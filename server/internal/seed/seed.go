@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const demoEmail = "demo@circle.dev"
+const demoEmail = "demo@converge.dev"
 const demoSlug = "acme"
 
 type seedUser struct {
@@ -67,8 +67,8 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 	// ---- accounts -----------------------------------------------------
 	users := []seedUser{
 		{demoEmail, "Alex Demo", "owner"},
-		{"maya@circle.dev", "Maya Chen", "admin"},
-		{"leo@circle.dev", "Leo Park", "member"},
+		{"maya@converge.dev", "Maya Chen", "admin"},
+		{"leo@converge.dev", "Leo Park", "member"},
 	}
 	for _, u := range users {
 		if err := exec("seed account "+u.email, `
@@ -110,8 +110,8 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		}
 	}
 	memberRoles := map[string]map[string]string{
-		"team-eng":  {"acc:" + demoEmail: "manager", "acc:maya@circle.dev": "member", "acc:leo@circle.dev": "member"},
-		"team-plat": {"acc:" + demoEmail: "manager", "acc:leo@circle.dev": "member"},
+		"team-eng":  {"acc:" + demoEmail: "manager", "acc:maya@converge.dev": "member", "acc:leo@converge.dev": "member"},
+		"team-plat": {"acc:" + demoEmail: "manager", "acc:leo@converge.dev": "member"},
 	}
 	for teamLabel, roles := range memberRoles {
 		for accLabel, role := range roles {
@@ -179,24 +179,24 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		daysAgo  float64
 	}
 	engIssues := []issueDef{
-		{"team-eng", "Migrate billing service to Go", "The billing service is on EOL Node 14. Plan the migration incrementally: payment gateway first, then invoicing.", 1, "In Progress", "acc:maya@circle.dev", "", 21},
-		{"team-eng", "Fix race condition in webhook retry loop", "Under load the retry loop can double-process webhooks. Add a per-payload lock and a regression test.", 1, "In Progress", "acc:demo@circle.dev", "", 18},
-		{"team-eng", "Upgrade Kubernetes cluster to 1.31", "CIS audit requires the new minor. Schedule a maintenance window and test the ingress controller upgrade.", 2, "To Do", "acc:leo@circle.dev", "", 15},
+		{"team-eng", "Migrate billing service to Go", "The billing service is on EOL Node 14. Plan the migration incrementally: payment gateway first, then invoicing.", 1, "In Progress", "acc:maya@converge.dev", "", 21},
+		{"team-eng", "Fix race condition in webhook retry loop", "Under load the retry loop can double-process webhooks. Add a per-payload lock and a regression test.", 1, "In Progress", "acc:demo@converge.dev", "", 18},
+		{"team-eng", "Upgrade Kubernetes cluster to 1.31", "CIS audit requires the new minor. Schedule a maintenance window and test the ingress controller upgrade.", 2, "To Do", "acc:leo@converge.dev", "", 15},
 		{"team-eng", "Reduce p95 API latency on issue lists", "The /issues endpoint serializes 2k rows in one pass. Batch the join and add a covering index.", 2, "In Progress", "", "", 12},
-		{"team-eng", "Document self-hosted deployment", "Write the operator guide: TLS, backups, upgrades, and the env reference.", 3, "To Do", "acc:maya@circle.dev", "", 10},
-		{"team-eng", "Add dark mode contrast pass", "Several muted-foreground colors fail AA in dark mode. Bump them per the design tokens.", 3, "Backlog", "acc:leo@circle.dev", "", 9},
+		{"team-eng", "Document self-hosted deployment", "Write the operator guide: TLS, backups, upgrades, and the env reference.", 3, "To Do", "acc:maya@converge.dev", "", 10},
+		{"team-eng", "Add dark mode contrast pass", "Several muted-foreground colors fail AA in dark mode. Bump them per the design tokens.", 3, "Backlog", "acc:leo@converge.dev", "", 9},
 		{"team-eng", "Keyboard shortcut for creating issues", "Global C key opens the create dialog, matching the design spec.", 2, "Backlog", "", "", 8},
-		{"team-eng", "Tighten session revocation on suspension", "Suspended members keep their session cookie until expiry. Revoke on state change.", 1, "Done", "acc:demo@circle.dev", "", 7},
-		{"team-eng", "Instrument search latency", "Add structured logs and a histogram for the full-text search path.", 3, "Done", "acc:maya@circle.dev", "", 6},
+		{"team-eng", "Tighten session revocation on suspension", "Suspended members keep their session cookie until expiry. Revoke on state change.", 1, "Done", "acc:demo@converge.dev", "", 7},
+		{"team-eng", "Instrument search latency", "Add structured logs and a histogram for the full-text search path.", 3, "Done", "acc:maya@converge.dev", "", 6},
 		{"team-eng", "Deduplicate label names on import", "Imported labels can collide case-insensitively. Normalize on write.", 3, "Done", "", "", 5},
-		{"team-eng", "Kanban: allow dropping into any column", "The current dnd handler restricts by category. Relax per the interaction spec.", 2, "Done", "acc:leo@circle.dev", "", 4},
-		{"team-eng", "Archive legacy integration definitions", "The deprecated action integrations clutter settings. Move them to an archive state.", 4, "Done", "acc:maya@circle.dev", "", 3},
+		{"team-eng", "Kanban: allow dropping into any column", "The current dnd handler restricts by category. Relax per the interaction spec.", 2, "Done", "acc:leo@converge.dev", "", 4},
+		{"team-eng", "Archive legacy integration definitions", "The deprecated action integrations clutter settings. Move them to an archive state.", 4, "Done", "acc:maya@converge.dev", "", 3},
 		{"team-eng", "Evaluate object storage for attachments", "Compare S3-compatible providers for the upcoming attachments feature.", 3, "Backlog", "", "", 2},
-		{"team-eng", "Investigate flaky e2e auth test", "The magic-link e2e test is flaky under CI load. Likely a timing assumption.", 2, "Canceled", "acc:demo@circle.dev", "", 1},
+		{"team-eng", "Investigate flaky e2e auth test", "The magic-link e2e test is flaky under CI load. Likely a timing assumption.", 2, "Canceled", "acc:demo@converge.dev", "", 1},
 	}
 	platIssues := []issueDef{
-		{"team-plat", "Provision staging Postgres with pgvector", "Needed for the (future) similarity experiments; provision and harden.", 2, "In Progress", "acc:leo@circle.dev", "", 11},
-		{"team-plat", "Upgrade CI to GitHub Actions runners v2", "Standard runners are being deprecated. Migrate the workflow files.", 2, "To Do", "acc:demo@circle.dev", "", 6},
+		{"team-plat", "Provision staging Postgres with pgvector", "Needed for the (future) similarity experiments; provision and harden.", 2, "In Progress", "acc:leo@converge.dev", "", 11},
+		{"team-plat", "Upgrade CI to GitHub Actions runners v2", "Standard runners are being deprecated. Migrate the workflow files.", 2, "To Do", "acc:demo@converge.dev", "", 6},
 		{"team-plat", "Cost review of managed Kubernetes", "Usage jumped 18% last month. Identify the offenders and right-size.", 1, "Done", "", "", 4},
 	}
 
@@ -292,7 +292,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 	// Sub-issues under the billing migration.
 	parentID := ids["issue:team-eng:"+engIssues[0].title]
 	children := []issueDef{
-		{"team-eng", "Billing: cut over payment gateway", "Switch Stripe calls to the new Go client behind a flag.", 2, "In Progress", "acc:maya@circle.dev", parentID, 14},
+		{"team-eng", "Billing: cut over payment gateway", "Switch Stripe calls to the new Go client behind a flag.", 2, "In Progress", "acc:maya@converge.dev", parentID, 14},
 		{"team-eng", "Billing: deprecate Node invoicing", "After the gateway cutover, stop the Node invoicing workers.", 2, "Backlog", "", parentID, 12},
 	}
 	for i, def := range children {
@@ -323,10 +323,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		issue, author, body string
 		days                float64
 	}{
-		{engIssues[0].title, "acc:maya@circle.dev", "Gateway cutover is behind a feature flag, safe to test on staging.", 16},
-		{engIssues[0].title, "acc:demo@circle.dev", "Agreed. Let's keep the flag for one release cycle before removing the old path.", 15},
-		{engIssues[1].title, "acc:leo@circle.dev", "Repro: send 200 identical payloads concurrently against the dev env.", 17},
-		{engIssues[1].title, "acc:demo@circle.dev", "Confirmed the double-process in the logs. Draft fix in the linked PR.", 16},
+		{engIssues[0].title, "acc:maya@converge.dev", "Gateway cutover is behind a feature flag, safe to test on staging.", 16},
+		{engIssues[0].title, "acc:demo@converge.dev", "Agreed. Let's keep the flag for one release cycle before removing the old path.", 15},
+		{engIssues[1].title, "acc:leo@converge.dev", "Repro: send 200 identical payloads concurrently against the dev env.", 17},
+		{engIssues[1].title, "acc:demo@converge.dev", "Confirmed the double-process in the logs. Draft fix in the linked PR.", 16},
 	}
 	for _, c := range commentCalls {
 		if err := comment(c.issue, c.author, c.body, c.days); err != nil {

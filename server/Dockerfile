@@ -9,12 +9,12 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
-    -o /out/circle ./cmd/circle
+    -o /out/converge ./cmd/converge
 
 FROM alpine:3.20
-RUN adduser -D -u 10001 circle
-USER circle
-COPY --from=build /out/circle /usr/local/bin/circle
+RUN adduser -D -u 10001 converge
+USER converge
+COPY --from=build /out/converge /usr/local/bin/converge
 EXPOSE 3001
-ENV CIRCLE_HTTP_ADDR=:3001
-ENTRYPOINT ["circle"]
+ENV CONVERGE_HTTP_ADDR=:3001
+ENTRYPOINT ["converge"]

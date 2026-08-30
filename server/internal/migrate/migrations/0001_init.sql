@@ -1,4 +1,4 @@
--- 0001_init.sql — Circle MVP domain schema
+-- 0001_init.sql — Converge MVP domain schema
 --
 -- Conventions (see docs/spec/07-domain-and-permissions.md):
 --   * Every tenant-owned object resolves to exactly one workspace,

@@ -1,4 +1,4 @@
-module circle
+module converge
 
 go 1.25.0
 

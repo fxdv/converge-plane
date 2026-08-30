@@ -3,7 +3,7 @@
 // Migrations are numbered files (NNNN_name.sql) embedded at build time and
 // applied in ascending order inside a single transaction, recorded in
 // schema_migrations. The server applies migrations on startup by default
-// (CIRCLE_AUTO_Migrate=true); operators can disable this and apply them in
+// (CONVERGE_AUTO_Migrate=true); operators can disable this and apply them in
 // a controlled window instead.
 package migrate
 

@@ -1,8 +1,8 @@
-# 11 — Direction v2: the Circle revival path
+# 11 — Direction v2: the Converge revival path
 
 **Status:** Authoritative addendum to product-spec v1
 **Effective date:** 2026-08-30
-**Product:** Circle — open-source issue tracker, Go server + Tegon-derived web frontend
+**Product:** Converge — open-source issue tracker, Go server + Tegon-derived web frontend
 
 ## Why this document exists
 
@@ -12,6 +12,10 @@ the project owner redirected the effort to a **revival path**:
 
 > Take Tegon's UI as a basis, refine it, and reframe it as a new product —
 > Circle — with an original Go backend.
+
+On 2026-08-31 the project owner renamed the product **Converge** to avoid any
+brand adjacency with CircleCI/Circle Payments (see R-12); all references in
+this document and the repository now use the current name.
 
 Tegon is effectively unmaintained (last release v0.3.11-alpha, ~1 year of
 inactivity, 53 open issues at time of forking), which makes forking its
@@ -28,7 +32,7 @@ to apply unchanged** and remains the execution contract for the product.
 | --- | --- | --- | --- |
 | R-1 | Frontend provenance (doc 00 principle 5, greenfield-spec) | original code and assets only | The web frontend (`web/`, `packages/`) is a **derivative of Tegon v0.3.11-alpha** (commit `e9d07e4d`) and **remains AGPL-3.0**. Tegon's name, logo, copy, and visual identity must be removed; workflow-level similarity is acceptable, Tegon/Linear trademark expression is not. |
 | R-2 | License (OD-01) | open (AGPL vs Apache) | **Closed: AGPL-3.0-or-later for the entire repository.** The AGPL frontend forces the decision; one license keeps the boundary simple. Dual-licensing may be revisited later with a clean-room UI. |
-| R-3 | Product name (OD-02) | open | **Closed: Circle.** Final trademark/domain validation is a release-gate task (v1 launch checklist), not a blocker for development. Provenance is documented in `NOTICE` and `README`. |
+| R-3 | Product name (OD-02) | open | **Closed: Circle (2026-08-30), renamed Converge (2026-08-31, R-12).** Final trademark/domain validation is a release-gate task (v1 launch checklist), not a blocker for development. Provenance is documented in `NOTICE` and `README`. |
 | R-4 | Implementation stack (OD-03) | "choose from team expertise" | **Closed: Go.** `server/` is a Go modular monolith (chi + pgx + PostgreSQL) shipped as one static binary; `web/` is the forked Next.js client. The web stays TypeScript/Next.js — it is the forked asset. |
 | R-5 | Authentication (OD-04) | maintained OIDC/magic-link component | **Closed: our own Go sessions.** Email magic-link over SMTP plus httpOnly, SameSite=Lax session cookies with server-side session records, rotation, and revocation. No Supertokens service. OIDC as an operator-configurable provider is a later hardening item. The web app's supertokens client is replaced by a small custom auth client. |
 | R-6 | Rich text (OD-05) | small versioned JSON schema | **Resolved by inheritance:** keep the Tegon web app's TipTap-based document format (versioned JSON, sanitized renderer, plain-text projection) as-is; the Go backend persists and validates the same document schema. |
@@ -37,6 +41,7 @@ to apply unchanged** and remains the execution contract for the product.
 | R-9 | Client state (PLAT-02) | bounded cache, no IDB replica | **Unchanged, now the main web workstream:** the forked IndexedDB + sequence-delta sync layer is removed; client state becomes server-authoritative REST + SSE with bounded caching and optimistic updates. The store's public API is preserved so screens keep working during the transition. |
 | R-10 | Scope matrix | 03/09 govern delivery | **Unchanged, with a trim rule:** any capability the forked web app ships but the matrix does not include in the active release (AI, actions, integrations, support/CRM, prompts) **must be removed from the web app during the trim milestone** — no dead navigation. |
 | R-11 | v1 feature scope | MVP per 09 | **Confirmed with one addition:** saved views ship in v1 (core to the product feel); projects/cycles remain v1.1+ per the matrix. |
+| R-12 | Product rename (2026-08-31) | Circle | **Closed: Converge.** The full repository (module path, env prefix, compose, docs, demo identities) is renamed `circle`→`converge`. Circle remains a distinct established brand in CI/payments; the rename removes any adjacency doubt without waiting on the launch-gate validation. |
 
 ## Decision records (abridged template)
 
@@ -54,10 +59,10 @@ Documents updated: LICENSE, NOTICE, README, this document
 
 ```text
 Decision ID: OD-02
-Date: 2026-08-30
+Date: 2026-08-30 (amended 2026-08-31)
 Owner/approvers: project owner
-Chosen option: Circle
-Rationale: short, memorable, no known issue-tracker name collision (CircleCI and Circle Payments are distinct established brands in other domains; final validation before public launch)
+Chosen option: Circle, amended to Converge on 2026-08-31
+Rationale: short, memorable, no known issue-tracker name collision. Amended to Converge proactively because CircleCI/Circle Payments are established adjacent brands; final validation remains a release-gate task
 Security/privacy: none
 Operational: github org/repo naming pending
 Alternatives rejected: Cairn, Sift, Tally, Strata, Waypoint
@@ -119,13 +124,13 @@ Documents updated: docker-compose.yaml, this document
 | OD-15 | Concrete p95 performance budgets at 10k issues / 1k team / 100 sessions | v1 acceptance |
 | OD-19 | Telemetry: off by default, operator opt-in, no issue content | before any analytics dependency (forked web ships PostHog + Sentry — **both must be disabled/removed in the trim milestone**) |
 | OD-21/22 | Browser matrix, WCAG 2.2 AA process | v1 acceptance |
-| NEW | Final trademark/domain validation for "Circle" | public launch |
+| NEW | Final trademark/domain validation for "Converge" | public launch |
 | NEW | Go module path on first public release | public launch |
 | NEW | Web standalone Docker layout verification | M1 |
 
 ## Consequences accepted
 
-1. **Circle is open source, AGPL, permanently** under this path. A future
+1. **Converge is open source, AGPL, permanently** under this path. A future
    closed-source variant would require the clean-room UI work the v1 spec
    describes — the v1 documents are retained in `docs/spec` precisely to
    keep that door defined.

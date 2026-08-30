@@ -1,6 +1,6 @@
 /* eslint-disable import/no-anonymous-default-export */
 
-// Forwards all /api/* calls from the web origin to the Circle API server.
+// Forwards all /api/* calls from the web origin to the Converge API server.
 // The web client calls the API same-origin (see common/lib/config.ts), so
 // session cookies work without CORS. The full path is preserved: the API
 // server owns /api/auth/* and /api/v1/* routes.

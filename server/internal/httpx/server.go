@@ -73,7 +73,7 @@ func New(d Dependencies) *Server {
 	})
 	r.MethodFunc("GET", "/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{
-			"name":    "circle",
+			"name":    "converge",
 			"version": d.Version,
 		})
 	})
