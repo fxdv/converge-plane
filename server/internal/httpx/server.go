@@ -26,6 +26,10 @@ type Dependencies struct {
 	WebOrigin string
 	// Ready reports database readiness for the /readyz probe.
 	Ready func(ctx context.Context) error
+	// MountApp registers application routes (auth + API) on the base
+	// router after the operator routes. Middleware registered via Use
+	// applies to everything mounted afterwards.
+	MountApp func(r chi.Router)
 }
 
 // Server is the configured HTTP server.
@@ -47,6 +51,10 @@ func New(d Dependencies) *Server {
 		RequestLogger(d.Logger),
 		CORS(d.WebOrigin),
 	)
+
+	if d.MountApp != nil {
+		d.MountApp(r)
+	}
 
 	r.MethodFunc("GET", "/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
