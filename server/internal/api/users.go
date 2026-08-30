@@ -36,12 +36,31 @@ type userResponse struct {
 	Image      string             `json:"image"`
 }
 
-// handleGetUser implements GET /api/v1/users — the client's "who am I"
-// call, returning the account with its workspaces and pending invites.
+// publicUser matches the web client's User shape for bulk lookups.
+// It mirrors Tegon's getUsersbyId, which returns the workspace
+// members' names for assignee/member renderers.
+type publicUser struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Fullname string `json:"fullname"`
+	Email    string `json:"email"`
+	Image    string `json:"image"`
+	Role     string `json:"role"`
+}
+
+// handleGetUser implements GET /api/v1/users. With a userIds query
+// parameter (even an empty one) it returns a JSON array of public users;
+// the client's hooks call .find/.filter on the result, so the response
+// must always be an array on that path. Without it, it returns the
+// caller's account with workspaces and pending invites.
 func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if v, ok := r.URL.Query()["userIds"]; ok {
+		a.handleGetUsersByIds(w, r, parseUserIds(v[0]))
 		return
 	}
 	ctx := r.Context()
@@ -116,4 +135,92 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	inviteRows.Close()
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleGetUsersByIds implements GET /api/v1/users?userIds=a,b,c —
+// the client's bulk user lookup for rendering member/assignee names.
+// It mirrors Tegon's getUsersbyId: the users' first (oldest-workspace)
+// membership provides the user-level role.
+func (a *API) handleGetUsersByIds(w http.ResponseWriter, r *http.Request, ids []string) {
+	out := make([]publicUser, 0, len(ids))
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	rows, err := a.pool.Query(r.Context(), `
+		select a.id, a.name, a.email, a.avatar_url,
+		       coalesce((
+		         select wm.role
+		         from workspace_members wm
+		         join workspaces w on w.id = wm.workspace_id
+		         where wm.account_id = a.id and wm.status = 'active'
+		         order by w.created_at
+		         limit 1
+		       ), 'member')
+		from accounts a
+		where a.id = any($1::uuid[])
+		order by a.name`, ids)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	for rows.Next() {
+		var u publicUser
+		var avatar *string
+		var role string
+		if err := rows.Scan(&u.ID, &u.Fullname, &u.Email, &avatar, &role); err != nil {
+			rows.Close()
+			a.internalError(w, err)
+			return
+		}
+		u.Username = strings.SplitN(u.Email, "@", 2)[0]
+		u.Image = strval(avatar)
+		u.Role = clientRole(role)
+		out = append(out, u)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// parseUserIds splits a comma-separated userIds query parameter,
+// dropping empty and malformed values. Malformed ids are excluded
+// rather than rejected: Tegon's findMany by id simply ignores
+// values it cannot match, and the client joins real uuids.
+func parseUserIds(raw string) []string {
+	var ids []string
+	for _, part := range strings.Split(raw, ",") {
+		id := strings.TrimSpace(part)
+		if id != "" && isUUID(id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// isUUID reports whether s is a canonical 8-4-4-4-12 UUID.
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return false
+			}
+			continue
+		}
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		case c >= 'A' && c <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
 }
