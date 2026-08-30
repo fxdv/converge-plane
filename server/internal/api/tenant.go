@@ -1,5 +1,5 @@
 // Package api assembles the application HTTP API: the Supertokens
-// compatible auth routes plus the Circle /api/v1 endpoints consumed by
+// compatible auth routes plus the Converge /api/v1 endpoints consumed by
 // the web client.
 package api
 
@@ -13,8 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"circle/internal/auth"
-	"circle/internal/config"
+	"converge/internal/auth"
+	"converge/internal/config"
 	"log/slog"
 )
 

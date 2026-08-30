@@ -2,7 +2,7 @@
 
 **Status:** Authoritative greenfield product specification v1
 **Effective date:** 2026-08-03
-**Addendum (2026-08-30):** [11-direction-v2.md](11-direction-v2.md) records the pivot to the Circle revival path (Tegon-derived UI, AGPL, Go backend). Where the two conflict, 11 controls for UI provenance, license, name, stack, auth, and topology; all other v1 contracts remain binding.
+**Addendum (2026-08-30):** [11-direction-v2.md](11-direction-v2.md) records the pivot to the Converge revival path (Tegon-derived UI, AGPL, Go backend). Where the two conflict, 11 controls for UI provenance, license, name, stack, auth, and topology; all other v1 contracts remain binding.
 **Research source:** Tegon repository at the current checkout
 **Product target:** a lightweight, self-hostable, open-source issue tracker for software teams
 

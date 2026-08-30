@@ -1,17 +1,17 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: circle-postgres
+    container_name: converge-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-circle}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-circle}
-      POSTGRES_DB: ${POSTGRES_DB:-circle}
+      POSTGRES_USER: ${POSTGRES_USER:-converge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-converge}
+      POSTGRES_DB: ${POSTGRES_DB:-converge}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-circle} -d ${POSTGRES_DB:-circle}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-converge} -d ${POSTGRES_DB:-converge}"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -20,19 +20,19 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: circle-api
+    container_name: converge-api
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      CIRCLE_HTTP_ADDR: ":3001"
-      CIRCLE_DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?sslmode=disable
-      CIRCLE_PUBLIC_URL: ${CIRCLE_PUBLIC_URL:-http://localhost:3001}
-      CIRCLE_WEB_ORIGIN: ${CIRCLE_WEB_ORIGIN:-http://localhost:3000}
-      CIRCLE_LOG_LEVEL: ${CIRCLE_LOG_LEVEL:-info}
+      CONVERGE_HTTP_ADDR: ":3001"
+      CONVERGE_DATABASE_URL: postgresql://${POSTGRES_USER:-converge}:${POSTGRES_PASSWORD:-converge}@postgres:5432/${POSTGRES_DB:-converge}?sslmode=disable
+      CONVERGE_PUBLIC_URL: ${CONVERGE_PUBLIC_URL:-http://localhost:3001}
+      CONVERGE_WEB_ORIGIN: ${CONVERGE_WEB_ORIGIN:-http://localhost:3000}
+      CONVERGE_LOG_LEVEL: ${CONVERGE_LOG_LEVEL:-info}
       # Signs session tokens; must be a long random value in real
       # deployments (e.g.: openssl rand -hex 32).
-      CIRCLE_SESSION_SECRET: ${CIRCLE_SESSION_SECRET:-circle-dev-session-secret-do-not-use-in-prod}
+      CONVERGE_SESSION_SECRET: ${CONVERGE_SESSION_SECRET:-converge-dev-session-secret-do-not-use-in-prod}
     ports:
       - "3001:3001"
     restart: unless-stopped
@@ -47,7 +47,7 @@ services:
       args:
         NEXT_PUBLIC_BACKEND_HOST: ${NEXT_PUBLIC_BACKEND_HOST:-http://localhost:3001}
         NEXT_PUBLIC_BASE_HOST: ${NEXT_PUBLIC_BASE_HOST:-http://localhost:3000}
-    container_name: circle-web
+    container_name: converge-web
     depends_on:
       - api
     ports:

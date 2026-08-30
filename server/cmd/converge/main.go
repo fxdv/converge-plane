@@ -1,13 +1,13 @@
-// Command circle runs the Circle API server.
+// Command converge runs the Converge API server.
 //
-// Circle is a fast, self-hostable issue tracker for software teams.
+// Converge is a fast, self-hostable issue tracker for software teams.
 // The binary starts PostgreSQL-backed services, applies schema migrations,
 // and serves the JSON API.
 //
 // Subcommands:
 //
-//	circle       run the server (default)
-//	circle seed  create the demo workspace and exit
+//	converge      run the server (default)
+//	converge seed  create the demo workspace and exit
 package main
 
 import (
@@ -18,14 +18,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"circle/internal/api"
-	"circle/internal/auth"
-	"circle/internal/config"
-	"circle/internal/db"
-	"circle/internal/httpx"
-	"circle/internal/logging"
-	"circle/internal/migrate"
-	"circle/internal/seed"
+	"converge/internal/api"
+	"converge/internal/auth"
+	"converge/internal/config"
+	"converge/internal/db"
+	"converge/internal/httpx"
+	"converge/internal/logging"
+	"converge/internal/migrate"
+	"converge/internal/seed"
 )
 
 // Injected at build time:
@@ -39,13 +39,13 @@ var (
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "seed" {
 		if err := runSeed(); err != nil {
-			fmt.Fprintln(os.Stderr, "circle:", err)
+			fmt.Fprintln(os.Stderr, "converge:", err)
 			os.Exit(1)
 		}
 		return
 	}
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "circle:", err)
+		fmt.Fprintln(os.Stderr, "converge:", err)
 		os.Exit(1)
 	}
 }
@@ -62,14 +62,14 @@ func bootstrap() (config.Config, *slog.Logger, *db.DB, context.Context, context.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	cfg.Version = version
-	logger.Info("starting circle", "version", version, "commit", commit, "public_url", cfg.PublicURL)
+	logger.Info("starting converge", "version", version, "commit", commit, "public_url", cfg.PublicURL)
 
 	database, err := db.New(ctx, cfg.DatabaseURL, cfg.DBMinConns, cfg.DBMaxConns)
 	if err != nil {
 		stop()
 		return cfg, logger, nil, nil, nil, fmt.Errorf("connect database: %w", err)
 	}
-	if os.Getenv("CIRCLE_AUTO_MIGRATE") != "false" {
+	if os.Getenv("CONVERGE_AUTO_MIGRATE") != "false" {
 		if err := migrate.Run(ctx, database.Pool); err != nil {
 			database.Close()
 			stop()

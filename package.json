@@ -1,8 +1,8 @@
 {
-  "name": "circle",
+  "name": "converge",
   "version": "0.1.0",
   "private": true,
-  "description": "Circle — a fast, self-hostable issue tracker for software teams.",
+  "description": "Converge — a fast, self-hostable issue tracker for software teams.",
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.3.0",
   "scripts": {
