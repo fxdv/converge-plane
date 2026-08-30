@@ -2,7 +2,12 @@
 //
 // Circle is a fast, self-hostable issue tracker for software teams.
 // The binary starts PostgreSQL-backed services, applies schema migrations,
-// and serves the JSON API (plus SSE streams in later milestones).
+// and serves the JSON API.
+//
+// Subcommands:
+//
+//	circle       run the server (default)
+//	circle seed  create the demo workspace and exit
 package main
 
 import (
@@ -13,11 +18,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"circle/internal/api"
+	"circle/internal/auth"
 	"circle/internal/config"
 	"circle/internal/db"
 	"circle/internal/httpx"
 	"circle/internal/logging"
 	"circle/internal/migrate"
+	"circle/internal/seed"
 )
 
 // Injected at build time:
@@ -29,44 +37,59 @@ var (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "seed" {
+		if err := runSeed(); err != nil {
+			fmt.Fprintln(os.Stderr, "circle:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "circle:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+// bootstrap loads config, logging, database, and applies migrations.
+func bootstrap() (config.Config, *slog.Logger, *db.DB, context.Context, context.CancelFunc, error) {
 	cfg, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return cfg, nil, nil, nil, nil, fmt.Errorf("load config: %w", err)
 	}
-
 	logger := logging.New(cfg.LogLevel)
 	slog.SetDefault(logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	cfg.Version = version
-	logger.Info("starting circle",
-		"version", version,
-		"commit", commit,
-		"public_url", cfg.PublicURL,
-	)
+	logger.Info("starting circle", "version", version, "commit", commit, "public_url", cfg.PublicURL)
 
 	database, err := db.New(ctx, cfg.DatabaseURL, cfg.DBMinConns, cfg.DBMaxConns)
 	if err != nil {
-		return fmt.Errorf("connect database: %w", err)
+		stop()
+		return cfg, logger, nil, nil, nil, fmt.Errorf("connect database: %w", err)
 	}
-	defer database.Close()
-
 	if os.Getenv("CIRCLE_AUTO_MIGRATE") != "false" {
 		if err := migrate.Run(ctx, database.Pool); err != nil {
-			return fmt.Errorf("apply migrations: %w", err)
+			database.Close()
+			stop()
+			return cfg, logger, nil, nil, nil, fmt.Errorf("apply migrations: %w", err)
 		}
-		latest, _ := migrate.Latest(ctx, database.Pool)
-		logger.Info("migrations applied", "latest", latest)
+		logger.Info("migrations applied")
 	}
+	return cfg, logger, database, ctx, stop, nil
+}
+
+func run() (err error) {
+	cfg, logger, database, ctx, stop, err := bootstrap()
+	if err != nil {
+		return err
+	}
+	defer stop()
+	defer database.Close()
+
+	authSvc := auth.NewService(database.Pool, cfg, logger)
+	apiSvc := api.New(database.Pool, cfg, logger, authSvc)
 
 	server := httpx.New(httpx.Dependencies{
 		Logger:    logger,
@@ -74,7 +97,25 @@ func run() error {
 		PublicURL: cfg.PublicURL,
 		WebOrigin: cfg.WebOrigin,
 		Ready:     database.Healthy,
+		MountApp:  apiSvc.Mount,
 	})
 
 	return server.Run(ctx, cfg.HTTPAddr)
+}
+
+func runSeed() error {
+	_, logger, database, ctx, stop, err := bootstrap()
+	if err != nil {
+		return err
+	}
+	defer stop()
+	defer database.Close()
+
+	email, err := seed.Run(ctx, database.Pool, logger)
+	if err != nil {
+		return err
+	}
+	logger.Info("seed complete", "login_email", email)
+	fmt.Printf("Demo workspace ready. Sign in with: %s\n", email)
+	return nil
 }

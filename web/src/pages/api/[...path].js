@@ -1,18 +1,21 @@
 /* eslint-disable import/no-anonymous-default-export */
 
-import httpProxy from 'http-proxy';
+// Forwards all /api/* calls from the web origin to the Circle API server.
+// The web client calls the API same-origin (see common/lib/config.ts), so
+// session cookies work without CORS. The full path is preserved: the API
+// server owns /api/auth/* and /api/v1/* routes.
 
-// Get the actual API_URL as an environment variable. For real
-// applications, you might want to get it from 'next/config' instead.
-const API_URL = process.env.BACKEND_URL;
+import httpProxy from 'http-proxy';
+import getConfig from 'next/config';
+
+const { publicRuntimeConfig } = getConfig();
+
+const API_URL = publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST;
 
 const proxy = httpProxy.createProxyServer();
 
-// You can export a config variable from any API route in Next.js.
-// We'll use this to disable the bodyParser, otherwise Next.js
-// would read and parse the entire request body before we
-// can forward the request to the API. By skipping the bodyParser,
-// we can just stream all requests through to the actual API.
+// Skip the body parser so request/response bodies stream through
+// untouched (important for large sync payloads and future uploads).
 export const config = {
   api: {
     bodyParser: false,
@@ -20,29 +23,30 @@ export const config = {
 };
 
 export default (req, res) => {
-  // Return a Promise to let Next.js know when we're done
-  // processing the request:
-  return new Promise((resolve, reject) => {
-    // In case the current API request is for logging in,
-    // we'll need to intercept the API response.
-    // More on that in a bit.
+  if (!API_URL) {
+    res.statusCode = 502;
+    res.end('backend host not configured (NEXT_PUBLIC_BACKEND_HOST)');
+    return;
+  }
 
-    // Rewrite the URL: strip out the leading '/api'.
-    // For example, '/api/login' would become '/login'.
-    // ️You might want to adjust this depending
-    // on the base path of your API.
-    req.url = req.url.replace(/^\/api/, '');
+  proxy.once('error', (err) => {
+    console.error('[api proxy] error:', err.message);
+    if (!res.headersSent) {
+      res.statusCode = 502;
+      res.end('backend unavailable');
+    } else {
+      res.end();
+    }
+  });
 
-    // Don't forget to handle errors:
-    proxy.once('error', reject);
-
-    // Forward the request to the API
+  return new Promise((resolve) => {
+    res.on('close', resolve);
     proxy.web(req, res, {
       target: API_URL,
-
-      // Don't autoRewrite because we manually rewrite
-      // the URL in the route handler.
-      autoRewrite: false,
+      changeOrigin: true,
+      // Preserve the original path (including the /api prefix).
+      // socket.io connections go directly to the API host, not
+      // through this proxy, so no websocket upgrade handling is needed.
     });
   });
 };

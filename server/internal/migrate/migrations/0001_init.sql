@@ -153,7 +153,7 @@ create table issues (
   priority       integer not null default 2 check (priority between 1 and 4),
   assignee_id    uuid references accounts (id) on delete set null,
   parent_id      uuid references issues (id) on delete set null,
-  order_key      numeric not null default 0,
+  sort_order     numeric not null default 0,
   status         text not null default 'active' check (status in ('active', 'archived', 'deleted')),
   version        integer not null default 0,
   created_by     uuid references accounts (id),

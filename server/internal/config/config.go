@@ -24,6 +24,14 @@ type Config struct {
 	WebOrigin string
 	// LogLevel selects the log level: debug, info, warn, error.
 	LogLevel string
+	// SessionCookieName is the name of the session cookie.
+	SessionCookieName string
+	// SecureCookies forces Secure cookies (set true behind TLS in prod).
+	SecureCookies bool
+	// SessionTTL bounds a session lifetime.
+	SessionTTL time.Duration
+	// CodeTTL bounds a magic-link code lifetime.
+	CodeTTL time.Duration
 	// HTTPTimeout bounds a single API request.
 	HTTPTimeout time.Duration
 	// DBMinConns and DBMaxConns bound the connection pool.
@@ -45,16 +53,25 @@ type Config struct {
 //	CIRCLE_HTTP_TIMEOUT    request timeout, e.g. "30s" (default "30s")
 //	CIRCLE_DB_MIN_CONNS    pool min conns          (default "1")
 //	CIRCLE_DB_MAX_CONNS    pool max conns          (default "20")
+//	CIRCLE_SECURE_COOKIES  force Secure cookies    (default "false")
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:    env("CIRCLE_HTTP_ADDR", ":3001"),
-		DatabaseURL: os.Getenv("CIRCLE_DATABASE_URL"),
-		PublicURL:   strings.TrimRight(env("CIRCLE_PUBLIC_URL", "http://localhost:3001"), "/"),
-		WebOrigin:   strings.TrimRight(env("CIRCLE_WEB_ORIGIN", "http://localhost:3000"), "/"),
-		LogLevel:    env("CIRCLE_LOG_LEVEL", "info"),
-		HTTPTimeout: 30 * time.Second,
-		DBMinConns:  1,
-		DBMaxConns:  20,
+		HTTPAddr:          env("CIRCLE_HTTP_ADDR", ":3001"),
+		DatabaseURL:       os.Getenv("CIRCLE_DATABASE_URL"),
+		PublicURL:         strings.TrimRight(env("CIRCLE_PUBLIC_URL", "http://localhost:3001"), "/"),
+		WebOrigin:         strings.TrimRight(env("CIRCLE_WEB_ORIGIN", "http://localhost:3000"), "/"),
+		LogLevel:          env("CIRCLE_LOG_LEVEL", "info"),
+		HTTPTimeout:       30 * time.Second,
+		DBMinConns:        1,
+		DBMaxConns:        20,
+		SessionCookieName: "sAccessToken",
+		SecureCookies:     false,
+		SessionTTL:        30 * 24 * time.Hour,
+		CodeTTL:           15 * time.Minute,
+	}
+
+	if v := os.Getenv("CIRCLE_SECURE_COOKIES"); v == "true" {
+		cfg.SecureCookies = true
 	}
 
 	if cfg.DatabaseURL == "" {
