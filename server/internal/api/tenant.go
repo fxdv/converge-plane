@@ -69,7 +69,7 @@ func (a *API) Mount(r chi.Router) {
 // rejects the request with 401.
 func (a *API) sessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		accountID := a.auth.SessionAccountID(r.Context(), r)
+		accountID := a.auth.ResolveAccountID(r.Context(), r)
 		if accountID == "" {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
