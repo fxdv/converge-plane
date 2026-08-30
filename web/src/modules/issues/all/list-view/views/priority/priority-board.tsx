@@ -1,0 +1,54 @@
+import type { DropResult } from '@hello-pangea/dnd';
+
+import { Board } from '@tegonhq/ui/components/board';
+import { observer } from 'mobx-react-lite';
+
+import { usePriorities } from 'hooks/priorities';
+
+import { useUpdateIssueMutation } from 'services/issues';
+
+import { useContextStore } from 'store/global-context-provider';
+
+import { PriorityBoardList } from './priority-board-list';
+
+export const PriorityBoard = observer(() => {
+  const { mutate: updateIssue } = useUpdateIssueMutation({});
+  const { issuesStore } = useContextStore();
+  const Priorities = usePriorities();
+
+  const onDragEnd = (result: DropResult) => {
+    const issueId = result.draggableId;
+
+    if (!result.destination) {
+      return;
+    }
+
+    const priority = result.destination.droppableId;
+    const issue = issuesStore.getIssueById(issueId);
+
+    if (issue.priority !== priority) {
+      updateIssue({
+        id: issueId,
+        priority: parseInt(priority),
+        teamId: issue.teamId,
+      });
+    }
+  };
+
+  const reorderedPriorities = Priorities.filter((p) => p !== '').concat(['']);
+
+  return (
+    <Board onDragEnd={onDragEnd} className="pl-4">
+      <>
+        {reorderedPriorities.map((priority: string) => {
+          return (
+            <PriorityBoardList
+              key={priority}
+              priority={Priorities.indexOf(priority)}
+            />
+          );
+        })}
+      </>
+    </Board>
+  );
+});

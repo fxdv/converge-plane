@@ -1,0 +1,19 @@
+{
+  "name": "circle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Circle — a fast, self-hostable issue tracker for software teams.",
+  "license": "AGPL-3.0-or-later",
+  "packageManager": "pnpm@10.3.0",
+  "scripts": {
+    "dev": "dotenv -e .env -- pnpm turbo run dev --filter=web",
+    "build": "dotenv -e .env -- pnpm turbo run build",
+    "build:web": "dotenv -e .env -- pnpm turbo run build --filter=web",
+    "lint": "pnpm turbo run lint",
+    "typecheck": "pnpm turbo run typecheck"
+  },
+  "dependencies": {
+    "dotenv-cli": "^7.4.4",
+    "turbo": "^2.0.9"
+  }
+}
