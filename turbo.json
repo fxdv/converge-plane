@@ -1,0 +1,25 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalEnv": [
+    "CIRCLE_*",
+    "NEXT_PUBLIC_*",
+    "NODE_ENV",
+    "VERSION"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "interactive": true
+    },
+    "lint": {},
+    "typecheck": {
+      "dependsOn": ["^build"]
+    }
+  }
+}

@@ -1,0 +1,23 @@
+# Node
+node_modules/
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*.local
+.sentryclirc
+
+# Go
+server/bin/
+*.test
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
