@@ -50,7 +50,7 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		Email:    p.Email,
 		Fullname: p.Fullname,
 		Username: strings.SplitN(p.Email, "@", 2)[0],
-		Role:     "MEMBER",
+		Role:     "USER",
 		Image:    "",
 	}
 
@@ -64,6 +64,7 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	firstRoleSet := false
 	for rows.Next() {
 		var ws workspaceSummary
 		var status, role string
@@ -76,8 +77,12 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		ws.Icon = ""
 		ws.ActionsEnabled = false
 		resp.Workspaces = append(resp.Workspaces, ws)
-		if strings.ToUpper(role) == "OWNER" || strings.ToUpper(role) == "ADMIN" {
-			resp.Role = strings.ToUpper(role)
+		// Tegon takes the first membership's role as the user-level role;
+		// the query is ordered by workspace created_at, so the first row is
+		// the oldest workspace.
+		if !firstRoleSet {
+			resp.Role = clientRole(role)
+			firstRoleSet = true
 		}
 	}
 	rows.Close()

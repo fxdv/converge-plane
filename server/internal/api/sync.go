@@ -124,6 +124,20 @@ type emitFn func(id string, data any) (syncActionRecord, error)
 
 const iso = time.RFC3339
 
+// clientRole maps internal workspace roles to the client's role enum.
+// The client model accepts only ADMIN | USER | BOT | AGENT (mirroring the
+// backend Role enum); "owner" is a backend-only concept that serializes
+// as ADMIN. Sending anything else (e.g. "OWNER") crashes the
+// mobx-state-tree validation in the browser.
+func clientRole(role string) string {
+	switch strings.ToLower(role) {
+	case "owner", "admin":
+		return "ADMIN"
+	default:
+		return "USER"
+	}
+}
+
 func (a *API) collectWorkspace(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
 	var (
 		id, slug, name string
@@ -179,7 +193,7 @@ func (a *API) collectMembers(ctx context.Context, workspaceID string, emit emitF
 			"id":          id,
 			"createdAt":   createdAt.Format(iso),
 			"updatedAt":   updatedAt.Format(iso),
-			"role":        strings.ToUpper(role),
+			"role":        clientRole(role),
 			"status":      strings.ToUpper(status),
 			"userId":      accountID,
 			"workspaceId": workspaceIDRow,
@@ -367,22 +381,24 @@ func (a *API) collectIssues(ctx context.Context, workspaceID string, emit emitFn
 			desc = descriptionToText(descRaw)
 		}
 		rec, err := emit(id, map[string]any{
-			"id":                 id,
-			"createdAt":          createdAt.Format(iso),
-			"updatedAt":          updatedAt.Format(iso),
-			"title":              title,
-			"number":             number,
-			"description":        desc,
-			"priority":           priority,
-			"dueDate":            nil,
-			"sortOrder":          sortOrder,
-			"estimate":           0,
-			"teamId":             teamID,
-			"createdById":        nullOrEmpty(strval(createdByID)),
-			"assigneeId":         nullOrEmpty(strval(assigneeID)),
-			"labelIds":           labelIDs,
-			"parentId":           nullOrEmpty(strval(parentID)),
-			"stateId":            nullOrEmpty(strval(statusID)),
+			"id":          id,
+			"createdAt":   createdAt.Format(iso),
+			"updatedAt":   updatedAt.Format(iso),
+			"title":       title,
+			"number":      number,
+			"description": desc,
+			"priority":    priority,
+			"dueDate":     nil,
+			"sortOrder":   sortOrder,
+			"estimate":    0,
+			"teamId":      teamID,
+			"createdById": nullOrEmpty(strval(createdByID)),
+			"assigneeId":  nullOrEmpty(strval(assigneeID)),
+			"labelIds":    labelIDs,
+			"parentId":    nullOrEmpty(strval(parentID)),
+			// stateId is a required string in the client model; an issue
+			// without a status serializes as empty rather than null.
+			"stateId":            strval(statusID),
 			"subscriberIds":      []string{},
 			"cycleId":            nil,
 			"projectId":          nil,
@@ -432,14 +448,18 @@ func (a *API) collectComments(ctx context.Context, workspaceID string, emit emit
 		if bodyRaw != "" && bodyRaw != "null" {
 			body = descriptionToText(bodyRaw)
 		}
+		// sourceMetadata must be present (null): the client model's field is
+		// union(string, null) without undefined, so a missing key would fail
+		// mobx-state-tree validation.
 		rec, err := emit(id, map[string]any{
-			"id":        id,
-			"createdAt": createdAt.Format(iso),
-			"updatedAt": updatedAt.Format(iso),
-			"body":      body,
-			"userId":    authorID,
-			"issueId":   issueID,
-			"parentId":  nullOrEmpty(strval(parentID)),
+			"id":             id,
+			"createdAt":      createdAt.Format(iso),
+			"updatedAt":      updatedAt.Format(iso),
+			"body":           body,
+			"userId":         authorID,
+			"issueId":        issueID,
+			"parentId":       nullOrEmpty(strval(parentID)),
+			"sourceMetadata": nil,
 		})
 		if err != nil {
 			return nil, err
@@ -478,6 +498,8 @@ func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitF
 			return nil, err
 		}
 
+		// Every from/to field is union(..., null) without undefined in the
+		// client model, so all of them must be present (null when unset).
 		data := map[string]any{
 			"id":              id,
 			"createdAt":       createdAt.Format(iso),
@@ -486,6 +508,18 @@ func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitF
 			"issueId":         nullOrEmpty(issueID),
 			"addedLabelIds":   []string{},
 			"removedLabelIds": []string{},
+			"fromPriority":    nil,
+			"toPriority":      nil,
+			"fromStateId":     nil,
+			"toStateId":       nil,
+			"fromEstimate":    nil,
+			"toEstimate":      nil,
+			"fromAssigneeId":  nil,
+			"toAssigneeId":    nil,
+			"fromParentId":    nil,
+			"toParentId":      nil,
+			"relationChanges": nil,
+			"sourceMetadata":  nil,
 		}
 		switch field {
 		case "status":
