@@ -30,6 +30,9 @@ services:
       CIRCLE_PUBLIC_URL: ${CIRCLE_PUBLIC_URL:-http://localhost:3001}
       CIRCLE_WEB_ORIGIN: ${CIRCLE_WEB_ORIGIN:-http://localhost:3000}
       CIRCLE_LOG_LEVEL: ${CIRCLE_LOG_LEVEL:-info}
+      # Signs session tokens; must be a long random value in real
+      # deployments (e.g.: openssl rand -hex 32).
+      CIRCLE_SESSION_SECRET: ${CIRCLE_SESSION_SECRET:-circle-dev-session-secret-do-not-use-in-prod}
     ports:
       - "3001:3001"
     restart: unless-stopped

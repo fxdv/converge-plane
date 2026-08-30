@@ -33,6 +33,9 @@ export function Auth() {
   });
   const [emailSent, setEmailSent] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  // Local deployments have no email provider; when the API is in dev mode
+  // it returns the magic link so we can offer it here directly.
+  const [devLink, setDevLink] = React.useState('');
   const { toast } = useToast();
 
   const onSubmit = async ({ email }: { email: string }) => {
@@ -52,6 +55,8 @@ export function Auth() {
           description: response.reason,
         });
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setDevLink((response as any).devMagicLink ?? '');
         setEmailSent(true);
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,12 +92,23 @@ export function Auth() {
               We sent you an email which contains a magic link that will log you
               in to your account.
             </div>
+            {devLink !== '' && (
+              <a
+                href={devLink}
+                className="text-sm text-primary underline underline-offset-4"
+              >
+                No email in this local setup — open your magic link
+              </a>
+            )}
           </div>
           <div className="flex justify-start items-center">
             <Button
               variant="ghost"
               className="flex items-center gap-1"
-              onClick={() => setEmailSent(false)}
+              onClick={() => {
+                setDevLink('');
+                setEmailSent(false);
+              }}
             >
               <ArrowLeft size={14} />
               Re-enter email

@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+// devSessionSecret substitutes for CIRCLE_SESSION_SECRET in local
+// development. Operators must set a real secret in any real deployment.
+const devSessionSecret = "circle-dev-session-secret-do-not-use-in-prod"
+
 // Config is the validated runtime configuration for the Circle API server.
 type Config struct {
 	// HTTPAddr is the address the API server listens on.
@@ -28,10 +32,23 @@ type Config struct {
 	SessionCookieName string
 	// SecureCookies forces Secure cookies (set true behind TLS in prod).
 	SecureCookies bool
-	// SessionTTL bounds a session lifetime.
+	// SessionSecret keys the HMAC signatures inside session tokens.
+	// The dev fallback is substituted when unset.
+	SessionSecret string
+	// SessionTTL bounds the session audit-row lifetime.
 	SessionTTL time.Duration
+	// AccessTokenTTL bounds the client-visible access token lifetime; the
+	// client refreshes as it approaches expiry.
+	AccessTokenTTL time.Duration
+	// RefreshTokenTTL bounds the refresh token lifetime (the effective
+	// sign-in session length).
+	RefreshTokenTTL time.Duration
 	// CodeTTL bounds a magic-link code lifetime.
 	CodeTTL time.Duration
+	// DevMode enables local-development conveniences that must never run
+	// in production: the create-code response then includes devMagicLink
+	// so a deployment without an email provider is still sign-in-able.
+	DevMode bool
 	// HTTPTimeout bounds a single API request.
 	HTTPTimeout time.Duration
 	// DBMinConns and DBMaxConns bound the connection pool.
@@ -45,15 +62,19 @@ type Config struct {
 //
 // Recognized variables (all optional unless noted):
 //
-//	CIRCLE_HTTP_ADDR       listen address          (default ":3001")
-//	CIRCLE_DATABASE_URL    postgres DSN            (required)
-//	CIRCLE_PUBLIC_URL      public base URL         (default "http://localhost:3001")
-//	CIRCLE_WEB_ORIGIN      web origin for CORS     (default "http://localhost:3000")
-//	CIRCLE_LOG_LEVEL       debug|info|warn|error  (default "info")
-//	CIRCLE_HTTP_TIMEOUT    request timeout, e.g. "30s" (default "30s")
-//	CIRCLE_DB_MIN_CONNS    pool min conns          (default "1")
-//	CIRCLE_DB_MAX_CONNS    pool max conns          (default "20")
-//	CIRCLE_SECURE_COOKIES  force Secure cookies    (default "false")
+//	CIRCLE_HTTP_ADDR         listen address          (default ":3001")
+//	CIRCLE_DATABASE_URL      postgres DSN            (required)
+//	CIRCLE_PUBLIC_URL        public base URL         (default "http://localhost:3001")
+//	CIRCLE_WEB_ORIGIN        web origin for CORS     (default "http://localhost:3000")
+//	CIRCLE_LOG_LEVEL         debug|info|warn|error  (default "info")
+//	CIRCLE_HTTP_TIMEOUT      request timeout, e.g. "30s" (default "30s")
+//	CIRCLE_DB_MIN_CONNS      pool min conns          (default "1")
+//	CIRCLE_DB_MAX_CONNS      pool max conns          (default "20")
+//	CIRCLE_SECURE_COOKIES    force Secure cookies    (default "false")
+//	CIRCLE_SESSION_SECRET    session HMAC key        (dev fallback when unset)
+//	CIRCLE_ACCESS_TOKEN_TTL  access token lifetime   (default "1h")
+//	CIRCLE_REFRESH_TOKEN_TTL refresh token lifetime  (default "720h")
+//	CIRCLE_DEV_MODE          true = dev conveniences (magic link in API)
 func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:          env("CIRCLE_HTTP_ADDR", ":3001"),
@@ -67,12 +88,36 @@ func Load() (Config, error) {
 		SessionCookieName: "sAccessToken",
 		SecureCookies:     false,
 		SessionTTL:        30 * 24 * time.Hour,
+		AccessTokenTTL:    time.Hour,
+		RefreshTokenTTL:   30 * 24 * time.Hour,
 		CodeTTL:           15 * time.Minute,
 	}
 
 	if v := os.Getenv("CIRCLE_SECURE_COOKIES"); v == "true" {
 		cfg.SecureCookies = true
 	}
+	if v := os.Getenv("CIRCLE_DEV_MODE"); v == "true" {
+		cfg.DevMode = true
+	}
+
+	if v := os.Getenv("CIRCLE_SESSION_SECRET"); v != "" {
+		cfg.SessionSecret = v
+	}
+	if v := os.Getenv("CIRCLE_ACCESS_TOKEN_TTL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return cfg, fmt.Errorf("invalid CIRCLE_ACCESS_TOKEN_TTL %q: %w", v, err)
+		}
+		cfg.AccessTokenTTL = d
+	}
+	if v := os.Getenv("CIRCLE_REFRESH_TOKEN_TTL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return cfg, fmt.Errorf("invalid CIRCLE_REFRESH_TOKEN_TTL %q: %w", v, err)
+		}
+		cfg.RefreshTokenTTL = d
+	}
+	cfg.SessionSecret = orDevSecret(cfg.SessionSecret)
 
 	if cfg.DatabaseURL == "" {
 		return cfg, fmt.Errorf("CIRCLE_DATABASE_URL is required")
@@ -104,6 +149,13 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func orDevSecret(secret string) string {
+	if secret == "" {
+		return devSessionSecret
+	}
+	return secret
 }
 
 func env(key, fallback string) string {
