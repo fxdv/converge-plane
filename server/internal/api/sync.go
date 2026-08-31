@@ -65,7 +65,9 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 		serverSeq = 0
 	}
 
-	var records []syncActionRecord
+	// Non-nil: the client contract is an array, and a Go nil slice
+	// marshals as JSON null, which crashes the client's iteration.
+	records := []syncActionRecord{}
 	if strings.HasSuffix(r.URL.Path, "/delta") {
 		// Delta: outbox records newer than the client's watermark, filtered
 		// to the models it asked for. The client upserts/removes by model
@@ -646,7 +648,10 @@ func (a *API) collectOutbox(ctx context.Context, workspaceID string, afterSeq in
 	}
 	defer rows.Close()
 
-	var out []syncActionRecord
+	// Non-nil: a Go nil slice marshals as JSON null, and the client
+	// contract (SyncActionRecord[]) is an array — null crashes its
+	// iteration in saveSocketData.
+	out := []syncActionRecord{}
 	for rows.Next() {
 		var (
 			seqNum        int64

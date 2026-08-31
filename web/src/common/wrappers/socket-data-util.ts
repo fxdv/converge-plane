@@ -35,6 +35,12 @@ export async function saveSocketData(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MODEL_STORE_MAP: Record<string, any>,
 ) {
+  // Defensive: a server may serialize an empty record list as null;
+  // never let that take the app down.
+  if (!Array.isArray(data)) {
+    return;
+  }
+
   return runInAction(async () => {
     // Pre-initialize the accumulator object with known model names
     const groupedRecords: Record<string, SyncActionRecord[]> = Object.values(
