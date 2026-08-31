@@ -26,6 +26,10 @@ type Dependencies struct {
 	WebOrigin string
 	// Ready reports database readiness for the /readyz probe.
 	Ready func(ctx context.Context) error
+	// ReadTimeout bounds request reading (headers + body) for every
+	// request. SSE is unaffected: its request carries no body, and the
+	// stream is on the response side, which this does not bound.
+	ReadTimeout time.Duration
 	// MountApp registers application routes (auth + API) on the base
 	// router after the operator routes. Middleware registered via Use
 	// applies to everything mounted afterwards.
@@ -78,10 +82,17 @@ func New(d Dependencies) *Server {
 		})
 	})
 
+	readTimeout := d.ReadTimeout
+	if readTimeout <= 0 {
+		readTimeout = 30 * time.Second
+	}
 	srv := &http.Server{
 		Addr:              "", // set in Run
 		Handler:           r,
 		ReadHeaderTimeout: 5 * time.Second,
+		// Without a read bound a stalled client body could pin its handler
+		// — and a pool connection — indefinitely.
+		ReadTimeout: readTimeout,
 		// No WriteTimeout: the SSE stream is a long-lived response. A
 		// global write cap (60s) killed every stream on a timer, making
 		// "live" updates wait up to a minute for the reconnect reconcile.

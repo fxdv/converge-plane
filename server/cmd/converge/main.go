@@ -92,12 +92,13 @@ func run() (err error) {
 	apiSvc := api.New(database.Pool, cfg, logger, authSvc)
 
 	server := httpx.New(httpx.Dependencies{
-		Logger:    logger,
-		Version:   version,
-		PublicURL: cfg.PublicURL,
-		WebOrigin: cfg.WebOrigin,
-		Ready:     database.Healthy,
-		MountApp:  apiSvc.Mount,
+		Logger:      logger,
+		Version:     version,
+		PublicURL:   cfg.PublicURL,
+		WebOrigin:   cfg.WebOrigin,
+		Ready:       database.Healthy,
+		MountApp:    apiSvc.Mount,
+		ReadTimeout: cfg.HTTPTimeout,
 	})
 
 	return server.Run(ctx, cfg.HTTPAddr)
