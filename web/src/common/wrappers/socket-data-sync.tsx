@@ -4,8 +4,11 @@ import getConfig from 'next/config';
 import * as React from 'react';
 
 import { hash } from 'common/common-utils';
+import type { BootstrapResponse } from 'common/types';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
+
+import { getDeltaRecords } from 'services/sync';
 
 import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
@@ -119,8 +122,39 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         );
       };
 
-      // EventSource reconnects automatically on drop; on reconnect the
-      // client will re-run delta to reconcile anything missed.
+      // Realtime is a hint, the delta endpoint is authoritative: the
+      // server caps stream lifetime (write timeout) and expired session
+      // cookies make reconnects 401 briefly, so the EventSource flaps.
+      // onopen fires on every (re)connect — re-run the delta to cover
+      // whatever happened during the gap.
+      socket.onopen = () => {
+        void (async () => {
+          if (!workspaceStore.workspace?.id) {
+            return;
+          }
+          const last =
+            localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0';
+          try {
+            const resp: BootstrapResponse = await getDeltaRecords(
+              workspaceStore.workspace.id,
+              Object.values(MODELS),
+              last,
+              user.id,
+            );
+            await saveSocketData(resp.syncActions, MODEL_STORE_MAP);
+            localStorage.setItem(
+              `lastSequenceId_${hash(hashKey)}`,
+              `${resp.lastSequenceId}`,
+            );
+          } catch {
+            // Reconciliation failed (session expired mid-flight, etc.).
+            // The next successful reconnect retries; a page reload always
+            // re-syncs from scratch.
+          }
+        })();
+      };
+
+      // EventSource reconnects automatically on drop.
       socket.onerror = () => {
         // No-op: the browser handles reconnect. Kept to avoid console noise
         // and to give a single place to log in the future.

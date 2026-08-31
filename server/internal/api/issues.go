@@ -81,9 +81,6 @@ type issueRequest struct {
 	SortOrder   *int     `json:"sortOrder"`
 }
 
-// validPriority reports whether p is one of the client's four priorities.
-func validPriority(p int) bool { return p >= 1 && p <= 4 }
-
 // toJSONB renders a client string for a jsonb column: valid JSON is
 // stored verbatim (the rich-text document format), anything else is
 // stored as a JSON string scalar.
@@ -117,10 +114,6 @@ func (a *API) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Title == nil || strings.TrimSpace(*req.Title) == "" || len(*req.Title) > 255 {
 		writeError(w, http.StatusUnprocessableEntity, "title is required (1-255 chars)")
-		return
-	}
-	if req.Priority != nil && !validPriority(*req.Priority) {
-		writeError(w, http.StatusUnprocessableEntity, "priority must be 1-4")
 		return
 	}
 	workspaceID, ok := a.teamWorkspace(ctx, p, *req.TeamID)
@@ -195,10 +188,9 @@ func (a *API) insertIssueTx(ctx context.Context, tx pgx.Tx, p *Principal, worksp
 		id        string
 		createdAt time.Time
 	)
-	priority := 2
-	if req.Priority != nil {
-		priority = *req.Priority
-	}
+	// Priority is the client's value verbatim: the new-issue template
+	// defaults it to 0 ("no explicit priority") and the client model
+	// accepts number | null (Tegon's schema: Int?, no range).
 	sortOrder := 0
 	if req.SortOrder != nil {
 		sortOrder = *req.SortOrder
@@ -218,7 +210,7 @@ func (a *API) insertIssueTx(ctx context.Context, tx pgx.Tx, p *Principal, worksp
 		values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)
 		returning id, created_at`,
 		teamID, number, strings.TrimSpace(*req.Title), toJSONB(description),
-		stateID, priority, assignee, parent, sortOrder, p.AccountID).Scan(&id, &createdAt)
+		stateID, req.Priority, assignee, parent, sortOrder, p.AccountID).Scan(&id, &createdAt)
 	if err != nil {
 		return "", err
 	}
@@ -326,10 +318,6 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if req.Priority != nil && !validPriority(*req.Priority) {
-		writeError(w, http.StatusUnprocessableEntity, "priority must be 1-4")
-		return
-	}
 
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
@@ -421,15 +409,20 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		row.AssigneeID = ptrOrNull(*req.AssigneeID)
 		changed = true
 	}
-	if req.Priority != nil && *req.Priority != row.Priority {
-		if _, err := tx.Exec(ctx, `update issues set priority = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, *req.Priority); err != nil {
+	if req.Priority != nil && (row.Priority == nil || *row.Priority != *req.Priority) {
+		if _, err := tx.Exec(ctx, `update issues set priority = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, req.Priority); err != nil {
 			return false, err
+		}
+		from := ""
+		if row.Priority != nil {
+			from = strconv.Itoa(*row.Priority)
 		}
 		if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "priority",
-			strconv.Itoa(row.Priority), strconv.Itoa(*req.Priority)); err != nil {
+			from, strconv.Itoa(*req.Priority)); err != nil {
 			return false, err
 		}
-		row.Priority = *req.Priority
+		next := *req.Priority
+		row.Priority = &next
 		changed = true
 	}
 	if req.SortOrder != nil && *req.SortOrder != row.SortOrder {
