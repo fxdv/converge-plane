@@ -627,6 +627,24 @@ func strval(s *string) string {
 	return *s
 }
 
+// wireAction maps the internal outbox action to the client's
+// SyncActionRecord action vocabulary (const enum Action = 'I'|'U'|'D',
+// data-loader.ts). The client's save-data handlers switch on exactly
+// these values; anything else is silently dropped, which would make
+// mutations invisible in the UI. The database keeps the descriptive
+// CREATE/UPDATE/DELETE names for operators.
+func wireAction(action string) string {
+	switch action {
+	case "CREATE":
+		return "I"
+	case "UPDATE":
+		return "U"
+	case "DELETE":
+		return "D"
+	}
+	return action
+}
+
 // collectOutbox serves the delta endpoint: outbox records for the
 // workspace newer than afterSeq, restricted to the requested models.
 func (a *API) collectOutbox(ctx context.Context, workspaceID string, afterSeq int64, modelNames string) ([]syncActionRecord, error) {
@@ -669,7 +687,7 @@ func (a *API) collectOutbox(ctx context.Context, workspaceID string, afterSeq in
 			Data:        data,
 			ModelName:   model,
 			ModelID:     strval(&modelID),
-			Action:      action,
+			Action:      wireAction(action),
 			WorkspaceID: workspaceID,
 			SequenceID:  strconv.FormatInt(seqNum, 10),
 		})
@@ -699,7 +717,7 @@ func (a *API) emitChange(ctx context.Context, tx pgx.Tx, workspaceID, model, mod
 		Data:        raw,
 		ModelName:   model,
 		ModelID:     modelID,
-		Action:      action,
+		Action:      wireAction(action),
 		WorkspaceID: workspaceID,
 		SequenceID:  strconv.FormatInt(seq, 10),
 	}
