@@ -44,8 +44,10 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache dumb-init
 ENV NODE_ENV=production
 WORKDIR /app
+# The standalone output mirrors the monorepo root with the app nested
+# under web/ (Next's monorepo layout), so the app root is /app/web.
 COPY --from=build /app/web/.next/standalone ./
-COPY --from=build /app/web/.next/static /app/.next/static
-COPY --from=build /app/web/public /app/public
+COPY --from=build /app/web/.next/static /app/web/.next/static
+COPY --from=build /app/web/public /app/web/public
 EXPOSE 3000
-CMD ["dumb-init", "node", "server.js"]
+CMD ["dumb-init", "node", "web/server.js"]
