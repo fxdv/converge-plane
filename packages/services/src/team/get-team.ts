@@ -3,7 +3,7 @@ import type {
   Team,
   TeamRequestParamsDto,
   WorkspaceRequestParamsDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 
 import axios from 'axios';
 

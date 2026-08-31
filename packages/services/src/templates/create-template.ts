@@ -1,4 +1,4 @@
-import type { CreateTemplateDto, Template } from '@tegonhq/types';
+import type { CreateTemplateDto, Template } from '@converge/types';
 
 import axios from 'axios';
 

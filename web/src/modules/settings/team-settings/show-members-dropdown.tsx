@@ -1,20 +1,20 @@
-import { RoleEnum } from '@tegonhq/types';
-import { Button } from '@tegonhq/ui/components/button';
+import { RoleEnum } from '@converge/types';
+import { Button } from '@converge/ui/components/button';
 import {
   Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
-} from '@tegonhq/ui/components/command';
-import { Loader } from '@tegonhq/ui/components/loader';
+} from '@converge/ui/components/command';
+import { Loader } from '@converge/ui/components/loader';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
-import { ScrollArea } from '@tegonhq/ui/components/scroll-area';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+} from '@converge/ui/components/popover';
+import { ScrollArea } from '@converge/ui/components/scroll-area';
+import { useToast } from '@converge/ui/components/use-toast';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

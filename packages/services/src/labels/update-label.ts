@@ -2,7 +2,7 @@ import type {
   Label,
   LabelRequestParamsDto,
   UpdateLabelDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 
 import axios from 'axios';
 

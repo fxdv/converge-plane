@@ -4,8 +4,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@tegonhq/ui/components/command';
-import { Loader } from '@tegonhq/ui/components/loader';
+} from '@converge/ui/components/command';
+import { Loader } from '@converge/ui/components/loader';
 import { useRouter } from 'next/router';
 import React from 'react';
 import { useDebouncedCallback } from 'use-debounce';

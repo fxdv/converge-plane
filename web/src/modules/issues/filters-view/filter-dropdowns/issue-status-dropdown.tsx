@@ -2,13 +2,13 @@
 
 // import type { WorkflowType } from 'common/types'
 
-import { Button } from '@tegonhq/ui/components/button';
-import { Command, CommandInput } from '@tegonhq/ui/components/command';
+import { Button } from '@converge/ui/components/button';
+import { Command, CommandInput } from '@converge/ui/components/command';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
+} from '@converge/ui/components/popover';
 import * as React from 'react';
 
 import { IssueStatusDropdownContent } from 'modules/issues/components';

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Team, TeamType as TeamTypeEnum } from '@tegonhq/types';
-import { Button } from '@tegonhq/ui/components/button';
+import { Team, TeamType as TeamTypeEnum } from '@converge/types';
+import { Button } from '@converge/ui/components/button';
 import {
   Form,
   FormField,
@@ -9,16 +9,16 @@ import {
   FormControl,
   FormMessage,
   FormDescription,
-} from '@tegonhq/ui/components/form';
-import { Input } from '@tegonhq/ui/components/input';
+} from '@converge/ui/components/form';
+import { Input } from '@converge/ui/components/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@tegonhq/ui/components/select';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+} from '@converge/ui/components/select';
+import { useToast } from '@converge/ui/components/use-toast';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 

@@ -1,12 +1,12 @@
 import type { User } from './types';
 
-import { AvatarText } from '@tegonhq/ui/components/avatar';
+import { AvatarText } from '@converge/ui/components/avatar';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@tegonhq/ui/components/tooltip';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/components/tooltip';
+import { cn } from '@converge/ui/lib/utils';
 
 interface UserAvatarProps {
   user: User;

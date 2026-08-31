@@ -1,4 +1,4 @@
-import type { UpdateActionInputsDto } from '@tegonhq/types';
+import type { UpdateActionInputsDto } from '@converge/types';
 
 import axios from 'axios';
 

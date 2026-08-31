@@ -3,7 +3,7 @@ import { NodeViewWrapper } from '@tiptap/react';
 import { filesize } from 'filesize';
 import React from 'react';
 
-import { DocumentLine } from '@tegonhq/ui/icons';
+import { DocumentLine } from '@converge/ui/icons';
 
 import { useSrc } from './use-src';
 import { Button } from '../../button';

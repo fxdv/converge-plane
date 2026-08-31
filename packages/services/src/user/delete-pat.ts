@@ -1,4 +1,4 @@
-import type { PatIdDto } from '@tegonhq/types';
+import type { PatIdDto } from '@converge/types';
 
 import axios from 'axios';
 

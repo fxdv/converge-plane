@@ -1,4 +1,4 @@
-import { Workflow, WorkflowRequestParamsDto } from '@tegonhq/types';
+import { Workflow, WorkflowRequestParamsDto } from '@converge/types';
 import axios from 'axios';
 
 export async function getWorkflowsByTeam({

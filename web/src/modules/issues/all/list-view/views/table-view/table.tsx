@@ -11,7 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@tegonhq/ui/components/table';
+} from '@converge/ui/components/table';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import React from 'react';

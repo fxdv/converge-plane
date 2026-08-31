@@ -1,4 +1,4 @@
-import { CommandGroup, CommandItem } from '@tegonhq/ui/components/command';
+import { CommandGroup, CommandItem } from '@converge/ui/components/command';
 import * as React from 'react';
 
 import { allCommands } from './add-issue-metadata-interface';

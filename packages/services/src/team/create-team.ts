@@ -1,4 +1,4 @@
-import { CreateTeamDto } from '@tegonhq/types';
+import { CreateTeamDto } from '@converge/types';
 import axios from 'axios';
 
 export async function createTeam(teamData: CreateTeamDto) {

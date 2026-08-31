@@ -1,6 +1,6 @@
-import type { Workflow } from '@tegonhq/types';
+import type { Workflow } from '@converge/types';
 
-import { createWorkflow } from '@tegonhq/services';
+import { createWorkflow } from '@converge/services';
 import { useMutation } from 'react-query';
 
 interface MutationParams {

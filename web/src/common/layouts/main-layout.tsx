@@ -1,4 +1,4 @@
-import { cn } from '@tegonhq/ui/lib/utils';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

@@ -14,9 +14,9 @@
     "@hookform/resolvers": "3.9.0",
     "@remixicon/react": "^4.2.0",
     "@tanstack/react-table": "^8.20.5",
-    "@tegonhq/services": "workspace:*",
-    "@tegonhq/types": "workspace:*",
-    "@tegonhq/ui": "workspace:*",
+    "@converge/services": "workspace:*",
+    "@converge/types": "workspace:*",
+    "@converge/ui": "workspace:*",
     "@tiptap/core": "^2.3.0",
     "@tiptap/extension-mention": "^2.10.3",
     "@tiptap/react": "^2.5.4",
@@ -61,8 +61,8 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@tegonhq/eslint-config": "workspace:*",
-    "@tegonhq/typescript-config": "workspace:*",
+    "@converge/eslint-config": "workspace:*",
+    "@converge/typescript-config": "workspace:*",
     "@types/lodash.isequal": "^4.5.8",
     "@types/node": "^20.11.5",
     "@types/pluralize": "^0.0.33",

@@ -3,7 +3,7 @@ import {
   IntegrationAccount,
   IntegrationAccountIdDto,
   PersonalAccountDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 import axios from 'axios';
 
 export async function getIntegrationAccount({

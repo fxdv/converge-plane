@@ -1,17 +1,17 @@
-import { AdjustableTextArea } from '@tegonhq/ui/components/adjustable-textarea';
-import { Button } from '@tegonhq/ui/components/button';
+import { AdjustableTextArea } from '@converge/ui/components/adjustable-textarea';
+import { Button } from '@converge/ui/components/button';
 import {
   FormControl,
   FormField,
   FormItem,
   FormMessage,
-} from '@tegonhq/ui/components/form';
+} from '@converge/ui/components/form';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@tegonhq/ui/components/tooltip';
-import { AI } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/tooltip';
+import { AI } from '@converge/ui/icons';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
@@ -67,7 +67,7 @@ export function NewIssueTitle({ form, index }: NewIssueTitleProps) {
   });
 
   useDescriptionChange(touched, descriptionString, (description: string) => {
-    mutate({ description, workspaceId: workspace.id }), 100, 40;
+    (mutate({ description, workspaceId: workspace.id }), 100, 40);
   });
 
   return (

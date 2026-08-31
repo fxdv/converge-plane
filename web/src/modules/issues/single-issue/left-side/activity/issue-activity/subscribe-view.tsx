@@ -1,5 +1,5 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+import { Button } from '@converge/ui/components/button';
+import { useToast } from '@converge/ui/components/use-toast';
 import React from 'react';
 
 import { SubscribeType } from 'common/types';

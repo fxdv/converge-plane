@@ -1,9 +1,9 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Editor, EditorExtensions } from '@tegonhq/ui/components/editor/index';
-import { FormControl, FormField, FormItem } from '@tegonhq/ui/components/form';
-import { Loader } from '@tegonhq/ui/components/loader';
-import { DeleteLine } from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+import { Button } from '@converge/ui/components/button';
+import { Editor, EditorExtensions } from '@converge/ui/components/editor/index';
+import { FormControl, FormField, FormItem } from '@converge/ui/components/form';
+import { Loader } from '@converge/ui/components/loader';
+import { DeleteLine } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import { usePathname } from 'next/navigation';
 import React from 'react';

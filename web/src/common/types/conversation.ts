@@ -1,4 +1,4 @@
-import type { UserType } from '@tegonhq/types';
+import type { UserType } from '@converge/types';
 
 export interface ConversationType {
   id: string;

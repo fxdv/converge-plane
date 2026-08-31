@@ -1,4 +1,4 @@
-import { BadgeColor } from '@tegonhq/ui/components/badge';
+import { BadgeColor } from '@converge/ui/components/badge';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

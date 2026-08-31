@@ -1,7 +1,7 @@
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { Checkbox } from '@tegonhq/ui/components/checkbox';
-import { CommandGroup } from '@tegonhq/ui/components/command';
-import { AssigneeLine } from '@tegonhq/ui/icons';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { Checkbox } from '@converge/ui/components/checkbox';
+import { CommandGroup } from '@converge/ui/components/command';
+import { AssigneeLine } from '@converge/ui/icons';
 
 import type { User } from 'common/types';
 import { getUserFromUsersData } from 'common/user-util';

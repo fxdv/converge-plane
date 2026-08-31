@@ -1,5 +1,5 @@
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { Button } from '@tegonhq/ui/components/button';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { Button } from '@converge/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@tegonhq/ui/components/dropdown-menu';
+} from '@converge/ui/components/dropdown-menu';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import React from 'react';

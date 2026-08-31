@@ -1,11 +1,11 @@
 'use client';
 
 import { type ColumnDef } from '@tanstack/react-table';
-import { Badge } from '@tegonhq/ui/components/badge';
-import { Button } from '@tegonhq/ui/components/button';
-import { TeamIcon } from '@tegonhq/ui/components/team-icon';
-import { useToast } from '@tegonhq/ui/components/use-toast';
-import { CheckLine } from '@tegonhq/ui/icons';
+import { Badge } from '@converge/ui/components/badge';
+import { Button } from '@converge/ui/components/button';
+import { TeamIcon } from '@converge/ui/components/team-icon';
+import { useToast } from '@converge/ui/components/use-toast';
+import { CheckLine } from '@converge/ui/icons';
 import * as React from 'react';
 
 import type { TeamType } from 'common/types';

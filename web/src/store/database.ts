@@ -20,7 +20,7 @@ import { MODELS } from './models';
 // Forked models outside the active release were trimmed in the M3
 // dead-feature pass. R-9 (data-layer workstream) replaces this cache with
 // server-authoritative state + bounded caching.
-export class TegonDatabase extends Dexie {
+export class ConvergeDatabase extends Dexie {
   workspaces: Dexie.Table<WorkspaceType, string>;
   labels: Dexie.Table<LabelType, string>;
   teams: Dexie.Table<TeamType, string>;
@@ -66,16 +66,16 @@ export class TegonDatabase extends Dexie {
   }
 }
 
-export let tegonDatabase: TegonDatabase;
+export let convergeDatabase: ConvergeDatabase;
 
 export function initDatabase(hash: number) {
-  tegonDatabase = new TegonDatabase(`Tegon_${hash}`);
+  convergeDatabase = new ConvergeDatabase(`Converge_${hash}`);
 }
 
 export async function resetDatabase() {
   localStorage.removeItem('lastSequenceId');
 
-  if (tegonDatabase) {
-    await tegonDatabase.delete();
+  if (convergeDatabase) {
+    await convergeDatabase.delete();
   }
 }

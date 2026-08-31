@@ -6,7 +6,7 @@ import {
   type DroppableProvided,
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { BadgeColor } from '@tegonhq/ui/components/badge';
+import { BadgeColor } from '@converge/ui/components/badge';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import ReactDOM from 'react-dom';

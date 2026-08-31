@@ -2,7 +2,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
+} from '@converge/ui/components/popover';
 import React from 'react';
 
 interface ColorPickerProps {

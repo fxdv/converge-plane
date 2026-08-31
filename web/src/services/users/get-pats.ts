@@ -1,6 +1,6 @@
-import type { Pat } from '@tegonhq/types';
+import type { Pat } from '@converge/types';
 
-import { getPats } from '@tegonhq/services';
+import { getPats } from '@converge/services';
 import { type UseQueryResult, useQuery } from 'react-query';
 
 import { type XHRErrorResponse } from 'services/utils';

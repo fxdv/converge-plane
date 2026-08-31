@@ -1,5 +1,5 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Filter } from '@tegonhq/ui/icons';
+import { Button } from '@converge/ui/components/button';
+import { Filter } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';

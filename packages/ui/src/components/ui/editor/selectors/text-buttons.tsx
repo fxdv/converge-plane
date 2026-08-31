@@ -8,7 +8,7 @@ import {
   ItalicLine,
   StrikeLine,
   UnderlineLine,
-} from '@tegonhq/ui/icons';
+} from '@converge/ui/icons';
 
 import { cn } from '../../../../lib/utils';
 import { Button } from '../../button';

@@ -1,6 +1,6 @@
-import { Badge, BadgeColor } from '@tegonhq/ui/components/badge';
-import { TimelineItem } from '@tegonhq/ui/components/timeline';
-import { LabelLine } from '@tegonhq/ui/icons';
+import { Badge, BadgeColor } from '@converge/ui/components/badge';
+import { TimelineItem } from '@converge/ui/components/timeline';
+import { LabelLine } from '@converge/ui/icons';
 import * as React from 'react';
 
 import type { LabelType } from 'common/types';

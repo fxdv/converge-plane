@@ -1,4 +1,4 @@
-import { Timeline, TimelineItem } from '@tegonhq/ui/components/timeline';
+import { Timeline, TimelineItem } from '@converge/ui/components/timeline';
 import { observer } from 'mobx-react-lite';
 
 import type { User } from 'common/types';

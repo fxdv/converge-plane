@@ -17,7 +17,7 @@ importers:
 
   packages/services:
     dependencies:
-      '@tegonhq/types':
+      '@converge/types':
         specifier: workspace:*
         version: link:../types
       axios:
@@ -30,10 +30,10 @@ importers:
         specifier: 3.23.8
         version: 3.23.8
     devDependencies:
-      '@tegonhq/eslint-config':
+      '@converge/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
-      '@tegonhq/typescript-config':
+      '@converge/typescript-config':
         specifier: workspace:*
         version: link:../../tooling/typescript-config
       '@types/superagent':
@@ -58,10 +58,10 @@ importers:
         specifier: 0.14.1
         version: 0.14.1
     devDependencies:
-      '@tegonhq/eslint-config':
+      '@converge/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
-      '@tegonhq/typescript-config':
+      '@converge/typescript-config':
         specifier: workspace:*
         version: link:../../tooling/typescript-config
       '@types/node':
@@ -278,10 +278,10 @@ importers:
         specifier: ^3.21.7
         version: 3.32.2(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
-      '@tegonhq/eslint-config':
+      '@converge/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
-      '@tegonhq/typescript-config':
+      '@converge/typescript-config':
         specifier: workspace:*
         version: link:../../tooling/typescript-config
       '@types/markdown-it':
@@ -358,6 +358,15 @@ importers:
 
   web:
     dependencies:
+      '@converge/services':
+        specifier: workspace:*
+        version: link:../packages/services
+      '@converge/types':
+        specifier: workspace:*
+        version: link:../packages/types
+      '@converge/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
       '@hello-pangea/dnd':
         specifier: ^16.6.0
         version: 16.6.0(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -370,15 +379,6 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.20.5
         version: 8.21.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tegonhq/services':
-        specifier: workspace:*
-        version: link:../packages/services
-      '@tegonhq/types':
-        specifier: workspace:*
-        version: link:../packages/types
-      '@tegonhq/ui':
-        specifier: workspace:*
-        version: link:../packages/ui
       '@tiptap/core':
         specifier: ^2.3.0
         version: 2.27.2(@tiptap/pm@2.27.2)
@@ -506,10 +506,10 @@ importers:
         specifier: 3.23.8
         version: 3.23.8
     devDependencies:
-      '@tegonhq/eslint-config':
+      '@converge/eslint-config':
         specifier: workspace:*
         version: link:../tooling/eslint-config
-      '@tegonhq/typescript-config':
+      '@converge/typescript-config':
         specifier: workspace:*
         version: link:../tooling/typescript-config
       '@types/lodash.isequal':

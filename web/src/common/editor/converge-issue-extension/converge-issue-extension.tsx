@@ -1,10 +1,10 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 
-import { TegonIssueComponent } from './tegon-issue-component';
+import { ConvergeIssueComponent } from './converge-issue-component';
 
-export const tegonIssueExtension = Node.create({
-  name: 'tegonIssueExtension',
+export const convergeIssueExtension = Node.create({
+  name: 'convergeIssueExtension',
   group: 'inline',
   inline: true,
   atom: true,
@@ -20,17 +20,17 @@ export const tegonIssueExtension = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'tegon-issue-extension',
+        tag: 'converge-issue-extension',
       },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['tegon-issue-extension', mergeAttributes(HTMLAttributes)];
+    return ['converge-issue-extension', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(TegonIssueComponent, {
+    return ReactNodeViewRenderer(ConvergeIssueComponent, {
       contentDOMElementTag: 'span',
       as: 'span',
     });

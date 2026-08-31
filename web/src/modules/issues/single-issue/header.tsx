@@ -2,10 +2,10 @@ import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
-} from '@tegonhq/ui/components/breadcrumb';
-import { Button } from '@tegonhq/ui/components/button';
-import { TeamIcon } from '@tegonhq/ui/components/team-icon';
-import { Close } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/breadcrumb';
+import { Button } from '@converge/ui/components/button';
+import { TeamIcon } from '@converge/ui/components/team-icon';
+import { Close } from '@converge/ui/icons';
 import { MoveDiagonal2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';

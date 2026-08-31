@@ -1,6 +1,6 @@
-import type { Workflow } from '@tegonhq/types';
+import type { Workflow } from '@converge/types';
 
-import { updateWorkflow, type UpdateWorkflowInput } from '@tegonhq/services';
+import { updateWorkflow, type UpdateWorkflowInput } from '@converge/services';
 import { useMutation } from 'react-query';
 
 import { useContextStore } from 'store/global-context-provider';

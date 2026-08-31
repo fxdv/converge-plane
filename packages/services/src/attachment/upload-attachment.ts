@@ -1,4 +1,4 @@
-import { AttachmentResponse } from '@tegonhq/types';
+import { AttachmentResponse } from '@converge/types';
 import axios from 'axios';
 
 export async function uploadAttachment(

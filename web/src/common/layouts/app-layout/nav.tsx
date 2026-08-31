@@ -1,7 +1,7 @@
 'use client';
 
-import { buttonVariants } from '@tegonhq/ui/components/button';
-import { cn } from '@tegonhq/ui/lib/utils';
+import { buttonVariants } from '@converge/ui/components/button';
+import { cn } from '@converge/ui/lib/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 

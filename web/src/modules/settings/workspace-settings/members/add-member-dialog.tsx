@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { RoleEnum } from '@tegonhq/types';
-import { Button } from '@tegonhq/ui/components/button';
+import { RoleEnum } from '@converge/types';
+import { Button } from '@converge/ui/components/button';
 import {
   DialogContent,
   Dialog,
   DialogHeader,
   DialogTitle,
-} from '@tegonhq/ui/components/dialog';
+} from '@converge/ui/components/dialog';
 import {
   Form,
   FormControl,
@@ -14,8 +14,8 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@tegonhq/ui/components/form';
-import { MultiSelect } from '@tegonhq/ui/components/multi-select';
+} from '@converge/ui/components/form';
+import { MultiSelect } from '@converge/ui/components/multi-select';
 import {
   Select,
   SelectContent,
@@ -23,9 +23,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@tegonhq/ui/components/select';
-import { Textarea } from '@tegonhq/ui/components/textarea';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+} from '@converge/ui/components/select';
+import { Textarea } from '@converge/ui/components/textarea';
+import { useToast } from '@converge/ui/components/use-toast';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';

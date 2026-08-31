@@ -1,4 +1,4 @@
-import { updateTeamPreferences } from '@tegonhq/services';
+import { updateTeamPreferences } from '@converge/services';
 import { useMutation } from 'react-query';
 
 import type { TeamType } from 'common/types';

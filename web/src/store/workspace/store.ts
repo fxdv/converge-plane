@@ -7,7 +7,7 @@ import {
 
 import type { UsersOnWorkspaceType, WorkspaceType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { UsersOnWorkspace, Workspace } from './models';
 
@@ -48,11 +48,11 @@ export const WorkspaceStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* (workspaceId: string) {
-      self.workspace = yield tegonDatabase.workspaces.get({
+      self.workspace = yield convergeDatabase.workspaces.get({
         id: workspaceId,
       });
 
-      self.usersOnWorkspaces = yield tegonDatabase.usersOnWorkspaces
+      self.usersOnWorkspaces = yield convergeDatabase.usersOnWorkspaces
         .where({
           workspaceId,
         })

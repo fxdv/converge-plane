@@ -1,4 +1,4 @@
-import { CrossCircle } from '@tegonhq/ui/icons';
+import { CrossCircle } from '@converge/ui/icons';
 
 export const NoTeamContainer = () => {
   return (

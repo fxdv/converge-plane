@@ -3,8 +3,8 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@tegonhq/ui/components/tabs';
-import { ActivityLine, SendLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/tabs';
+import { ActivityLine, SendLine } from '@converge/ui/icons';
 import React from 'react';
 
 import { CommentsActivity } from './comments-activity';

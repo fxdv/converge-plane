@@ -1,10 +1,10 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Command,
   CommandInput,
   CommandList,
-} from '@tegonhq/ui/components/command';
-import { CrossLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/command';
+import { CrossLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

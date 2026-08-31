@@ -1,5 +1,5 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { CreateIssueLine, SearchLine } from '@tegonhq/ui/icons';
+import { Button } from '@converge/ui/components/button';
+import { CreateIssueLine, SearchLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

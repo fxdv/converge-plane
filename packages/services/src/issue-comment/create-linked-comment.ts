@@ -1,4 +1,4 @@
-import { CreateLinkedIssueCommentDto, LinkedComment } from '@tegonhq/types';
+import { CreateLinkedIssueCommentDto, LinkedComment } from '@converge/types';
 import axios from 'axios';
 
 export async function createLinkedIssueComment(

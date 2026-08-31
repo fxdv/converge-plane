@@ -2,7 +2,7 @@ import type { WorkspaceStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 import { MODELS } from 'store/models';
 
 export async function saveWorkspaceData(
@@ -24,7 +24,7 @@ export async function saveWorkspaceData(
           settings: record.data.settings,
         };
 
-        await tegonDatabase.usersOnWorkspaces.put(userOnWorkspace);
+        await convergeDatabase.usersOnWorkspaces.put(userOnWorkspace);
 
         // Update the store
         return (
@@ -43,7 +43,7 @@ export async function saveWorkspaceData(
         slug: record.data.slug,
       };
 
-      await tegonDatabase.workspaces.put(workspace);
+      await convergeDatabase.workspaces.put(workspace);
 
       // Update the store
       return workspaceStore && (await workspaceStore.update(workspace));

@@ -1,4 +1,4 @@
-import type { ActionIdDto } from '@tegonhq/types';
+import type { ActionIdDto } from '@converge/types';
 
 import axios from 'axios';
 

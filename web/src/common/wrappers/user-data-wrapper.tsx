@@ -1,6 +1,6 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Logo } from '@tegonhq/ui/components/dynamic-logo';
-import { Loader } from '@tegonhq/ui/components/loader';
+import { Button } from '@converge/ui/components/button';
+import { Logo } from '@converge/ui/components/dynamic-logo';
+import { Loader } from '@converge/ui/components/loader';
 import { useRouter } from 'next/router';
 import * as React from 'react';
 import { signOut } from 'supertokens-auth-react/recipe/session';

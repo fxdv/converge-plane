@@ -1,4 +1,4 @@
-import { updateTeam, type UpdateTeamDtoWithTeamId } from '@tegonhq/services';
+import { updateTeam, type UpdateTeamDtoWithTeamId } from '@converge/services';
 import { useMutation } from 'react-query';
 
 import type { TeamType } from 'common/types';

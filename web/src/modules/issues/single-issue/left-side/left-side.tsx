@@ -1,6 +1,6 @@
-import { Editor, EditorExtensions } from '@tegonhq/ui/components/editor/index';
-import { ScrollArea } from '@tegonhq/ui/components/scroll-area';
-import { Separator } from '@tegonhq/ui/components/separator';
+import { Editor, EditorExtensions } from '@converge/ui/components/editor/index';
+import { ScrollArea } from '@converge/ui/components/scroll-area';
+import { Separator } from '@converge/ui/components/separator';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 import { useDebouncedCallback } from 'use-debounce';
@@ -8,7 +8,7 @@ import { useDebouncedCallback } from 'use-debounce';
 import { useEditorSuggestionItems } from 'modules/issues/components/use-editor-suggestion-items';
 
 import { getTiptapJSON } from 'common';
-import { tegonIssueExtension } from 'common/editor/tegon-issue-extension';
+import { convergeIssueExtension } from 'common/editor/converge-issue-extension';
 
 import { useIssueData } from 'hooks/issues';
 import { useEditorPasteHandler } from 'hooks/use-editor-paste-handler';
@@ -62,7 +62,7 @@ export const LeftSide = observer(() => {
               value={issue.description}
               onChange={onDescriptionChange}
               handlePaste={handlePaste}
-              extensions={[tegonIssueExtension]}
+              extensions={[convergeIssueExtension]}
               className="min-h-[50px] mb-8 px-6 mt-3 text-md"
             >
               <FileUpload />

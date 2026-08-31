@@ -2,7 +2,7 @@ import type { LabelsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveLabelData(
   data: SyncActionRecord[],
@@ -24,21 +24,21 @@ export async function saveLabelData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.labels.put(label);
+          await convergeDatabase.labels.put(label);
           return (
             labelsStore && (await labelsStore.update(label, record.data.id))
           );
         }
 
         case 'U': {
-          await tegonDatabase.labels.put(label);
+          await convergeDatabase.labels.put(label);
           return (
             labelsStore && (await labelsStore.update(label, record.data.id))
           );
         }
 
         case 'D': {
-          await tegonDatabase.labels.delete(record.data.id);
+          await convergeDatabase.labels.delete(record.data.id);
           return labelsStore && (await labelsStore.deleteById(record.data.id));
         }
       }

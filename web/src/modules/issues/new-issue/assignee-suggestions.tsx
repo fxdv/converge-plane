@@ -1,4 +1,4 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 
 import type { User } from 'common/types';
 

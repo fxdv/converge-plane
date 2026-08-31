@@ -1,5 +1,5 @@
-import { Issue } from '@tegonhq/types';
-import { SearchDto } from '@tegonhq/types';
+import { Issue } from '@converge/types';
+import { SearchDto } from '@converge/types';
 import axios from 'axios';
 
 export async function search({

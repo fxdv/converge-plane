@@ -1,12 +1,12 @@
 import { RiArrowDownSFill, RiArrowRightSFill } from '@remixicon/react';
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@tegonhq/ui/components/collapsible';
-import { DuplicateLine2 } from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/components/collapsible';
+import { DuplicateLine2 } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { useRouter } from 'next/router';
 import React from 'react';
 

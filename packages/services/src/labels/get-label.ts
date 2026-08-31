@@ -1,4 +1,4 @@
-import type { GetLabelsDTO, Label } from '@tegonhq/types';
+import type { GetLabelsDTO, Label } from '@converge/types';
 
 import axios from 'axios';
 

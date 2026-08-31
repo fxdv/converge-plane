@@ -6,8 +6,8 @@ import {
   type DroppableProvided,
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { AssigneeLine } from '@tegonhq/ui/icons';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { AssigneeLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import ReactDOM from 'react-dom';

@@ -1,11 +1,11 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Command, CommandInput } from '@tegonhq/ui/components/command';
+import { Button } from '@converge/ui/components/button';
+import { Command, CommandInput } from '@converge/ui/components/command';
 import {
   Popover,
   PopoverContent,
   PopoverPortal,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
+} from '@converge/ui/components/popover';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

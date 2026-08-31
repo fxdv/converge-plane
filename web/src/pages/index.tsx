@@ -1,4 +1,4 @@
-import { Loader } from '@tegonhq/ui/components/loader';
+import { Loader } from '@converge/ui/components/loader';
 import { useRouter } from 'next/router';
 import * as React from 'react';
 import { SessionAuth } from 'supertokens-auth-react/recipe/session';

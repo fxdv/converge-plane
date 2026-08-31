@@ -1,6 +1,6 @@
-import type { Pat } from '@tegonhq/types';
+import type { Pat } from '@converge/types';
 
-import { createPat } from '@tegonhq/services';
+import { createPat } from '@converge/services';
 import { useMutation } from 'react-query';
 
 interface MutationParams {

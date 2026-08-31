@@ -1,4 +1,4 @@
-import { IssueComment, IssueCommentDto } from '@tegonhq/types';
+import { IssueComment, IssueCommentDto } from '@converge/types';
 import axios from 'axios';
 
 export async function getIssueCommentReplies({

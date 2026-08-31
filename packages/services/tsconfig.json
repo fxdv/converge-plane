@@ -1,11 +1,11 @@
 {
-  "extends": "@tegonhq/typescript-config/node.json",
+  "extends": "@converge/typescript-config/node.json",
   "include": ["./src/**/*.ts"],
   "compilerOptions": {
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "paths": {
-      "@tegonhq/types": ["../types/src/index"]
+      "@converge/types": ["../types/src/index"]
     },
     "lib": ["DOM", "DOM.Iterable"],
     "declaration": false,

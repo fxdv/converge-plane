@@ -1,9 +1,9 @@
-import { CommandItem, CommandList } from '@tegonhq/ui/components/command';
+import { CommandItem, CommandList } from '@converge/ui/components/command';
 import { StepForward } from 'lucide-react';
 import { useEditor } from 'novel';
 import { getPrevText } from 'novel/utils';
 
-import { SubIssue } from '@tegonhq/ui/icons';
+import { SubIssue } from '@converge/ui/icons';
 
 const options = [
   {

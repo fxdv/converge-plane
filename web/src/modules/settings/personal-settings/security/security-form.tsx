@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Form,
   FormControl,
@@ -7,9 +7,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@tegonhq/ui/components/form';
-import { Input } from '@tegonhq/ui/components/input';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+} from '@converge/ui/components/form';
+import { Input } from '@converge/ui/components/input';
+import { useToast } from '@converge/ui/components/use-toast';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';

@@ -1,11 +1,11 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Command, CommandInput } from '@tegonhq/ui/components/command';
+import { Button } from '@converge/ui/components/button';
+import { Command, CommandInput } from '@converge/ui/components/command';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
-import { AddLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/popover';
+import { AddLine } from '@converge/ui/icons';
 import * as React from 'react';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 

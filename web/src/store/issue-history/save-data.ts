@@ -2,7 +2,7 @@ import type { IssueHistoryStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveIssueHistoryData(
   data: SyncActionRecord[],
@@ -34,7 +34,7 @@ export async function saveIssueHistoryData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.issueHistory.put(issueHistory);
+          await convergeDatabase.issueHistory.put(issueHistory);
           return (
             issueHistoryStore &&
             (await issueHistoryStore.update(issueHistory, record.data.id))
@@ -42,7 +42,7 @@ export async function saveIssueHistoryData(
         }
 
         case 'U': {
-          await tegonDatabase.issueHistory.put(issueHistory);
+          await convergeDatabase.issueHistory.put(issueHistory);
           return (
             issueHistoryStore &&
             (await issueHistoryStore.update(issueHistory, record.data.id))
@@ -50,7 +50,7 @@ export async function saveIssueHistoryData(
         }
 
         case 'D': {
-          await tegonDatabase.issueHistory.delete(record.data.id);
+          await convergeDatabase.issueHistory.delete(record.data.id);
           return (
             issueHistoryStore &&
             (await issueHistoryStore.deleteById(record.data.id))

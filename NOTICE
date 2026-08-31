@@ -1,4 +1,4 @@
-Circle
+Converge
 
 This project contains the web frontend (web/) and workspace packages
 (packages/ui, packages/types, packages/services) derived from Tegon,
@@ -6,9 +6,9 @@ Copyright (c) 2024 Tegon, Inc. and its contributors.
 
 Tegon is an open-source issue tracker published at
 https://github.com/tegonhq/tegon under the GNU Affero General Public
-License, version 3 (AGPL-3.0). The Circle frontend was forked from Tegon
+License, version 3 (AGPL-3.0). The Converge frontend was forked from Tegon
 at release v0.3.11-alpha (commit e9d07e4d) and is adapted and modified
-for the Circle product. The Circle API server (server/) is an original
+for the Converge product. The Converge API server (server/) is an original
 implementation and does not incorporate Tegon source code.
 
 This program is free software: you can redistribute it and/or modify it

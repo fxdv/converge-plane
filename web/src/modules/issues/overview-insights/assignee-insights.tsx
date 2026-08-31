@@ -1,7 +1,7 @@
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { Button } from '@tegonhq/ui/components/button';
-import { Loader } from '@tegonhq/ui/components/loader';
-import { AssigneeLine } from '@tegonhq/ui/icons';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { Button } from '@converge/ui/components/button';
+import { Loader } from '@converge/ui/components/loader';
+import { AssigneeLine } from '@converge/ui/icons';
 import { sort } from 'fast-sort';
 import { observer } from 'mobx-react-lite';
 

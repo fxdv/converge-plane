@@ -10,7 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@tegonhq/ui/components/table';
+} from '@converge/ui/components/table';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import React from 'react';

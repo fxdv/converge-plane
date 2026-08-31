@@ -1,4 +1,4 @@
-import type { Issue, IssueCommentRequestParamsDto } from '@tegonhq/types';
+import type { Issue, IssueCommentRequestParamsDto } from '@converge/types';
 
 import axios from 'axios';
 

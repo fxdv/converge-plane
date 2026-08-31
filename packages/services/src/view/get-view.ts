@@ -1,4 +1,4 @@
-import { GetViewRequestIdDTO, View } from '@tegonhq/types';
+import { GetViewRequestIdDTO, View } from '@converge/types';
 import axios from 'axios';
 
 export async function getView({ viewId }: GetViewRequestIdDTO): Promise<View> {

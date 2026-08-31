@@ -1,10 +1,10 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@tegonhq/ui/components/collapsible';
-import { AddLine, ChevronDown, ChevronRight } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/collapsible';
+import { AddLine, ChevronDown, ChevronRight } from '@converge/ui/icons';
 import * as React from 'react';
 
 import { IssueListItem } from 'modules/issues/components';

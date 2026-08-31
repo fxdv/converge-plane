@@ -1,5 +1,5 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Input } from '@tegonhq/ui/components/input';
+import { Button } from '@converge/ui/components/button';
+import { Input } from '@converge/ui/components/input';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

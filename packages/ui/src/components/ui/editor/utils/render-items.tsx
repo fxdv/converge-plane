@@ -6,7 +6,7 @@ import {
   Command,
   CommandInput,
   CommandList,
-} from '@tegonhq/ui/components/command';
+} from '@converge/ui/components/command';
 import { ReactRenderer } from '@tiptap/react';
 import { Provider } from 'jotai';
 import { useSetAtom, useAtom } from 'jotai';

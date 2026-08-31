@@ -1,4 +1,4 @@
-import { authorizeCode } from '@tegonhq/services';
+import { authorizeCode } from '@converge/services';
 import { useMutation } from 'react-query';
 
 interface MutationParams {

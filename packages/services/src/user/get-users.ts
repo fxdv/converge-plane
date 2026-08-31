@@ -1,4 +1,4 @@
-import { GetUsersDto, PublicUser } from '@tegonhq/types';
+import { GetUsersDto, PublicUser } from '@converge/types';
 import axios from 'axios';
 
 export async function getUsers(data: GetUsersDto): Promise<PublicUser[]> {

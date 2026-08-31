@@ -2,7 +2,7 @@ import type { IssuesStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveIssuesData(
   data: SyncActionRecord[],
@@ -36,21 +36,21 @@ export async function saveIssuesData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.issues.put(issue);
+          await convergeDatabase.issues.put(issue);
           return (
             issuesStore && (await issuesStore.update(issue, record.data.id))
           );
         }
 
         case 'U': {
-          await tegonDatabase.issues.put(issue);
+          await convergeDatabase.issues.put(issue);
           return (
             issuesStore && (await issuesStore.update(issue, record.data.id))
           );
         }
 
         case 'D': {
-          await tegonDatabase.issues.delete(record.data.id);
+          await convergeDatabase.issues.delete(record.data.id);
           return issuesStore && (await issuesStore.deleteById(record.data.id));
         }
       }

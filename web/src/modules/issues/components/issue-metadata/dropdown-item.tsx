@@ -1,4 +1,4 @@
-import { CommandItem } from '@tegonhq/ui/components/command';
+import { CommandItem } from '@converge/ui/components/command';
 
 interface DropdownItemProps {
   id: string | number;

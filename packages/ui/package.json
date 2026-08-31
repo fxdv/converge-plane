@@ -1,5 +1,5 @@
 {
-  "name": "@tegonhq/ui",
+  "name": "@converge/ui",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -12,8 +12,8 @@
     "react": "^18"
   },
   "devDependencies": {
-    "@tegonhq/eslint-config": "workspace:*",
-    "@tegonhq/typescript-config": "workspace:*",
+    "@converge/eslint-config": "workspace:*",
+    "@converge/typescript-config": "workspace:*",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20",
     "@types/react": "^18",

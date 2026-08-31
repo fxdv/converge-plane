@@ -1,7 +1,7 @@
 import type { Editor, Range } from '@tiptap/core';
 import type { ComponentPropsWithoutRef } from 'react';
 
-import { CommandEmpty, CommandItem } from '@tegonhq/ui/components/command';
+import { CommandEmpty, CommandItem } from '@converge/ui/components/command';
 import { useCurrentEditor } from '@tiptap/react';
 import { useAtomValue } from 'jotai';
 import { forwardRef } from 'react';

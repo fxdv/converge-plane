@@ -3,7 +3,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@tegonhq/ui/components/tabs';
+} from '@converge/ui/components/tabs';
 import { observer } from 'mobx-react-lite';
 
 import { useCurrentTeam } from 'hooks/teams';

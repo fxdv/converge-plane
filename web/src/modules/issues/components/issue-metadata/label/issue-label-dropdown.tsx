@@ -1,14 +1,14 @@
-import { Badge, BadgeColor } from '@tegonhq/ui/components/badge';
-import { Button } from '@tegonhq/ui/components/button';
-import { Command, CommandInput } from '@tegonhq/ui/components/command';
+import { Badge, BadgeColor } from '@converge/ui/components/badge';
+import { Button } from '@converge/ui/components/button';
+import { Command, CommandInput } from '@converge/ui/components/command';
 import {
   Popover,
   PopoverContent,
   PopoverPortal,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
-import { AddLine, LabelLine } from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/components/popover';
+import { AddLine, LabelLine } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

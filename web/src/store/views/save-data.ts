@@ -2,7 +2,7 @@ import type { ViewsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveViewData(
   data: SyncActionRecord[],
@@ -25,17 +25,17 @@ export async function saveViewData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.views.put(view);
+          await convergeDatabase.views.put(view);
           return viewsStore && (await viewsStore.update(view, record.data.id));
         }
 
         case 'U': {
-          await tegonDatabase.views.put(view);
+          await convergeDatabase.views.put(view);
           return viewsStore && (await viewsStore.update(view, record.data.id));
         }
 
         case 'D': {
-          await tegonDatabase.views.delete(record.data.id);
+          await convergeDatabase.views.delete(record.data.id);
           return viewsStore && (await viewsStore.deleteById(record.data.id));
         }
       }

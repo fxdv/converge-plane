@@ -1,4 +1,4 @@
-import { CheckLine } from '@tegonhq/ui/icons';
+import { CheckLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 
 import { TimeBasedFilterEnum } from 'store/application';

@@ -1,4 +1,4 @@
-import { RoleEnum } from '@tegonhq/types';
+import { RoleEnum } from '@converge/types';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

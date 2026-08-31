@@ -2,7 +2,7 @@ import {
   CommandDialog,
   CommandInput,
   CommandList,
-} from '@tegonhq/ui/components/command';
+} from '@converge/ui/components/command';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

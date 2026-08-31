@@ -1,5 +1,5 @@
-import { Checkbox } from '@tegonhq/ui/components/checkbox';
-import { CommandGroup } from '@tegonhq/ui/components/command';
+import { Checkbox } from '@converge/ui/components/checkbox';
+import { CommandGroup } from '@converge/ui/components/command';
 
 import { getWorkflowColor } from 'common/status-color';
 import type { WorkflowType } from 'common/types';

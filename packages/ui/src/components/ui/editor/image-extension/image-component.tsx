@@ -7,7 +7,7 @@ import Lightbox from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 
-import { ArrowLeft, Close, FullscreenLine } from '@tegonhq/ui/icons';
+import { ArrowLeft, Close, FullscreenLine } from '@converge/ui/icons';
 
 import { getNodeTypesWithImageExtension, type AttrType } from './utils';
 import { Button } from '../../button';

@@ -1,8 +1,8 @@
 import type { Editor, Range } from '@tiptap/core';
 import type { UseFieldArrayReturn } from 'react-hook-form';
 
-import { suggestionItems } from '@tegonhq/ui/components/editor/slash-command';
-import { ListEdit, SubIssue } from '@tegonhq/ui/icons';
+import { suggestionItems } from '@converge/ui/components/editor/slash-command';
+import { ListEdit, SubIssue } from '@converge/ui/icons';
 import React from 'react';
 
 import { useCurrentWorkspace } from 'hooks/workspace';

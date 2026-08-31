@@ -1,4 +1,4 @@
-import { ActionStatusEnum } from '@tegonhq/types';
+import { ActionStatusEnum } from '@converge/types';
 
 export interface ActionType {
   id: string;
