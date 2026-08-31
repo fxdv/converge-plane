@@ -1,4 +1,3 @@
-import * as Sentry from '@sentry/nextjs';
 import { Button } from '@tegonhq/ui/components/button';
 import Error from 'next/error';
 
@@ -26,13 +25,7 @@ const CustomErrorComponent = (props: any) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-CustomErrorComponent.getInitialProps = async (contextData: any) => {
-  // In case this is running in a serverless function, await this in order to give Sentry
-  // time to send the error before the lambda exits
-  await Sentry.captureUnderscoreErrorException(contextData);
-
-  // This will contain the status code of the response
-  return Error.getInitialProps(contextData);
-};
+CustomErrorComponent.getInitialProps = (contextData: any) =>
+  Error.getInitialProps(contextData);
 
 export default CustomErrorComponent;
