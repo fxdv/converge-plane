@@ -34,14 +34,14 @@ export async function saveSocketData(
   data: SyncActionRecord[],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MODEL_STORE_MAP: Record<string, any>,
-) {
+): Promise<void> {
   // Defensive: a server may serialize an empty record list as null;
   // never let that take the app down.
   if (!Array.isArray(data)) {
     return;
   }
 
-  return runInAction(async () => {
+  await runInAction(async () => {
     // Pre-initialize the accumulator object with known model names
     const groupedRecords: Record<string, SyncActionRecord[]> = Object.values(
       MODELS,

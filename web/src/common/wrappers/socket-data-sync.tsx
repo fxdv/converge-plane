@@ -122,11 +122,11 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         );
       };
 
-      // Realtime is a hint, the delta endpoint is authoritative: the
-      // server caps stream lifetime (write timeout) and expired session
-      // cookies make reconnects 401 briefly, so the EventSource flaps.
-      // onopen fires on every (re)connect — re-run the delta to cover
-      // whatever happened during the gap.
+      // Realtime is a hint, the delta endpoint is authoritative. The
+      // stream is now long-lived (the 60s write-timeout cap is gone), but
+      // the EventSource still flaps on session-cookie expiry and tab
+      // suspension; onopen fires on every (re)connect, so re-run the delta
+      // to cover whatever happened during the gap.
       socket.onopen = () => {
         void (async () => {
           if (!workspaceStore.workspace?.id) {
@@ -142,6 +142,13 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
               user.id,
             );
             await saveSocketData(resp.syncActions, MODEL_STORE_MAP);
+            if (resp.stale) {
+              // The delta is incomplete: the server's change feed was
+              // trimmed past our cursor. Forget the watermark so the next
+              // load takes a full snapshot; don't advance past the gap.
+              localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
+              return;
+            }
             localStorage.setItem(
               `lastSequenceId_${hash(hashKey)}`,
               `${resp.lastSequenceId}`,

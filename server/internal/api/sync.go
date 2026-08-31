@@ -26,6 +26,11 @@ type syncActionRecord struct {
 type syncResponse struct {
 	SyncActions    []syncActionRecord `json:"syncActions"`
 	LastSequenceID string             `json:"lastSequenceId"`
+	// Stale marks the delta as incomplete: the client's watermark is
+	// older than the outbox's retained window, so some records were
+	// trimmed away before delivery. The client must fall back to a
+	// full bootstrap to reconstruct its object set.
+	Stale bool `json:"stale,omitempty"`
 }
 
 // handleSync serves both /sync_actions/bootstrap and /sync_actions/delta.
@@ -68,6 +73,7 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 	// Non-nil: the client contract is an array, and a Go nil slice
 	// marshals as JSON null, which crashes the client's iteration.
 	records := []syncActionRecord{}
+	stale := false
 	if strings.HasSuffix(r.URL.Path, "/delta") {
 		// Delta: outbox records newer than the client's watermark, filtered
 		// to the models it asked for. The client upserts/removes by model
@@ -83,6 +89,20 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			a.internalError(w, err)
 			return
+		}
+		// The outbox is trimmed per workspace; if the client's cursor
+		// predates the oldest retained record, the delta cannot be
+		// complete. An empty outbox with a watermark behind it is stale
+		// for the same reason, as is a zero cursor: a client that holds
+		// no watermark cannot be satisfied by a forward-only delta, so it
+		// must fall back to a full bootstrap.
+		var oldest *int64
+		if err := a.pool.QueryRow(r.Context(),
+			"select min(sequence_id) from sync_outbox where workspace_id = $1",
+			workspaceID).Scan(&oldest); err == nil {
+			if oldest == nil || *oldest > afterSeq {
+				stale = true
+			}
 		}
 	} else {
 		// Bootstrap: the client passes a comma-separated MODELS list. Unknown
@@ -100,6 +120,7 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, syncResponse{
 		SyncActions:    records,
 		LastSequenceID: strconv.FormatInt(serverSeq, 10),
+		Stale:          stale,
 	})
 }
 

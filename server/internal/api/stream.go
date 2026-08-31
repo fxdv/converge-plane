@@ -47,7 +47,10 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 	}
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, ": connected\n\n")
+	// retry: instruct the client to reconnect 2s after a drop (the
+	// browser default is implementation-defined); the stream is a hint
+	// and the delta reconcile on (re)connect covers any gap.
+	fmt.Fprint(w, "retry: 2000\n: connected\n\n")
 	fl.Flush()
 
 	ch, cancel := a.bcast.Subscribe(workspaceID)

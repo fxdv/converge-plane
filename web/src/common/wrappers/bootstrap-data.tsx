@@ -111,6 +111,14 @@ export function BootstrapWrapper({ children }: Props) {
     userId: user.id,
     onSuccess: async (data: BootstrapResponse) => {
       await saveSocketData(data.syncActions, MODEL_STORE_MAP);
+      if (data.stale) {
+        // The server's change feed was trimmed past our cursor: the delta
+        // is incomplete, so forget the watermark and take a full snapshot.
+        localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
+        setLoading(true);
+        await bootstrapRecords();
+        return;
+      }
       localStorage.setItem(
         `lastSequenceId_${hash(hashKey)}`,
         `${data.lastSequenceId}`,
