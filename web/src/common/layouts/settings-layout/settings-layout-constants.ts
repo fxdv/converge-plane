@@ -17,14 +17,6 @@ export const WORKSPACE_LINKS: LinkItem[] = [
     href: 'members',
   },
   {
-    title: 'Integrations',
-    href: 'integrations',
-  },
-  {
-    title: 'Actions',
-    href: 'actions',
-  },
-  {
     title: 'Export',
     href: 'export',
   },
@@ -36,16 +28,8 @@ export const ACCOUNT_LINKS: LinkItem[] = [
     href: 'profile',
   },
   {
-    title: 'Security',
-    href: 'security',
-  },
-  {
     title: 'Preferences',
     href: 'preferences',
-  },
-  {
-    title: 'API',
-    href: 'api',
   },
 ];
 
@@ -57,10 +41,6 @@ export const TEAM_LINKS: LinkItem[] = [
   {
     title: 'Members',
     href: 'members',
-  },
-  {
-    title: 'Templates',
-    href: 'templates',
   },
   {
     title: 'Workflow',

@@ -62,6 +62,7 @@ func (a *API) Mount(r chi.Router) {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(a.sessionMiddleware)
 		r.Get("/users", a.handleGetUser)
+		r.Put("/users", a.handleUpdateUser)
 		r.Post("/workspaces/onboarding", a.handleOnboarding)
 		r.Get("/sync_actions/bootstrap", a.handleSync)
 		r.Get("/sync_actions/delta", a.handleSync)
