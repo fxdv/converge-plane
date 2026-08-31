@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 
-import { Logo } from '@tegonhq/ui/components/dynamic-logo';
+import { Logo } from '@converge/ui/components/dynamic-logo';
 
 interface Props {
   children: React.ReactNode;

@@ -1,6 +1,6 @@
 import type { UseFormReturn } from 'react-hook-form';
 
-import { WorkflowCategory } from '@tegonhq/types';
+import { WorkflowCategory } from '@converge/types';
 import React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useDebouncedCallback } from 'use-debounce';

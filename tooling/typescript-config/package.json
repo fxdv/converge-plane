@@ -1,5 +1,5 @@
 {
-  "name": "@tegonhq/typescript-config",
+  "name": "@converge/typescript-config",
   "version": "0.0.0",
   "private": true,
   "publishConfig": {

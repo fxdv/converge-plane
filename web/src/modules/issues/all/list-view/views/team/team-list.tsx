@@ -1,6 +1,6 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { TeamIcon } from '@tegonhq/ui/components/team-icon';
-import { cn } from '@tegonhq/ui/lib/utils';
+import { Button } from '@converge/ui/components/button';
+import { TeamIcon } from '@converge/ui/components/team-icon';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import {

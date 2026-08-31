@@ -1,4 +1,4 @@
-import type { AIStreamResponse, GetAIRequestDTO } from '@tegonhq/types';
+import type { AIStreamResponse, GetAIRequestDTO } from '@converge/types';
 
 import axios from 'axios';
 

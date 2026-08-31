@@ -1,24 +1,24 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@tegonhq/ui/components/dropdown-menu';
+} from '@converge/ui/components/dropdown-menu';
 import {
   Editor,
   EditorExtensions,
   suggestionItems,
-} from '@tegonhq/ui/components/editor/index';
+} from '@converge/ui/components/editor/index';
 import {
   DeleteLine,
   EditLine,
   MoreLine,
   NewIssueLine,
   SubIssue,
-} from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { Reply } from 'lucide-react';
 import * as React from 'react';
 import ReactTimeAgo from 'react-time-ago';

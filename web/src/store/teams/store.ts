@@ -8,7 +8,7 @@ import {
 
 import type { TeamType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { Teams } from './models';
 
@@ -42,7 +42,7 @@ export const TeamsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
-      const teams = yield tegonDatabase.teams.toArray();
+      const teams = yield convergeDatabase.teams.toArray();
 
       self.teams = Teams.create(
         sort(teams).asc((team: TeamType) => team.createdAt),

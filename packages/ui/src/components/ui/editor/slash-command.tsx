@@ -10,7 +10,7 @@ import {
   LinkLine,
   NumberedListLine,
   TextLine,
-} from '@tegonhq/ui/icons';
+} from '@converge/ui/icons';
 
 import { uploadFileFn, uploadFn } from './utils';
 import { renderItems } from './utils/render-items';

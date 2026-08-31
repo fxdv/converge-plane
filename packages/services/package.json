@@ -1,7 +1,7 @@
 {
-  "name": "@tegonhq/services",
+  "name": "@converge/services",
   "version": "0.0.0",
-  "description": "Tegon API services",
+  "description": "Converge API services",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "module": "./dist/index.mjs",
@@ -37,15 +37,15 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@tegonhq/eslint-config": "workspace:*",
-    "@tegonhq/typescript-config": "workspace:*",
+    "@converge/eslint-config": "workspace:*",
+    "@converge/typescript-config": "workspace:*",
     "@types/superagent": "^8.1.4",
     "rimraf": "^3.0.2",
     "tsup": "^8.0.1",
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@tegonhq/types": "workspace:*",
+    "@converge/types": "workspace:*",
     "axios": "^1.6.7",
     "superagent": "^8.1.2",
     "zod": "3.23.8"

@@ -1,4 +1,4 @@
-import type { CreateIssueDto, Issue } from '@tegonhq/types';
+import type { CreateIssueDto, Issue } from '@converge/types';
 
 import axios from 'axios';
 

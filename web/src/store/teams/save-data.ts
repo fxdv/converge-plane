@@ -2,7 +2,7 @@ import type { TeamsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveTeamData(
   data: SyncActionRecord[],
@@ -23,17 +23,17 @@ export async function saveTeamData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.teams.put(team);
+          await convergeDatabase.teams.put(team);
           return teamsStore && (await teamsStore.update(team, record.data.id));
         }
 
         case 'U': {
-          await tegonDatabase.teams.put(team);
+          await convergeDatabase.teams.put(team);
           return teamsStore && (await teamsStore.update(team, record.data.id));
         }
 
         case 'D': {
-          await tegonDatabase.teams.delete(record.data.id);
+          await convergeDatabase.teams.delete(record.data.id);
           return teamsStore && (await teamsStore.deleteById(record.data.id));
         }
       }

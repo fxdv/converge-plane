@@ -1,13 +1,13 @@
 import './global.css';
-import '@tegonhq/ui/index.css';
-import '@tegonhq/ui/global.css';
+import '@converge/ui/index.css';
+import '@converge/ui/global.css';
 import type { NextComponentType } from 'next';
 import type { AppContext, AppInitialProps, AppLayoutProps } from 'next/app';
 
-import { ThemeProvider } from '@tegonhq/ui/components/theme-provider';
-import { Toaster } from '@tegonhq/ui/components/toaster';
-import { TooltipProvider } from '@tegonhq/ui/components/tooltip';
-import { cn } from '@tegonhq/ui/lib/utils';
+import { ThemeProvider } from '@converge/ui/components/theme-provider';
+import { Toaster } from '@converge/ui/components/toaster';
+import { TooltipProvider } from '@converge/ui/components/tooltip';
+import { cn } from '@converge/ui/lib/utils';
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import TimeAgo from 'javascript-time-ago';

@@ -7,8 +7,8 @@ import {
   AlertDialogAction,
   AlertDialogHeader,
   AlertDialogFooter,
-} from '@tegonhq/ui/components/alert-dialog';
-import { TeamIcon } from '@tegonhq/ui/components/team-icon';
+} from '@converge/ui/components/alert-dialog';
+import { TeamIcon } from '@converge/ui/components/team-icon';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import React from 'react';

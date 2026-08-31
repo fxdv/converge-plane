@@ -1,4 +1,4 @@
-import { RoleEnum } from '@tegonhq/types';
+import { RoleEnum } from '@converge/types';
 import * as React from 'react';
 
 import type { User } from 'common/types';

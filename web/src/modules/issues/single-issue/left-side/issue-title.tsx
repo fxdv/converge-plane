@@ -1,4 +1,4 @@
-import { AdjustableTextArea } from '@tegonhq/ui/components/adjustable-textarea';
+import { AdjustableTextArea } from '@converge/ui/components/adjustable-textarea';
 import * as React from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 

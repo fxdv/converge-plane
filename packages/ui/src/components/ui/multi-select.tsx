@@ -4,7 +4,7 @@ import { Command as CommandPrimitive } from 'cmdk';
 import { CheckIcon } from 'lucide-react';
 import * as React from 'react';
 
-import { Close } from '@tegonhq/ui/icons';
+import { Close } from '@converge/ui/icons';
 
 import { Badge } from './badge';
 import { Command, CommandGroup, CommandItem, CommandList } from './command';

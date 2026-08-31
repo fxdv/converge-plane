@@ -2,7 +2,7 @@ import type {
   Issue,
   IssueRequestParamsDto,
   TeamRequestParamsDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 
 import axios from 'axios';
 

@@ -1,5 +1,5 @@
 // import { sort } from 'fast-sort';
-import { Timeline } from '@tegonhq/ui/components/timeline';
+import { Timeline } from '@converge/ui/components/timeline';
 import { sort } from 'fast-sort';
 import { observer } from 'mobx-react-lite';
 import React from 'react';

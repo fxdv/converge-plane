@@ -3,7 +3,7 @@ import {
   LinkedIssue,
   LinkedIssueRequestParamsDto,
   LinkedIssueSourceDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 import axios from 'axios';
 
 export async function getLinkedIssue({

@@ -2,7 +2,7 @@ import type { WorkflowsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveWorkflowData(
   data: SyncActionRecord[],
@@ -25,7 +25,7 @@ export async function saveWorkflowData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.workflows.put(workflow);
+          await convergeDatabase.workflows.put(workflow);
           return (
             workflowsStore &&
             (await workflowsStore.update(workflow, record.data.id))
@@ -33,7 +33,7 @@ export async function saveWorkflowData(
         }
 
         case 'U': {
-          await tegonDatabase.workflows.put(workflow);
+          await convergeDatabase.workflows.put(workflow);
           return (
             workflowsStore &&
             (await workflowsStore.update(workflow, record.data.id))
@@ -41,7 +41,7 @@ export async function saveWorkflowData(
         }
 
         case 'D': {
-          await tegonDatabase.workflows.delete(record.data.id);
+          await convergeDatabase.workflows.delete(record.data.id);
           return (
             workflowsStore && (await workflowsStore.deleteById(record.data.id))
           );

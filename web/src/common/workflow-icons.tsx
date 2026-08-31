@@ -1,4 +1,4 @@
-import { WorkflowCategoryEnum } from '@tegonhq/types';
+import { WorkflowCategoryEnum } from '@converge/types';
 import {
   BacklogLine,
   CanceledLine,
@@ -8,7 +8,7 @@ import {
   TodoLine,
   TriageFill,
   UnscopedLine,
-} from '@tegonhq/ui/icons';
+} from '@converge/ui/icons';
 
 import { type WorkflowType } from './types';
 

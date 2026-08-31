@@ -1,6 +1,6 @@
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { Button } from '@tegonhq/ui/components/button';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { Button } from '@converge/ui/components/button';
+import { useToast } from '@converge/ui/components/use-toast';
 import { useRouter } from 'next/router';
 import React from 'react';
 import { SessionAuth, signOut } from 'supertokens-auth-react/recipe/session';

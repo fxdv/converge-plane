@@ -1,4 +1,4 @@
-import type { CreateProjectDto, Project } from '@tegonhq/types';
+import type { CreateProjectDto, Project } from '@converge/types';
 
 import axios from 'axios';
 

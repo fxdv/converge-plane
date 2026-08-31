@@ -1,9 +1,5 @@
-import {
-  MyIssues,
-  StackLine,
-  TeamLine,
-} from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+import { MyIssues, StackLine, TeamLine } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import * as React from 'react';

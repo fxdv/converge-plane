@@ -2,7 +2,7 @@ import type { CommentsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 export async function saveCommentsData(
   data: SyncActionRecord[],
@@ -24,7 +24,7 @@ export async function saveCommentsData(
 
       switch (record.action) {
         case 'I': {
-          await tegonDatabase.comments.put(comment);
+          await convergeDatabase.comments.put(comment);
           return (
             commentsStore &&
             (await commentsStore.update(comment, record.data.id))
@@ -32,7 +32,7 @@ export async function saveCommentsData(
         }
 
         case 'U': {
-          await tegonDatabase.comments.put(comment);
+          await convergeDatabase.comments.put(comment);
           return (
             commentsStore &&
             (await commentsStore.update(comment, record.data.id))
@@ -40,7 +40,7 @@ export async function saveCommentsData(
         }
 
         case 'D': {
-          await tegonDatabase.comments.delete(record.data.id);
+          await convergeDatabase.comments.delete(record.data.id);
           return (
             commentsStore && (await commentsStore.deleteById(record.data.id))
           );

@@ -1,12 +1,12 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Calendar } from '@tegonhq/ui/components/calendar';
+import { Button } from '@converge/ui/components/button';
+import { Calendar } from '@converge/ui/components/calendar';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
-import { AddLine, CalendarLine, Fire } from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/components/popover';
+import { AddLine, CalendarLine, Fire } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { differenceInDays, format } from 'date-fns';
 import React from 'react';
 

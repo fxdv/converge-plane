@@ -3,15 +3,15 @@ import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
-} from '@tegonhq/ui/components/breadcrumb';
-import { Button } from '@tegonhq/ui/components/button';
+} from '@converge/ui/components/breadcrumb';
+import { Button } from '@converge/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@tegonhq/ui/components/dropdown-menu';
-import { DeleteLine, EditLine, MoreLine, StackLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/dropdown-menu';
+import { DeleteLine, EditLine, MoreLine, StackLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/router';

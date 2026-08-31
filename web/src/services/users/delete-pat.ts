@@ -1,6 +1,6 @@
-import type { Pat } from '@tegonhq/types';
+import type { Pat } from '@converge/types';
 
-import { deletePat } from '@tegonhq/services';
+import { deletePat } from '@converge/services';
 import { useMutation, useQueryClient } from 'react-query';
 
 import { GetPats } from './get-pats';

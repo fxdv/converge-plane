@@ -1,4 +1,4 @@
-import type { Label, LabelRequestParamsDto } from '@tegonhq/types';
+import type { Label, LabelRequestParamsDto } from '@converge/types';
 
 import axios from 'axios';
 

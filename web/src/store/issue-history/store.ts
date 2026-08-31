@@ -7,7 +7,7 @@ import {
 
 import type { IssueHistoryType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { IssueHistoriesModel } from './models';
 
@@ -61,7 +61,7 @@ export const IssueHistoryStore: IAnyStateTreeNode = types
 
     const load = flow(function* (issueId: string) {
       const issueHistories = issueId
-        ? yield tegonDatabase.issueHistory
+        ? yield convergeDatabase.issueHistory
             .where({
               issueId,
             })

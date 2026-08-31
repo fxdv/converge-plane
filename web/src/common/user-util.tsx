@@ -1,5 +1,5 @@
-import { RoleEnum } from '@tegonhq/types';
-import { AvatarText } from '@tegonhq/ui/components/avatar';
+import { RoleEnum } from '@converge/types';
+import { AvatarText } from '@converge/ui/components/avatar';
 
 import type { User } from 'common/types';
 

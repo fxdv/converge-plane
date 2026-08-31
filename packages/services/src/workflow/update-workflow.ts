@@ -2,7 +2,7 @@ import {
   UpdateWorkflowDTO,
   Workflow,
   WorkflowRequestParamsDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 import axios from 'axios';
 
 export interface UpdateWorkflowInput

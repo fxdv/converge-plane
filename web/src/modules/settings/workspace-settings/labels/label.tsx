@@ -1,11 +1,11 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@tegonhq/ui/components/dropdown-menu';
-import { DeleteLine, EditLine, MoreLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/dropdown-menu';
+import { DeleteLine, EditLine, MoreLine } from '@converge/ui/icons';
 import * as React from 'react';
 
 import type { LabelType } from 'common/types';

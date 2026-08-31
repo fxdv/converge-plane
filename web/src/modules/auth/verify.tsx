@@ -1,5 +1,5 @@
-import { Loader } from '@tegonhq/ui/components/loader';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+import { Loader } from '@converge/ui/components/loader';
+import { useToast } from '@converge/ui/components/use-toast';
 import { useRouter } from 'next/router';
 import React from 'react';
 import {

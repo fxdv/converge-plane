@@ -7,7 +7,7 @@ import {
 
 import type { IssueCommentType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { CommentArray } from './models';
 
@@ -53,7 +53,7 @@ export const CommentsStore: IAnyStateTreeNode = types
 
     const load = flow(function* (issueId: string) {
       const comments = issueId
-        ? yield tegonDatabase.comments
+        ? yield convergeDatabase.comments
             .where({
               issueId,
             })

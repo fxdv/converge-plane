@@ -7,7 +7,7 @@ import {
 
 import type { IssueType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { Issue, IssuesMap } from './models';
 
@@ -33,7 +33,7 @@ export const IssuesStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
-      const issues = yield tegonDatabase.issues.toArray();
+      const issues = yield convergeDatabase.issues.toArray();
 
       issues.forEach((issue: IssueType) => {
         self.issuesMap.set(issue.id, Issue.create(issue));

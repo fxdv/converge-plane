@@ -1,4 +1,4 @@
-import { CommandItem } from '@tegonhq/ui/components/command';
+import { CommandItem } from '@converge/ui/components/command';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

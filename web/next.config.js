@@ -2,7 +2,7 @@
 
 module.exports = {
   reactStrictMode: false,
-  transpilePackages: ['geist', '@tegonhq/ui'],
+  transpilePackages: ['geist', '@converge/ui'],
   async redirects() {
     return [
       {

@@ -1,4 +1,4 @@
-import { WorkflowCategoryEnum } from '@tegonhq/types';
+import { WorkflowCategoryEnum } from '@converge/types';
 import { sort } from 'fast-sort';
 import { usePathname } from 'next/navigation';
 import React from 'react';
@@ -309,10 +309,7 @@ export function useFilterIssues(
   const pathname = usePathname();
   const user = React.useContext(UserContext);
 
-  const {
-    applicationStore,
-    issuesStore,
-  } = useContextStore();
+  const { applicationStore, issuesStore } = useContextStore();
   const { labels } = useComputedLabels();
 
   const isCompleted = (stateId: string) => {

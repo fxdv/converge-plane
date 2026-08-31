@@ -1,4 +1,4 @@
-import { LinkedIssue } from '@tegonhq/types';
+import { LinkedIssue } from '@converge/types';
 import axios from 'axios';
 
 export interface DeleteLinkedIssueParams {

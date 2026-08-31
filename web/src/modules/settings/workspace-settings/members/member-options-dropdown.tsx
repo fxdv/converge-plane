@@ -1,13 +1,13 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@tegonhq/ui/components/dropdown-menu';
-import { useToast } from '@tegonhq/ui/components/use-toast';
-import { CanceledLine, DeleteLine, MoreLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/dropdown-menu';
+import { useToast } from '@converge/ui/components/use-toast';
+import { CanceledLine, DeleteLine, MoreLine } from '@converge/ui/icons';
 import React from 'react';
 
 import { useRemoveTeamMemberMutation } from 'services/team';

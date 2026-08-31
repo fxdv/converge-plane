@@ -2,7 +2,7 @@ import type {
   LinkedIssue,
   LinkedIssueRequestParamsDto,
   UpdateLinkedIssueDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 
 import axios from 'axios';
 

@@ -1,4 +1,4 @@
-import { FormField, FormItem, FormControl } from '@tegonhq/ui/components/form';
+import { FormField, FormItem, FormControl } from '@converge/ui/components/form';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import { type UseFormReturn } from 'react-hook-form';

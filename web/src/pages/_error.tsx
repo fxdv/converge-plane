@@ -1,4 +1,4 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import Error from 'next/error';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

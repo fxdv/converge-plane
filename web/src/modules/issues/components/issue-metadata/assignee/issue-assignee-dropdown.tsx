@@ -1,14 +1,14 @@
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { Button } from '@tegonhq/ui/components/button';
-import { Command, CommandInput } from '@tegonhq/ui/components/command';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { Button } from '@converge/ui/components/button';
+import { Command, CommandInput } from '@converge/ui/components/command';
 import {
   Popover,
   PopoverContent,
   PopoverPortal,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
-import { AssigneeLine } from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/components/popover';
+import { AssigneeLine } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import * as React from 'react';
 
 import { UserAvatar } from 'common/user-avatar';

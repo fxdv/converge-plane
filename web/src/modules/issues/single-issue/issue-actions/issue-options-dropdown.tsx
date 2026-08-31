@@ -1,12 +1,12 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@tegonhq/ui/components/dropdown-menu';
-import { ArrowForwardLine, MoreLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/dropdown-menu';
+import { ArrowForwardLine, MoreLine } from '@converge/ui/icons';
 import React from 'react';
 
 import { AddIssueRelationModal } from 'modules/issues/components/modals';

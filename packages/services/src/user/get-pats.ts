@@ -1,4 +1,4 @@
-import { Pat } from '@tegonhq/types';
+import { Pat } from '@converge/types';
 import axios from 'axios';
 
 export async function getPats(): Promise<Pat[]> {

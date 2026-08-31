@@ -1,5 +1,5 @@
-import { CommandGroup, CommandItem } from '@tegonhq/ui/components/command';
-import { Separator } from '@tegonhq/ui/components/separator';
+import { CommandGroup, CommandItem } from '@converge/ui/components/command';
+import { Separator } from '@converge/ui/components/separator';
 import {
   AssigneeLine,
   LabelLine,
@@ -7,7 +7,7 @@ import {
   PriorityHigh,
   SubIssue,
   UnscopedLine,
-} from '@tegonhq/ui/icons';
+} from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

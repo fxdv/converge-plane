@@ -5,8 +5,8 @@ import type {
   DropResult,
 } from '@hello-pangea/dnd';
 
-import { WorkflowCategoryEnum } from '@tegonhq/types';
-import { Board, BoardRow } from '@tegonhq/ui/components/board';
+import { WorkflowCategoryEnum } from '@converge/types';
+import { Board, BoardRow } from '@converge/ui/components/board';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

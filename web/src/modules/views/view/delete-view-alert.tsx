@@ -7,8 +7,8 @@ import {
   AlertDialogAction,
   AlertDialogHeader,
   AlertDialogFooter,
-} from '@tegonhq/ui/components/alert-dialog';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+} from '@converge/ui/components/alert-dialog';
+import { useToast } from '@converge/ui/components/use-toast';
 import { useRouter } from 'next/router';
 
 import { useCurrentTeam } from 'hooks/teams';

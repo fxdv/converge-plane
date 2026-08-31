@@ -1,4 +1,4 @@
-import type { WorkflowCategoryEnum } from '@tegonhq/types';
+import type { WorkflowCategoryEnum } from '@converge/types';
 
 import type { WorkflowType } from 'common/types';
 

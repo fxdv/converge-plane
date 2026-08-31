@@ -1,7 +1,7 @@
 import {
   IntegrationDefinition,
   IntegrationDefinitionIdDto,
-} from '@tegonhq/types';
+} from '@converge/types';
 import axios from 'axios';
 
 export async function getIntegrationDefinition({

@@ -5,7 +5,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@tegonhq/ui/components/select';
+} from '@converge/ui/components/select';
 import { useTheme } from 'next-themes';
 
 import { SettingSection } from 'modules/settings/setting-section';

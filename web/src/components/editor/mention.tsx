@@ -1,4 +1,4 @@
-import { cn } from '@tegonhq/ui/lib/utils';
+import { cn } from '@converge/ui/lib/utils';
 import Mention from '@tiptap/extension-mention';
 import {
   mergeAttributes,

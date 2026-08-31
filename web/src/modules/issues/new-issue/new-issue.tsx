@@ -4,11 +4,11 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@tegonhq/ui/components/accordion';
-import { Form } from '@tegonhq/ui/components/form';
-import { Separator } from '@tegonhq/ui/components/separator';
-import { useToast } from '@tegonhq/ui/components/use-toast';
-import { cn } from '@tegonhq/ui/lib/utils';
+} from '@converge/ui/components/accordion';
+import { Form } from '@converge/ui/components/form';
+import { Separator } from '@converge/ui/components/separator';
+import { useToast } from '@converge/ui/components/use-toast';
+import { cn } from '@converge/ui/lib/utils';
 import React from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useHotkeys } from 'react-hotkeys-hook';

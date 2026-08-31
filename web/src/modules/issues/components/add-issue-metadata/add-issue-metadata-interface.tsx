@@ -1,4 +1,4 @@
-import { SubIssue } from '@tegonhq/ui/icons';
+import { SubIssue } from '@converge/ui/icons';
 
 export const allCommands = [
   {

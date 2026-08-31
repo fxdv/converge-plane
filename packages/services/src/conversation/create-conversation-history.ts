@@ -1,4 +1,4 @@
-import { CreateConversationHistoryDto } from '@tegonhq/types';
+import { CreateConversationHistoryDto } from '@converge/types';
 import axios from 'axios';
 
 export async function createConversationHistory(

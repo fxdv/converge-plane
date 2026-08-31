@@ -7,7 +7,7 @@ const { publicRuntimeConfig } = getConfig();
 
 export const frontendConfig = () => {
   const appInfo = {
-    appName: 'Tegon',
+    appName: 'Converge',
     apiDomain: publicRuntimeConfig.NEXT_PUBLIC_BASE_HOST,
     websiteDomain: publicRuntimeConfig.NEXT_PUBLIC_BASE_HOST,
     apiBasePath: '/api/auth',
@@ -24,7 +24,7 @@ export const frontendConfig = () => {
       SessionReact.init(
         isProd
           ? {
-              sessionTokenBackendDomain: '.tegon.ai',
+              sessionTokenBackendDomain: '.converge.dev',
             }
           : {},
       ),

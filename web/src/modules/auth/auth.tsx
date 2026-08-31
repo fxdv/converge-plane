@@ -1,17 +1,17 @@
 /* eslint-disable react/no-unescaped-entities */
 import { zodResolver } from '@hookform/resolvers/zod';
 import { RiMailFill } from '@remixicon/react';
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormMessage,
-} from '@tegonhq/ui/components/form';
-import { Input } from '@tegonhq/ui/components/input';
-import { useToast } from '@tegonhq/ui/components/use-toast';
-import { ArrowLeft, Inbox } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/form';
+import { Input } from '@converge/ui/components/input';
+import { useToast } from '@converge/ui/components/use-toast';
+import { ArrowLeft, Inbox } from '@converge/ui/icons';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { createCode } from 'supertokens-web-js/recipe/passwordless';

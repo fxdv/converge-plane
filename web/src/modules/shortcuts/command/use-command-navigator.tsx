@@ -5,7 +5,7 @@ import {
   StackLine,
   TeamLine,
   TriageLine,
-} from '@tegonhq/ui/icons';
+} from '@converge/ui/icons';
 import { useParams } from 'next/navigation';
 import { useRouter } from 'next/router';
 import React from 'react';

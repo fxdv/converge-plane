@@ -1,4 +1,4 @@
-import type { EditorT } from '@tegonhq/ui/components/editor/index';
+import type { EditorT } from '@converge/ui/components/editor/index';
 
 import { useContextStore } from 'store/global-context-provider';
 
@@ -8,10 +8,12 @@ export const useEditorPasteHandler = () => {
 
   const handlePaste = (editor: EditorT, event: ClipboardEvent) => {
     const pastedText = event.clipboardData.getData('text/plain');
-    const regex = /https?:\/\/app\.tegon\.ai\/\w+\/issue\/([A-Z]+)-(\d+)/;
-    const isTegonIssue = regex.test(pastedText);
+    const regex = new RegExp(
+      `https?://${window.location.host}/\\w+/issue/([A-Z]+)-(\\d+)`,
+    );
+    const isConvergeIssue = regex.test(pastedText);
     const parts = regex.exec(pastedText);
-    if (isTegonIssue && parts) {
+    if (isConvergeIssue && parts) {
       const teamIdentifier = parts[1]; // 'ENG' in this case
       const issueId = parts[2]; // '11' in this case
       const team = teamsStore.getTeamWithIdentifier(teamIdentifier);
@@ -24,7 +26,7 @@ export const useEditorPasteHandler = () => {
           .chain()
           .insertContentAt(editor.view.state.selection.from, [
             {
-              type: 'tegonIssueExtension',
+              type: 'convergeIssueExtension',
               attrs: {
                 url: pastedText,
               },

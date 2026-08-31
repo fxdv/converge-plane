@@ -1,15 +1,15 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Input } from '@tegonhq/ui/components/input';
+import { Button } from '@converge/ui/components/button';
+import { Input } from '@converge/ui/components/input';
 import {
   PopoverContent,
   Popover,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
+} from '@converge/ui/components/popover';
 import { Check, Trash } from 'lucide-react';
 import { useEditor } from 'novel';
 import { useEffect, useRef } from 'react';
 
-import { LinkLine } from '@tegonhq/ui/icons';
+import { LinkLine } from '@converge/ui/icons';
 
 export function isValidUrl(url: string) {
   try {

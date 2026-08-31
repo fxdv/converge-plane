@@ -12,7 +12,7 @@ import { useTeamWorkflows } from 'hooks/workflows';
 import { useContextStore } from 'store/global-context-provider';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const TegonIssueComponent = observer((props: any) => {
+export const ConvergeIssueComponent = observer((props: any) => {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
   const { issuesStore, teamsStore } = useContextStore();
 

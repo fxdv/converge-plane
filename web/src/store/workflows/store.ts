@@ -1,4 +1,4 @@
-import { WorkflowCategoryEnum } from '@tegonhq/types';
+import { WorkflowCategoryEnum } from '@converge/types';
 import {
   type IAnyStateTreeNode,
   type Instance,
@@ -8,7 +8,7 @@ import {
 
 import { type WorkflowType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { Workflow } from './models';
 
@@ -47,7 +47,7 @@ export const WorkflowsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
-      const workflows = yield tegonDatabase.workflows.toArray();
+      const workflows = yield convergeDatabase.workflows.toArray();
 
       // Clear existing data
       self.workflows.clear();

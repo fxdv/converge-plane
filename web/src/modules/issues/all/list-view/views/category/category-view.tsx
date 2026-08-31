@@ -1,4 +1,4 @@
-import { WorkflowCategoryEnum } from '@tegonhq/types';
+import { WorkflowCategoryEnum } from '@converge/types';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

@@ -1,4 +1,4 @@
-import { UpdateTeamPreferencesDto } from '@tegonhq/types';
+import { UpdateTeamPreferencesDto } from '@converge/types';
 import axios from 'axios';
 
 export interface UpdateTeamPreferencesDtoWithTeamId

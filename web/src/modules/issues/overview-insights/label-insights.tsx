@@ -1,5 +1,5 @@
-import { BadgeColor } from '@tegonhq/ui/components/badge';
-import { Button } from '@tegonhq/ui/components/button';
+import { BadgeColor } from '@converge/ui/components/badge';
+import { Button } from '@converge/ui/components/button';
 import { sort } from 'fast-sort';
 import { observer } from 'mobx-react-lite';
 

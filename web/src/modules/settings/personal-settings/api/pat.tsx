@@ -1,5 +1,5 @@
-import { Pat as PatI } from '@tegonhq/types';
-import { Button } from '@tegonhq/ui/components/button';
+import { Pat as PatI } from '@converge/types';
+import { Button } from '@converge/ui/components/button';
 
 import { useDeletePatMutation } from 'services/users';
 

@@ -6,7 +6,7 @@ import {
   type DroppableProvided,
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { TeamIcon } from '@tegonhq/ui/components/team-icon';
+import { TeamIcon } from '@converge/ui/components/team-icon';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import ReactDOM from 'react-dom';

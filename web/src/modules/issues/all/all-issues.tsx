@@ -1,10 +1,10 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
-} from '@tegonhq/ui/components/resizable';
-import { RightSidebarClosed, RightSidebarOpen } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/resizable';
+import { RightSidebarClosed, RightSidebarOpen } from '@converge/ui/icons';
 import React from 'react';
 
 import { AppLayout } from 'common/layouts/app-layout';

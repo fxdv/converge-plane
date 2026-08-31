@@ -6,8 +6,8 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@tegonhq/ui/components/select';
-import { BulletListLine, StackLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/select';
+import { BulletListLine, StackLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 
 import { useCurrentTeam } from 'hooks/teams';

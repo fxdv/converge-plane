@@ -1,7 +1,7 @@
 import { RiClipboardLine } from '@remixicon/react';
-import { Button } from '@tegonhq/ui/components/button';
-import { Input } from '@tegonhq/ui/components/input';
-import { useToast } from '@tegonhq/ui/components/use-toast';
+import { Button } from '@converge/ui/components/button';
+import { Input } from '@converge/ui/components/input';
+import { useToast } from '@converge/ui/components/use-toast';
 import copy from 'copy-to-clipboard';
 import { observer } from 'mobx-react-lite';
 
@@ -13,7 +13,7 @@ export const Preferences = observer(() => {
   const team = useCurrentTeam();
   const { toast } = useToast();
 
-  const teamEmail = `triage+${team?.id}@tegon.ai`;
+  const teamEmail = `triage+${team?.id}@converge.dev`;
 
   return (
     <SettingSection

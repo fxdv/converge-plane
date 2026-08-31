@@ -3,7 +3,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from '@tegonhq/ui/components/dropdown-menu';
+} from '@converge/ui/components/dropdown-menu';
 
 import { FilterTypeEnum } from 'store/application';
 

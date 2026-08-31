@@ -1,13 +1,13 @@
 import { RiCheckLine } from '@remixicon/react';
-import { Checkbox } from '@tegonhq/ui/components/checkbox';
-import { CommandGroup } from '@tegonhq/ui/components/command';
+import { Checkbox } from '@converge/ui/components/checkbox';
+import { CommandGroup } from '@converge/ui/components/command';
 import {
   NoPriorityLine,
   PriorityHigh,
   PriorityLow,
   PriorityMedium,
   UrgentFill,
-} from '@tegonhq/ui/icons';
+} from '@converge/ui/icons';
 
 import { useScope } from 'hooks';
 

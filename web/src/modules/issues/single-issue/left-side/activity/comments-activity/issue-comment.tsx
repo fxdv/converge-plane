@@ -1,11 +1,11 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Editor,
   EditorExtensions,
   suggestionItems,
-} from '@tegonhq/ui/components/editor/index';
-import { useToast } from '@tegonhq/ui/components/use-toast';
-import { SendLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/editor/index';
+import { useToast } from '@converge/ui/components/use-toast';
+import { SendLine } from '@converge/ui/icons';
 import * as React from 'react';
 
 import { getTiptapJSON } from 'common';

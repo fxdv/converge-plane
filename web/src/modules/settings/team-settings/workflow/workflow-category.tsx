@@ -1,13 +1,13 @@
-import type { WorkflowCategoryEnum } from '@tegonhq/types';
+import type { WorkflowCategoryEnum } from '@converge/types';
 
 import {
   Draggable,
   type DraggableProvided,
   type DraggableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { BoardItem } from '@tegonhq/ui/components/board';
-import { Button } from '@tegonhq/ui/components/button';
-import { AddLine } from '@tegonhq/ui/icons';
+import { BoardItem } from '@converge/ui/components/board';
+import { Button } from '@converge/ui/components/button';
+import { AddLine } from '@converge/ui/icons';
 import React from 'react';
 
 import { capitalizeFirstLetter } from 'common/lib/common';

@@ -1,7 +1,7 @@
-import type { WorkflowCategoryEnum } from '@tegonhq/types';
+import type { WorkflowCategoryEnum } from '@converge/types';
 
-import { Button } from '@tegonhq/ui/components/button';
-import { Input } from '@tegonhq/ui/components/input';
+import { Button } from '@converge/ui/components/button';
+import { Input } from '@converge/ui/components/input';
 import * as React from 'react';
 
 import { getWorkflowColorWithNumber } from 'common/status-color';

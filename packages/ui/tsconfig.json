@@ -1,5 +1,5 @@
 {
-  "extends": "@tegonhq/typescript-config/next.json",
+  "extends": "@converge/typescript-config/next.json",
   "compilerOptions": {
     "baseUrl": "src",
     "plugins": [

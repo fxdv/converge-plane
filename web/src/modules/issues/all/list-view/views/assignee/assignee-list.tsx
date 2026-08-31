@@ -1,7 +1,7 @@
-import { AvatarText } from '@tegonhq/ui/components/avatar';
-import { Button } from '@tegonhq/ui/components/button';
-import { AssigneeLine } from '@tegonhq/ui/icons';
-import { cn } from '@tegonhq/ui/lib/utils';
+import { AvatarText } from '@converge/ui/components/avatar';
+import { Button } from '@converge/ui/components/button';
+import { AssigneeLine } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import {

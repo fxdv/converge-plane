@@ -1,4 +1,4 @@
-import { TeamRequestParamsDto } from '@tegonhq/types';
+import { TeamRequestParamsDto } from '@converge/types';
 import axios from 'axios';
 
 export async function deleteTeam({ teamId }: TeamRequestParamsDto) {

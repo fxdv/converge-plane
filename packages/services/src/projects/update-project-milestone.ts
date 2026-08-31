@@ -1,7 +1,7 @@
 import type {
   UpdateProjectMilestoneDto,
   ProjectMilestone,
-} from '@tegonhq/types';
+} from '@converge/types';
 
 import axios from 'axios';
 

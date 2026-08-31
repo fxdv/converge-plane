@@ -7,7 +7,7 @@ import {
 
 import type { LabelType } from 'common/types';
 
-import { tegonDatabase } from 'store/database';
+import { convergeDatabase } from 'store/database';
 
 import { Label } from './models';
 
@@ -41,7 +41,7 @@ export const LabelsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
-      const labels = yield tegonDatabase.labels.toArray();
+      const labels = yield convergeDatabase.labels.toArray();
 
       self.labels = labels;
     });

@@ -1,15 +1,15 @@
 'use client';
 
-import { Command, CommandInput } from '@tegonhq/ui/components/command';
-import { Loader } from '@tegonhq/ui/components/loader';
-import { ScrollArea } from '@tegonhq/ui/components/scroll-area';
+import { Command, CommandInput } from '@converge/ui/components/command';
+import { Loader } from '@converge/ui/components/loader';
+import { ScrollArea } from '@converge/ui/components/scroll-area';
 import { useCompletion } from 'ai/react';
 import { useEditor } from 'novel';
 import { addAIHighlight } from 'novel/extensions';
 import { useState } from 'react';
 import Markdown from 'react-markdown';
 
-import { AI } from '@tegonhq/ui/icons';
+import { AI } from '@converge/ui/icons';
 
 import AICompletionCommands from './ai-completion-command';
 import AISelectorCommands from './ai-selector-commands';

@@ -3,14 +3,14 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@tegonhq/ui/components/accordion';
-import { TeamIcon } from '@tegonhq/ui/components/team-icon';
+} from '@converge/ui/components/accordion';
+import { TeamIcon } from '@converge/ui/components/team-icon';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@tegonhq/ui/components/tooltip';
-import { ChevronRight, IssuesLine, StackLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/tooltip';
+import { ChevronRight, IssuesLine, StackLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

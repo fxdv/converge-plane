@@ -1,4 +1,4 @@
-import type { CodeDtoWithWorkspace } from '@tegonhq/types';
+import type { CodeDtoWithWorkspace } from '@converge/types';
 
 import axios from 'axios';
 

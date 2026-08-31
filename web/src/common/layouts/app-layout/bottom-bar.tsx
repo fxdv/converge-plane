@@ -1,10 +1,11 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@tegonhq/ui/components/tooltip';
-import { HelpLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/tooltip';
+import { HelpLine } from '@converge/ui/icons';
+import getConfig from 'next/config';
 import React from 'react';
 
 interface BottomBarButtonProps {
@@ -37,6 +38,8 @@ const BottomBarButton: React.FC<BottomBarButtonProps> = ({
   </Tooltip>
 );
 
+const { publicRuntimeConfig } = getConfig();
+
 export function BottomBar() {
   return (
     <div className="w-full flex justify-between px-6 py-4">
@@ -44,7 +47,10 @@ export function BottomBar() {
         icon={<HelpLine size={20} />}
         tooltip="Help from docs"
         onClick={() => {
-          window.open('https://docs.tegon.ai', '_blank');
+          window.open(
+            publicRuntimeConfig.NEXT_PUBLIC_DOCS_URL || 'https://converge.dev',
+            '_blank',
+          );
         }}
       />
     </div>

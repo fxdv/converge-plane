@@ -1,5 +1,5 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { Separator } from '@tegonhq/ui/components/separator';
+import { Button } from '@converge/ui/components/button';
+import { Separator } from '@converge/ui/components/separator';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

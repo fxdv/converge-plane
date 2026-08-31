@@ -1,10 +1,10 @@
-import { Button } from '@tegonhq/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@tegonhq/ui/components/popover';
-import { SettingsLine } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/popover';
+import { SettingsLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 

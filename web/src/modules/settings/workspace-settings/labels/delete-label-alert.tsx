@@ -7,7 +7,7 @@ import {
   AlertDialogAction,
   AlertDialogHeader,
   AlertDialogFooter,
-} from '@tegonhq/ui/components/alert-dialog';
+} from '@converge/ui/components/alert-dialog';
 
 interface DeleteLabelAlertProps {
   open: boolean;

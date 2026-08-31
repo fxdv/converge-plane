@@ -1,5 +1,5 @@
 {
-  "name": "@tegonhq/types",
+  "name": "@converge/types",
   "version": "0.1.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@tegonhq/eslint-config": "workspace:*",
-    "@tegonhq/typescript-config": "workspace:*",
+    "@converge/eslint-config": "workspace:*",
+    "@converge/typescript-config": "workspace:*",
     "@types/node": "^20",
     "class-transformer": "0.5.1",
     "esbuild": "0.24.0",

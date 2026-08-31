@@ -1,4 +1,4 @@
-import { Loader } from '@tegonhq/ui/components/loader';
+import { Loader } from '@converge/ui/components/loader';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 

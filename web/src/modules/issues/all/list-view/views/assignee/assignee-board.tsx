@@ -1,6 +1,6 @@
 import type { DropResult } from '@hello-pangea/dnd';
 
-import { Board } from '@tegonhq/ui/components/board';
+import { Board } from '@converge/ui/components/board';
 import { sort } from 'fast-sort';
 import { observer } from 'mobx-react-lite';
 

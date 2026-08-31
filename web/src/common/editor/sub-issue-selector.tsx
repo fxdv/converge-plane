@@ -1,11 +1,11 @@
-import { Button } from '@tegonhq/ui/components/button';
-import { useEditor } from '@tegonhq/ui/components/editor/index';
+import { Button } from '@converge/ui/components/button';
+import { useEditor } from '@converge/ui/components/editor/index';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@tegonhq/ui/components/tooltip';
-import { SubIssue } from '@tegonhq/ui/icons';
+} from '@converge/ui/components/tooltip';
+import { SubIssue } from '@converge/ui/icons';
 import React from 'react';
 
 export function isValidUrl(url: string) {

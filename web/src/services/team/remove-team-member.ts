@@ -1,4 +1,4 @@
-import { removeTeamMember } from '@tegonhq/services';
+import { removeTeamMember } from '@converge/services';
 import { useMutation } from 'react-query';
 
 interface MutationParams {

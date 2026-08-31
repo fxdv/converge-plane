@@ -1,4 +1,4 @@
-import { Company } from '@tegonhq/types';
+import { Company } from '@converge/types';
 import axios from 'axios';
 
 export async function getCompaniesByWorkspace(): Promise<Company[]> {
