@@ -1,4 +1,3 @@
-import { WorkflowCategoryEnum } from '@tegonhq/types';
 import { Editor, EditorExtensions } from '@tegonhq/ui/components/editor/index';
 import { ScrollArea } from '@tegonhq/ui/components/scroll-area';
 import { Separator } from '@tegonhq/ui/components/separator';
@@ -10,12 +9,9 @@ import { useEditorSuggestionItems } from 'modules/issues/components/use-editor-s
 
 import { getTiptapJSON } from 'common';
 import { tegonIssueExtension } from 'common/editor/tegon-issue-extension';
-import { type WorkflowType } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
-import { useTeamWithId } from 'hooks/teams';
 import { useEditorPasteHandler } from 'hooks/use-editor-paste-handler';
-import { useTeamWorkflows } from 'hooks/workflows';
 
 import { useUpdateIssueMutation } from 'services/issues';
 
@@ -24,21 +20,10 @@ import { FileUpload } from './file-upload';
 import { IssueSubIssueSelector } from './issue-sub-issue-selector';
 import { IssueTitle } from './issue-title';
 import { ParentIssueView } from './parent-issue-view';
-import { RelationsView } from './relations-view';
-import { SimilarIssuesView } from './similar-issues-view';
 import { SubIssueView } from './sub-issue-view';
 
 export const LeftSide = observer(() => {
   const issue = useIssueData();
-  const team = useTeamWithId(issue.teamId);
-
-  const workflows = useTeamWorkflows(team.identifier);
-  const triageWorkflow = workflows.find(
-    (workflow: WorkflowType) =>
-      workflow.category === WorkflowCategoryEnum.TRIAGE,
-  );
-  const isTriageView = issue.stateId === triageWorkflow?.id;
-
   const { mutate: updateIssue } = useUpdateIssueMutation({});
   const { suggestionItems } = useEditorSuggestionItems();
 
@@ -67,8 +52,6 @@ export const LeftSide = observer(() => {
       <div className="flex h-full justify-center w-full pb-[150px]">
         <div className="grow flex flex-col gap-2 h-full max-w-[97ch]">
           <div className="py-6 flex flex-col">
-            {isTriageView && <SimilarIssuesView issueId={issue.id} />}
-
             <IssueTitle value={issue.title} onChange={onIssueChange} />
             {issue.parentId && (
               <div className="px-6">
@@ -92,8 +75,6 @@ export const LeftSide = observer(() => {
               <Separator />
             </div>
             <SubIssueView childIssues={issue.children} issueId={issue.id} />
-
-            <RelationsView issueId={issue.id} />
 
             <Activity />
           </div>

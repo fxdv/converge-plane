@@ -12,8 +12,6 @@ import {
   LazyIssueAssigneeDropdown,
 } from 'modules/issues/components';
 
-import type { IssueType } from 'common/types';
-
 import { IssueViewContext } from 'components/side-issue-view';
 import { useTeamWithId } from 'hooks/teams/use-current-team';
 
@@ -21,58 +19,17 @@ import { useUpdateIssueMutation } from 'services/issues';
 
 import { useContextStore } from 'store/global-context-provider';
 
-import { IssueCycle } from './issue-cycle';
 import { IssueDueDate } from './issue-duedate';
 import { IssueLabels } from './issue-labels';
-import { IssueProject } from './issue-project';
-import { IssueRelations, View } from './issue-relations';
-import { getRelationIssues, useSortIssues } from './utils';
 
 interface IssueListItemProps {
   issueId: string;
   subIssueView?: boolean;
   noBorder?: boolean;
-  changeHeight?: (issueCount: number) => void;
 }
-
-interface IssueRelationIssuesProps {
-  view: View;
-  issue: IssueType;
-}
-
-export const IssueRelationIssues = observer(
-  ({ view, issue }: IssueRelationIssuesProps) => {
-    const { issuesStore, issueRelationsStore } = useContextStore();
-
-    let issues = getRelationIssues({
-      issueRelationsStore,
-      issuesStore,
-      issue,
-      view,
-    });
-
-    issues = useSortIssues(issues);
-
-    return (
-      <div className="pl-12 pr-2">
-        {issues.map((issue: IssueType) => {
-          return (
-            <IssueListItem key={issue.id} subIssueView issueId={issue.id} />
-          );
-        })}
-      </div>
-    );
-  },
-);
 
 export const IssueListItem = observer(
-  ({
-    issueId,
-    subIssueView = false,
-    noBorder = false,
-    changeHeight,
-  }: IssueListItemProps) => {
-    const [currentView, setCurrentView] = React.useState<View | undefined>();
+  ({ issueId, subIssueView = false, noBorder = false }: IssueListItemProps) => {
     const {
       openIssue,
       issueId: currentViewIssueId,
@@ -179,12 +136,6 @@ export const IssueListItem = observer(
 
                   <div className="flex items-center gap-2 flex-wrap pr-1 shrink-0">
                     <IssueDueDate dueDate={issue.dueDate} />
-
-                    <IssueCycle cycleId={issue.cycleId} />
-                    <IssueProject
-                      projectId={issue.projectId}
-                      projectMilestoneId={issue.projectMilestoneId}
-                    />
                     <IssueLabels labelIds={issue.labelIds} />
                     <div className="w-[20px] mr-8">
                       <IssuePriorityDropdown
@@ -205,25 +156,10 @@ export const IssueListItem = observer(
                     </Suspense>
                   </div>
                 </div>
-
-                {!subIssueView && (
-                  <div>
-                    <IssueRelations
-                      issue={issue}
-                      setCurrentView={setCurrentView}
-                      currentView={currentView}
-                      changeHeight={changeHeight}
-                    />
-                  </div>
-                )}
               </div>
             </div>
           </div>
         </a>
-
-        {currentView && (
-          <IssueRelationIssues view={currentView} issue={issue} />
-        )}
       </>
     );
   },

@@ -86,7 +86,7 @@ export function filterTimeBasedIssue(issue: IssueType, filter: FilterType) {
 export function filterIssues(
   issues: IssueType[],
   filters: FilterType[],
-  { issuesStore, issueRelationsStore }: Partial<StoreContextInstanceType>,
+  { issuesStore }: Partial<StoreContextInstanceType>,
   isCompleted: (stateId: string) => boolean,
 ) {
   return issues.filter((issue: IssueType) => {
@@ -100,14 +100,6 @@ export function filterIssues(
           return filter.filterType === FilterTypeEnum.IS
             ? !!issue.parentId
             : !issue.parentId;
-        }
-
-        case 'isBlocked': {
-          return issueRelationsStore.isBlocked(issue.id);
-        }
-
-        case 'isBlocking': {
-          return issueRelationsStore.isBlocking(issue.id);
         }
 
         case 'updatedAt': {
@@ -319,9 +311,7 @@ export function useFilterIssues(
 
   const {
     applicationStore,
-    linkedIssuesStore,
     issuesStore,
-    issueRelationsStore,
   } = useContextStore();
   const { labels } = useComputedLabels();
 
@@ -360,9 +350,7 @@ export function useFilterIssues(
       issues,
       [...filters, ...silentFilters],
       {
-        linkedIssuesStore,
         issuesStore,
-        issueRelationsStore,
       },
       isCompleted,
     );

@@ -1,7 +1,5 @@
 import {
-  Inbox,
   MyIssues,
-  Project,
   StackLine,
   TeamLine,
 } from '@tegonhq/ui/icons';
@@ -31,7 +29,7 @@ interface LayoutProps {
 }
 
 export const AppLayoutChild = observer(({ children }: LayoutProps) => {
-  const { applicationStore, notificationsStore } = useContextStore();
+  const { applicationStore } = useContextStore();
   useSidebarShortcut();
 
   const {
@@ -53,12 +51,6 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
               <Nav
                 links={[
                   {
-                    title: 'Inbox',
-                    icon: Inbox,
-                    href: `/${workspaceSlug}/inbox`,
-                    count: notificationsStore.unReadCount,
-                  },
-                  {
                     title: 'My issues',
                     icon: MyIssues,
                     href: `/${workspaceSlug}/my-issues`,
@@ -67,11 +59,6 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
                     title: 'Views',
                     icon: StackLine,
                     href: `/${workspaceSlug}/views`,
-                  },
-                  {
-                    title: 'Projects',
-                    icon: Project,
-                    href: `/${workspaceSlug}/projects`,
                   },
                   {
                     title: 'Teams',

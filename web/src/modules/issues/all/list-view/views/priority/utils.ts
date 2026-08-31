@@ -13,7 +13,6 @@ export const useIssueRowsPriority = (
       displaySettings: { showEmptyGroups },
     },
     issuesStore,
-    issueRelationsStore,
   } = useContextStore();
 
   const reorderedPriorities = Priorities.filter((p) => p !== '').concat(['']);
@@ -27,6 +26,5 @@ export const useIssueRowsPriority = (
 
     showEmptyGroups,
     issuesStore,
-    issueRelationsStore,
   );
 };

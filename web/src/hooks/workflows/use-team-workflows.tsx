@@ -5,8 +5,6 @@ import * as React from 'react';
 
 import { type WorkflowType } from 'common/types';
 
-import { useProject } from 'hooks/projects';
-
 import { useContextStore } from 'store/global-context-provider';
 
 import { useCurrentTeam, useTeam } from '../teams/use-current-team';
@@ -70,7 +68,6 @@ export function useComputedWorkflows(): {
   const { workflowsStore } = useContextStore();
   const workflows = Array.from(workflowsStore.workflows.values());
   const team = useCurrentTeam();
-  const project = useProject();
 
   const getWorkflows = () => {
     const workflowMap: Record<
@@ -83,10 +80,6 @@ export function useComputedWorkflows(): {
       .filter((workflow: WorkflowType) => {
         if (team) {
           return workflow.teamId === team.id;
-        }
-
-        if (project) {
-          return project.teams.includes(workflow.teamId);
         }
 
         return true;

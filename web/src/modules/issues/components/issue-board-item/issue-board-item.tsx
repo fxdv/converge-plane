@@ -19,11 +19,8 @@ import { useUpdateIssueMutation } from 'services/issues';
 
 import { useContextStore } from 'store/global-context-provider';
 
-import { IssueRelations } from './issue-relations';
-import { IssueCycle } from '../issue-list-item/issue-cycle';
 import { IssueDueDate } from '../issue-list-item/issue-duedate';
 import { IssueLabels } from '../issue-list-item/issue-labels';
-import { IssueProject } from '../issue-list-item/issue-project';
 
 interface BoardIssueItemProps {
   issueId: string;
@@ -122,13 +119,6 @@ export const BoardIssueItem = observer(
         </div>
 
         <IssueLabels labelIds={issue.labelIds} />
-        <IssueProject
-          projectId={issue.projectId}
-          projectMilestoneId={issue.projectMilestoneId}
-        />
-        <IssueCycle cycleId={issue.cycleId} />
-
-        <IssueRelations issue={issue} />
 
         <div className="flex gap-2 items-center justify-between">
           <div className="inline-flex gap-2 items-center">

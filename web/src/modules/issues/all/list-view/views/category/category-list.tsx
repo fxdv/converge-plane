@@ -17,8 +17,6 @@ import { getWorkflowColor } from 'common/status-color';
 import { getWorkflowIcon } from 'common/workflow-icons';
 
 import { ScrollManagedList } from 'components/scroll-managed-list';
-import { useCycle } from 'hooks/cycles';
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
@@ -27,17 +25,11 @@ import { useContextStore } from 'store/global-context-provider';
 import { useIssueRowsCategory } from './utils';
 
 export const CategoryList = observer(() => {
-  const project = useProject();
-  const cycle = useCycle();
   const team = useCurrentTeam();
-
-  const [_heightChange, setHeightChange] = React.useState(false);
 
   const { issuesStore } = useContextStore();
   const issues = issuesStore.getIssues({
     teamId: team?.id,
-    projectId: project?.id,
-    cycleId: cycle?.id,
   });
   const { workflows } = useComputedWorkflows();
   const filteredIssues = useFilterIssues(issues, workflows);
@@ -82,11 +74,6 @@ export const CategoryList = observer(() => {
     );
   };
 
-  const changeHeight = (_issueCount: number, index: number) => {
-    cache.clear(index, 0);
-    setHeightChange(!_heightChange);
-  };
-
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const row = rows[index];
 
@@ -106,11 +93,7 @@ export const CategoryList = observer(() => {
           {row.type === 'header' ? (
             getHeaderRow(row, index)
           ) : (
-            <IssueListItem
-              issueId={row.issueId}
-              key={key}
-              changeHeight={(issueCount) => changeHeight(issueCount, index)}
-            />
+            <IssueListItem issueId={row.issueId} key={key} />
           )}
         </div>
       </CellMeasurer>

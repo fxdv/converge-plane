@@ -3,8 +3,6 @@ import * as React from 'react';
 
 import type { LabelType } from 'common/types';
 
-import { useProject } from 'hooks/projects';
-
 import { useContextStore } from 'store/global-context-provider';
 
 import { useCurrentTeam, useTeam } from '../teams/use-current-team';
@@ -50,7 +48,6 @@ export function useComputedLabels(): {
 } {
   const { labelsStore } = useContextStore();
   const team = useCurrentTeam();
-  const project = useProject();
 
   const getLabels = () => {
     const labelMap: Record<string, { teamId: string; label: LabelType }> = {};
@@ -64,10 +61,6 @@ export function useComputedLabels(): {
 
         if (team) {
           return label.teamId === team.id;
-        }
-
-        if (project) {
-          return project.teams.includes(label.teamId);
         }
 
         return true;

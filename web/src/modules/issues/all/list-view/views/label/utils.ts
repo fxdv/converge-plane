@@ -12,7 +12,6 @@ export const useIssueRowsLabel = (issues: IssueType[], labels: LabelType[]) => {
       displaySettings: { showEmptyGroups },
     },
     issuesStore,
-    issueRelationsStore,
   } = useContextStore();
 
   return getIssueRows(
@@ -23,7 +22,6 @@ export const useIssueRowsLabel = (issues: IssueType[], labels: LabelType[]) => {
       .map((workflow) => workflow.id),
     showEmptyGroups,
     issuesStore,
-    issueRelationsStore,
     true,
   );
 };

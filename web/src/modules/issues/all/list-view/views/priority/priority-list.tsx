@@ -15,9 +15,7 @@ import { IssueListItem, PriorityIcons } from 'modules/issues/components';
 import { useFilterIssues } from 'modules/issues/issues-utils';
 
 import { ScrollManagedList } from 'components/scroll-managed-list';
-import { useCycle } from 'hooks/cycles';
 import { usePriorities } from 'hooks/priorities';
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
@@ -26,18 +24,12 @@ import { useContextStore } from 'store/global-context-provider';
 import { useIssueRowsPriority } from './utils';
 
 export const PriorityList = observer(() => {
-  const project = useProject();
-  const cycle = useCycle();
   const team = useCurrentTeam();
   const Priorities = usePriorities();
-
-  const [_heightChange, setHeightChange] = React.useState(false);
 
   const { issuesStore } = useContextStore();
   const issues = issuesStore.getIssues({
     teamId: team?.id,
-    projectId: project?.id,
-    cycleId: cycle?.id,
   });
   const { workflows } = useComputedWorkflows();
   const filteredIssues = useFilterIssues(issues, workflows);
@@ -91,11 +83,6 @@ export const PriorityList = observer(() => {
     );
   };
 
-  const changeHeight = (_issueCount: number, index: number) => {
-    cache.clear(index, 0);
-    setHeightChange(!_heightChange);
-  };
-
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const row = rows[index];
 
@@ -115,11 +102,7 @@ export const PriorityList = observer(() => {
           {row.type === 'header' ? (
             getHeaderRow(row, index)
           ) : (
-            <IssueListItem
-              issueId={row.issueId}
-              key={index}
-              changeHeight={(issueCount) => changeHeight(issueCount, index)}
-            />
+            <IssueListItem issueId={row.issueId} key={index} />
           )}
         </div>
       </CellMeasurer>

@@ -1,29 +1,11 @@
-import { IssueRelationEnum, type IssueType } from 'common/types';
+import { type IssueType } from 'common/types';
 
-import type { IssueRelationsStoreType } from 'store/issue-relation';
 import type { IssuesStoreType } from 'store/issues';
 
-const hasRelations = (
-  issue: IssueType,
-  issuesStore: IssuesStoreType,
-  issueRelationsStore: IssueRelationsStoreType,
-) => {
-  const blockedIssues = issueRelationsStore.getIssueRelationForType(
-    issue.id,
-    IssueRelationEnum.BLOCKED,
-  );
-  if (blockedIssues.length > 0) {
-    return true;
-  }
-
-  const blocksIssues = issueRelationsStore.getIssueRelationForType(
-    issue.id,
-    IssueRelationEnum.BLOCKS,
-  );
-  if (blocksIssues.length > 0) {
-    return true;
-  }
-
+// Flags an issue that has a hierarchy edge (parent or sub-issues) so the
+// list can render its relation badge. Cross-workspace issue relations
+// (blocks/blocked) are a later release and are not tracked here.
+const hasRelations = (issue: IssueType, issuesStore: IssuesStoreType) => {
   const parentIssue = issuesStore.getIssueById(issue.parentId);
   if (parentIssue !== undefined) {
     return true;
@@ -43,7 +25,6 @@ export const getIssueRows = (
   keys: string[],
   showEmptyGroups: boolean,
   issuesStore: IssuesStoreType,
-  issueRelationsStore: IssueRelationsStoreType,
   propertyArray: boolean = false,
 ): IssueRow[] => {
   // Use Map for better performance with string keys
@@ -96,7 +77,7 @@ export const getIssueRows = (
         result[index++] = {
           type: 'issue',
           issueId: issue.id,
-          hasRelations: hasRelations(issue, issuesStore, issueRelationsStore),
+          hasRelations: hasRelations(issue, issuesStore),
         };
       }
     }
@@ -110,7 +91,7 @@ export const getIssueRows = (
       result[index++] = {
         type: 'issue',
         issueId: issue.id,
-        hasRelations: hasRelations(issue, issuesStore, issueRelationsStore),
+        hasRelations: hasRelations(issue, issuesStore),
       };
     }
   }

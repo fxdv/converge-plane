@@ -3,7 +3,6 @@ import { observer } from 'mobx-react-lite';
 
 import type { User } from 'common/types';
 import type { IssueHistoryType } from 'common/types';
-import type { LinkedIssueType } from 'common/types';
 import { getUserIcon } from 'common/user-util';
 
 import { useIssueData } from 'hooks/issues';
@@ -12,13 +11,11 @@ import { useUsersData } from 'hooks/users';
 import { useContextStore } from 'store/global-context-provider';
 
 import { ActivityItem } from './activity-item';
-import { LinkedIssueActivity } from './linked-issue-activity';
 import { getUserDetails } from './user-activity-utils';
 
 enum ActivityType {
   Comment = 'Comment',
   Default = 'Default',
-  LinkedIssue = 'LinkedIssue',
 }
 
 export const IssueActivity = observer(() => {
@@ -31,9 +28,7 @@ export const IssueActivity = observer(() => {
 
   const { users, isLoading } = useUsersData(true);
 
-  const { issuesHistoryStore, linkedIssuesStore } = useContextStore();
-
-  const linkedIssues = linkedIssuesStore.getLinkedIssues(issue.id);
+  const { issuesHistoryStore } = useContextStore();
 
   const activities = [
     ...issuesHistoryStore
@@ -42,10 +37,6 @@ export const IssueActivity = observer(() => {
         ...issueHistory,
         type: ActivityType.Default,
       })),
-    ...linkedIssues.map((linkedIssue: LinkedIssueType) => ({
-      ...linkedIssue,
-      type: ActivityType.LinkedIssue,
-    })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ].sort((a: any, b: any) => {
     if (new Date(a.updatedAt) > new Date(b.updatedAt)) {
@@ -88,19 +79,6 @@ export const IssueActivity = observer(() => {
         {activities.length > 0 &&
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           activities.map((activity: any) => {
-            if (activity.type === ActivityType.LinkedIssue) {
-              return (
-                <TimelineItem
-                  className="w-full"
-                  key={`${activity.id}-comment`}
-                  hasMore
-                  date={activity.updatedAt}
-                >
-                  <LinkedIssueActivity linkedIssue={activity} />
-                </TimelineItem>
-              );
-            }
-
             if (activity.type === ActivityType.Default) {
               const sourceMetadata = activity.userId
                 ? undefined
