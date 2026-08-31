@@ -2,10 +2,7 @@ import { Loader } from '@converge/ui/components/loader';
 import { useToast } from '@converge/ui/components/use-toast';
 import { useRouter } from 'next/router';
 import React from 'react';
-import {
-  consumeCode,
-  clearLoginAttemptInfo,
-} from 'supertokens-web-js/recipe/passwordless';
+import { consumeCode, clearLoginAttemptInfo } from 'common/auth';
 
 import { AuthGuard } from 'common/wrappers/auth-guard';
 
@@ -55,7 +52,7 @@ export function Verify() {
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      if (err.isSuperTokensGeneralError === true) {
+      if (err.isAuthApiError === true) {
         toast({
           title: 'Error!',
           description: err.message,

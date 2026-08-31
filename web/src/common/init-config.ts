@@ -1,12 +1,9 @@
-import SuperTokensReact from 'supertokens-auth-react';
+import { Session } from 'common/auth';
 
-import { frontendConfig } from 'common/lib/config';
-
-export function initSuperTokens() {
-  // Initialise Supertokens
+// Initialise the client-side session (cookie parsing + renewal
+// maintenance). Runs once per page load, before the app tree mounts.
+export function initSession() {
   if (typeof window !== 'undefined') {
-    // we only want to call this init function on the frontend, so we check typeof window !== 'undefined'
-
-    SuperTokensReact.init(frontendConfig());
+    Session.start();
   }
 }

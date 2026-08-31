@@ -14,7 +14,7 @@ import { useToast } from '@converge/ui/components/use-toast';
 import { ArrowLeft, Inbox } from '@converge/ui/icons';
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { createCode } from 'supertokens-web-js/recipe/passwordless';
+import { createCode } from 'common/auth';
 import { z } from 'zod';
 
 import { AuthLayout } from 'common/layouts/auth-layout';
@@ -62,7 +62,7 @@ export function Auth() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.log(err);
-      if (err.isSuperTokensGeneralError === true) {
+      if (err.isAuthApiError === true) {
         // this may be a custom error message sent from the API by you,
         toast({
           variant: 'destructive',

@@ -11,7 +11,7 @@ import {
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import React from 'react';
-import { signOut } from 'supertokens-auth-react/recipe/session';
+import { signOut } from 'common/auth';
 
 import { deleteCookies } from 'common/common-utils';
 

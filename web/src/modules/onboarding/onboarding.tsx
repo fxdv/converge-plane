@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/router';
 import React from 'react';
-import { SessionAuth } from 'supertokens-auth-react/recipe/session';
+import { SessionAuth } from 'common/auth';
 
 import { AuthLayout } from 'common/layouts/auth-layout';
 import { UserDataWrapper } from 'common/wrappers/user-data-wrapper';

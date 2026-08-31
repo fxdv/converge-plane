@@ -1,4 +1,4 @@
-import { SessionAuth } from 'supertokens-auth-react/recipe/session';
+import { SessionAuth } from 'common/auth';
 
 import { NewIssueProvider } from 'modules/issues/new-issue';
 
