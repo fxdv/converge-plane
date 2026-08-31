@@ -12,7 +12,6 @@ export const useIssueRowsTeam = (issues: IssueType[], teams: TeamType[]) => {
       displaySettings: { showEmptyGroups },
     },
     issuesStore,
-    issueRelationsStore,
   } = useContextStore();
 
   return getIssueRows(
@@ -23,6 +22,5 @@ export const useIssueRowsTeam = (issues: IssueType[], teams: TeamType[]) => {
       .map((team) => team.id),
     showEmptyGroups,
     issuesStore,
-    issueRelationsStore,
   );
 };

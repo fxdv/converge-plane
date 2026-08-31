@@ -18,8 +18,6 @@ import { useFilterIssues } from 'modules/issues/issues-utils';
 import type { User } from 'common/types';
 
 import { ScrollManagedList } from 'components/scroll-managed-list';
-import { useCycle } from 'hooks/cycles';
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
@@ -32,17 +30,11 @@ interface AssigneeListProps {
 }
 
 export const AssigneeList = observer(({ users }: AssigneeListProps) => {
-  const project = useProject();
-  const cycle = useCycle();
   const team = useCurrentTeam();
-
-  const [_heightChange, setHeightChange] = React.useState(false);
 
   const { issuesStore } = useContextStore();
   const issues = issuesStore.getIssues({
     teamId: team?.id,
-    projectId: project?.id,
-    cycleId: cycle?.id,
   });
   const { workflows } = useComputedWorkflows();
   const filteredIssues = useFilterIssues(issues, workflows);
@@ -98,11 +90,6 @@ export const AssigneeList = observer(({ users }: AssigneeListProps) => {
     );
   };
 
-  const changeHeight = (_issueCount: number, index: number) => {
-    cache.clear(index, 0);
-    setHeightChange(!_heightChange);
-  };
-
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const row = rows[index];
     if (!row) {
@@ -120,11 +107,7 @@ export const AssigneeList = observer(({ users }: AssigneeListProps) => {
           {row.type === 'header' ? (
             getHeaderRow(row, index)
           ) : (
-            <IssueListItem
-              issueId={row.issueId}
-              key={index}
-              changeHeight={(issueCount) => changeHeight(issueCount, index)}
-            />
+            <IssueListItem issueId={row.issueId} key={index} />
           )}
         </div>
       </CellMeasurer>

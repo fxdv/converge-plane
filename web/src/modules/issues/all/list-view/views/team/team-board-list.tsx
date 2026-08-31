@@ -21,8 +21,6 @@ import {
 import { BoardIssueItem } from 'modules/issues/components/issue-board-item';
 
 import type { TeamType } from 'common/types';
-
-import { useProject } from 'hooks/projects';
 import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
@@ -35,12 +33,10 @@ interface TeamBoardListProps {
 
 export const TeamBoardList = observer(({ team }: TeamBoardListProps) => {
   const { issuesStore, applicationStore } = useContextStore();
-  const project = useProject();
   const { workflows } = useComputedWorkflows();
 
   const issues = issuesStore.getIssuesForTeam({
     teamId: team.id,
-    projectId: project?.id,
   });
 
   const computedIssues = useFilterIssues(issues, workflows);

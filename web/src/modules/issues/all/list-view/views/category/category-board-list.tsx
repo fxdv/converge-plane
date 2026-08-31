@@ -23,9 +23,6 @@ import { getWorkflowColor } from 'common/status-color';
 import type { WorkflowType } from 'common/types';
 import { getWorkflowIcon } from 'common/workflow-icons';
 
-import { useCycle } from 'hooks/cycles';
-import { useProject } from 'hooks/projects';
-
 import { useContextStore } from 'store/global-context-provider';
 
 import { useFilterIssues } from '../../../../issues-utils';
@@ -39,12 +36,8 @@ export const CategoryBoardList = observer(
   ({ workflow, workflows }: CategoryBoardItemProps) => {
     const CategoryIcon = getWorkflowIcon(workflow);
     const { issuesStore, applicationStore } = useContextStore();
-    const project = useProject();
-    const cycle = useCycle();
 
     const issues = issuesStore.getIssuesForState(workflow.ids, {
-      projectId: project?.id,
-      cycleId: cycle?.id,
     });
 
     const computedIssues = useFilterIssues(issues, workflows);

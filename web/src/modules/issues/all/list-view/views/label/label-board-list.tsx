@@ -19,9 +19,6 @@ import {
 } from 'react-virtualized';
 
 import type { LabelType } from 'common/types';
-
-import { useCycle } from 'hooks/cycles';
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
@@ -36,15 +33,11 @@ interface LabelBoardItemProps {
 
 export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
   const { issuesStore, applicationStore } = useContextStore();
-  const project = useProject();
   const { workflows } = useComputedWorkflows();
   const team = useCurrentTeam();
-  const cycle = useCycle();
 
   const issues = issuesStore.getIssuesForLabel(label.ids, {
     teamId: team?.id,
-    projectId: project?.id,
-    cycleId: cycle?.id,
   });
 
   const computedIssues = useFilterIssues(issues, workflows);
@@ -181,13 +174,9 @@ export const NoLabelBoardList = observer(() => {
   const { issuesStore, applicationStore } = useContextStore();
   const team = useCurrentTeam();
   const { workflows } = useComputedWorkflows();
-  const project = useProject();
-  const cycle = useCycle();
 
   const issues = issuesStore.getIssuesForNoLabel({
     teamId: team?.id,
-    projectId: project?.id,
-    cycleId: cycle?.id,
   });
 
   const computedIssues = useFilterIssues(issues, workflows);

@@ -2,29 +2,12 @@ import { runInAction } from 'mobx';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { saveActionData } from 'store/action';
 import { saveCommentsData } from 'store/comments';
-import { saveCompanyData } from 'store/company';
-import { saveConversationHistorytData } from 'store/conversation-history';
-import { saveConversationData } from 'store/conversations';
-import { saveCyclesData } from 'store/cycle';
-import { saveIntegrationAccountData } from 'store/integration-accounts';
 import { saveIssueHistoryData } from 'store/issue-history';
-import { saveIssueRelationData } from 'store/issue-relation';
-import { saveIssueSuggestionData } from 'store/issue-suggestions';
 import { saveIssuesData } from 'store/issues';
 import { saveLabelData } from 'store/labels';
-import { saveLinkedIssueData } from 'store/linked-issues';
 import { MODELS } from 'store/models';
-import { saveNotificationData } from 'store/notifications';
-import { savePeopleData } from 'store/people';
-import {
-  saveProjectData,
-  saveProjectMilestoneData,
-} from 'store/projects/save-data';
-import { saveSupportData } from 'store/support';
 import { saveTeamData } from 'store/teams';
-import { saveTemplateData } from 'store/templates';
 import { saveViewData } from 'store/views';
 import { saveWorkflowData } from 'store/workflows';
 import { saveWorkspaceData } from 'store/workspace';
@@ -71,22 +54,7 @@ export async function saveSocketData(
       [MODELS.Issue]: saveIssuesData,
       [MODELS.IssueHistory]: saveIssueHistoryData,
       [MODELS.IssueComment]: saveCommentsData,
-      [MODELS.IntegrationAccount]: saveIntegrationAccountData,
-      [MODELS.LinkedIssue]: saveLinkedIssueData,
-      [MODELS.IssueRelation]: saveIssueRelationData,
-      [MODELS.Notification]: saveNotificationData,
       [MODELS.View]: saveViewData,
-      [MODELS.IssueSuggestion]: saveIssueSuggestionData,
-      [MODELS.Action]: saveActionData,
-      [MODELS.Project]: saveProjectData,
-      [MODELS.ProjectMilestone]: saveProjectMilestoneData,
-      [MODELS.Cycle]: saveCyclesData,
-      [MODELS.Conversation]: saveConversationData,
-      [MODELS.ConversationHistory]: saveConversationHistorytData,
-      [MODELS.Template]: saveTemplateData,
-      [MODELS.People]: savePeopleData,
-      [MODELS.Company]: saveCompanyData,
-      [MODELS.Support]: saveSupportData,
     };
 
     // Process records using the handler map

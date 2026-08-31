@@ -12,7 +12,6 @@ export const useIssueRowsAssignee = (issues: IssueType[], users: User[]) => {
       displaySettings: { showEmptyGroups },
     },
     issuesStore,
-    issueRelationsStore,
   } = useContextStore();
 
   return getIssueRows(
@@ -23,6 +22,5 @@ export const useIssueRowsAssignee = (issues: IssueType[], users: User[]) => {
       .map((user) => user.id),
     showEmptyGroups,
     issuesStore,
-    issueRelationsStore,
   );
 };

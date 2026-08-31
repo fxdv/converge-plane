@@ -4,7 +4,6 @@ import * as React from 'react';
 import type { User } from 'common/types';
 import type { UsersOnWorkspaceType } from 'common/types';
 
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam, useTeamWithId } from 'hooks/teams';
 
 import { useGetUsersQuery } from 'services/users';
@@ -16,7 +15,6 @@ export function useUsersData(bot = true, teamId?: string) {
   const currentTeam = useCurrentTeam();
   const teamWithId = useTeamWithId(teamId);
   const team = teamWithId ? teamWithId : currentTeam;
-  const project = useProject();
 
   const { data: usersData, isLoading } = useGetUsersQuery();
 
@@ -35,7 +33,7 @@ export function useUsersData(bot = true, teamId?: string) {
     }
 
     // Pre-calculate team IDs to check against
-    const validTeamIds = new Set(project?.teams || (team?.id ? [team.id] : []));
+    const validTeamIds = new Set(team?.id ? [team.id] : []);
 
     const users = usersData.filter((user) => {
       const isBot = bot ? true : user.role !== RoleEnum.BOT;
@@ -48,8 +46,8 @@ export function useUsersData(bot = true, teamId?: string) {
         return false;
       }
 
-      // If no team or project filter, return all non-bot users
-      if (!team?.id && !project?.teams) {
+      // If no team filter, return all non-bot users
+      if (!team?.id) {
         return true;
       }
 
@@ -59,7 +57,7 @@ export function useUsersData(bot = true, teamId?: string) {
 
     return users;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bot, usersData, team?.id, project?.teams]);
+  }, [bot, usersData, team?.id]);
 
   return {
     isLoading,

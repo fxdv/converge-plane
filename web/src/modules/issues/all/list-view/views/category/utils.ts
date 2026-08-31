@@ -18,7 +18,6 @@ export const useIssueRowsCategory = (issues: IssueType[]) => {
       displaySettings: { completedFilter, view, showEmptyGroups },
     },
     issuesStore,
-    issueRelationsStore,
   } = useContextStore();
   const categorySequence =
     view === ViewEnum.list
@@ -62,6 +61,5 @@ export const useIssueRowsCategory = (issues: IssueType[]) => {
     workflows.map((workflow) => workflow.id),
     showEmptyGroups,
     issuesStore,
-    issueRelationsStore,
   );
 };

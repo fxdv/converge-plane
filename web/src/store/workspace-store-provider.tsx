@@ -14,23 +14,9 @@ export const WorkspaceStoreInit = observer(
       workspaceStore,
       teamsStore,
       labelsStore,
-      integrationAccountsStore,
       issuesStore,
       workflowsStore,
-      issueRelationsStore,
-      notificationsStore,
       viewsStore,
-      issueSuggestionsStore,
-      actionsStore,
-      projectsStore,
-      projectMilestonesStore,
-      cyclesStore,
-      conversationsStore,
-      conversationHistoryStore,
-      templatesStore,
-      supportStore,
-      companiesStore,
-      peopleStore,
     } = useContextStore();
 
     const currentWorkspace = useCurrentWorkspace();
@@ -54,22 +40,8 @@ export const WorkspaceStoreInit = observer(
 
       await Promise.all([
         labelsStore.load(),
-        cyclesStore.load(),
-        integrationAccountsStore.load(),
         issuesStore.load(),
-        issueRelationsStore.load(),
-        notificationsStore.load(),
         viewsStore.load(),
-        issueSuggestionsStore.load(),
-        actionsStore.load(),
-        projectsStore.load(),
-        projectMilestonesStore.load(),
-        conversationsStore.load(),
-        conversationHistoryStore.load(),
-        templatesStore.load(),
-        companiesStore.load(),
-        peopleStore.load(),
-        supportStore.load(),
       ]);
 
       // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -8,8 +8,6 @@ import {
   IssueAssigneeDropdown,
   IssueLabelDropdown,
   IssuePriorityDropdown,
-  IssueProjectDropdown,
-  IssueCycleDropdown,
 } from './filter-dropdowns';
 import { FilterItemView } from './filter-item-view';
 import { isEmpty } from './filter-utils';
@@ -55,20 +53,6 @@ export const AppliedFiltersView = observer(() => {
           />
 
           <FilterItemView
-            name="Cycle"
-            filterKey="cycle"
-            filter={filters.cycle}
-            Component={IssueCycleDropdown}
-          />
-
-          <FilterItemView
-            name="Project"
-            filterKey="project"
-            filter={filters.project}
-            Component={IssueProjectDropdown}
-          />
-
-          <FilterItemView
             name="Parent issues"
             filterKey="isParent"
             filter={filters.isParent}
@@ -82,19 +66,6 @@ export const AppliedFiltersView = observer(() => {
             Component={() => <>sub-issue</>}
           />
 
-          <FilterItemView
-            name="Blocked issues"
-            filterKey="isBlocked"
-            filter={filters.isBlocked}
-            Component={() => <>blocked</>}
-          />
-
-          <FilterItemView
-            name="Blocking issues"
-            filterKey="isBlocking"
-            filter={filters.isBlocking}
-            Component={() => <>blocking</>}
-          />
         </div>
       )}
     </>

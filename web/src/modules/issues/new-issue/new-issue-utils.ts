@@ -7,7 +7,6 @@ import { useDebouncedCallback } from 'use-debounce';
 
 import type { IssueType, TeamType, WorkflowType } from 'common/types';
 
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 
 import { useContextStore } from 'store/global-context-provider';
@@ -55,7 +54,6 @@ export const useDefaultValues = (
   team: TeamType,
   defaultValues: Partial<IssueType>,
 ) => {
-  const project = useProject();
   const { workflowsStore } = useContextStore();
   const user = React.useContext(UserContext);
   const workflows = workflowsStore.getWorkflowsForTeam(team.id);
@@ -63,7 +61,6 @@ export const useDefaultValues = (
   return React.useMemo(() => {
     return {
       teamId: team?.id,
-      projectId: project?.id,
       parentId: defaultValues.parentId,
       labelIds: [] as string[],
       stateId: getBacklogWorkflow(workflows).id,
@@ -72,7 +69,7 @@ export const useDefaultValues = (
       ...defaultValues,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team, project]);
+  }, [team]);
 };
 
 export function useTeamForNewIssue(defaultTeamId: string): {
@@ -82,7 +79,6 @@ export function useTeamForNewIssue(defaultTeamId: string): {
   const { teamsStore } = useContextStore();
   const teams = teamsStore.teams;
   const currentTeam = useCurrentTeam();
-  const project = useProject();
 
   const getDefaultTeamId = () => {
     if (defaultTeamId) {
@@ -91,10 +87,6 @@ export function useTeamForNewIssue(defaultTeamId: string): {
 
     if (currentTeam) {
       return currentTeam;
-    }
-
-    if (project) {
-      return teams.find((team: TeamType) => team.id === project.teams[0]);
     }
 
     return teams[0];

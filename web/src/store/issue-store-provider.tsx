@@ -17,8 +17,7 @@ export const IssueStoreInit = ({
   sideView: boolean;
 }) => {
   const [loading, setLoading] = React.useState(true);
-  const { issuesHistoryStore, commentsStore, linkedIssuesStore } =
-    useContextStore();
+  const { issuesHistoryStore, commentsStore } = useContextStore();
 
   const { issueId: paramIssueId } = useParams();
   const { issueId: viewIssueId } = React.useContext(IssueViewContext);
@@ -49,7 +48,6 @@ export const IssueStoreInit = ({
 
     await issuesHistoryStore.load(issueData.id);
     await commentsStore.load(issueData.id);
-    await linkedIssuesStore.load(issueData.id);
 
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

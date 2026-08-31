@@ -10,7 +10,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@tegonhq/ui/components/tooltip';
-import { ChevronRight, Cycle, IssuesLine, StackLine } from '@tegonhq/ui/icons';
+import { ChevronRight, IssuesLine, StackLine } from '@tegonhq/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
@@ -61,25 +61,6 @@ export const TeamList = observer(() => {
               href: `/${workspace.slug}/team/${team.identifier}/views`,
             },
           ];
-
-          if (team.preferences.cyclesEnabled) {
-            links = [
-              ...links,
-              ...[
-                {
-                  title: 'Cycles',
-                  icon: Cycle,
-                  strict: true,
-                  href: `/${workspace.slug}/team/${team.identifier}/cycles`,
-                },
-                {
-                  title: 'Current',
-                  icon: Cycle,
-                  href: `/${workspace.slug}/team/${team.identifier}/cycles/current`,
-                },
-              ],
-            ];
-          }
 
           return (
             <AccordionItem value={team.id} key={team.id} className="mb-1">

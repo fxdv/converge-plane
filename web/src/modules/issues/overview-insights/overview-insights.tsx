@@ -6,8 +6,6 @@ import {
 } from '@tegonhq/ui/components/tabs';
 import { observer } from 'mobx-react-lite';
 
-import { useCycle } from 'hooks/cycles';
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 import { useLocalState } from 'hooks/use-local-state';
 import { useComputedWorkflows } from 'hooks/workflows';
@@ -21,14 +19,10 @@ import { useFilterIssues } from '../issues-utils';
 export const OverviewInsights = observer(() => {
   const { issuesStore, applicationStore } = useContextStore();
   const team = useCurrentTeam();
-  const project = useProject();
-  const cycle = useCycle();
   const [tab, setTab] = useLocalState('insights-tabs', 'assignee');
 
   const issues = issuesStore.getIssues({
-    projectId: project?.id,
     teamId: team?.id,
-    cycleId: cycle?.id,
     subIssue: applicationStore.displaySettings.showSubIssues,
   });
   const { workflows } = useComputedWorkflows();

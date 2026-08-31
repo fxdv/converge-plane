@@ -22,9 +22,6 @@ import {
 import { BoardIssueItem } from 'modules/issues/components/issue-board-item';
 
 import type { User } from 'common/types';
-
-import { useCycle } from 'hooks/cycles';
-import { useProject } from 'hooks/projects';
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
@@ -41,8 +38,6 @@ export const AssigneeBoardList = observer(
     const { issuesStore, applicationStore } = useContextStore();
     const team = useCurrentTeam();
     const { workflows } = useComputedWorkflows();
-    const cycle = useCycle();
-    const project = useProject();
 
     // Create a CellMeasurerCache instance
     const cache = new CellMeasurerCache({
@@ -53,8 +48,6 @@ export const AssigneeBoardList = observer(
     const issues = issuesStore.getIssuesForUser({
       userId: user.id,
       teamId: team?.id,
-      projectId: project?.id,
-      cycleId: cycle?.id,
     });
 
     const computedIssues = useFilterIssues(issues, workflows);
@@ -181,12 +174,10 @@ export const NoAssigneeView = observer(() => {
   const { issuesStore, applicationStore } = useContextStore();
   const team = useCurrentTeam();
   const { workflows } = useComputedWorkflows();
-  const project = useProject();
 
   const issues = issuesStore.getIssuesForUser({
     userId: undefined,
     teamId: team?.id,
-    projectId: project?.id,
   });
   const computedIssues = useFilterIssues(issues, workflows);
 
