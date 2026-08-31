@@ -2,7 +2,6 @@ import { Button } from '@tegonhq/ui/components/button';
 import { Logo } from '@tegonhq/ui/components/dynamic-logo';
 import { Loader } from '@tegonhq/ui/components/loader';
 import { useRouter } from 'next/router';
-import posthog from 'posthog-js';
 import * as React from 'react';
 import { signOut } from 'supertokens-auth-react/recipe/session';
 
@@ -24,16 +23,6 @@ export function UserDataWrapper(props: Props): React.ReactElement {
     replace,
   } = useRouter();
 
-  React.useEffect(() => {
-    if (!isLoading && !isError) {
-      posthog.identify(
-        data.id, // Replace 'distinct_id' with your user's unique identifier
-        { email: data.email, name: data.fullname }, // optional: set additional person properties
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!isLoading, !isError]);
-
   if (!isLoading && !isError) {
     const workspaceRes = data.workspaces.find(
       (work) => work.slug === workspaceSlug,
@@ -46,7 +35,6 @@ export function UserDataWrapper(props: Props): React.ReactElement {
           <Button
             variant="secondary"
             onClick={async () => {
-              posthog.reset(true);
               deleteCookies();
               await signOut();
 
