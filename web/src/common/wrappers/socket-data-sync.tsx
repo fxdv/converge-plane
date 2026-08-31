@@ -2,7 +2,6 @@ import { Loader } from '@tegonhq/ui/components/loader';
 import { observer } from 'mobx-react-lite';
 import getConfig from 'next/config';
 import * as React from 'react';
-import { Socket, io } from 'socket.io-client';
 
 import { hash } from 'common/common-utils';
 
@@ -52,7 +51,12 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
     const user = React.useContext(UserContext);
     const hashKey = `${workspace.id}__${user.id}`;
 
-    const [socket, setSocket] = React.useState<Socket | undefined>(undefined);
+    // R-8: realtime is an SSE stream, not socket.io. The EventSource is
+    // kept under the `socket` name to minimize the diff; it is a hint —
+    // the delta endpoint remains authoritative (refetch-after-gap).
+    const [socket, setSocket] = React.useState<EventSource | undefined>(
+      undefined,
+    );
 
     const { publicRuntimeConfig } = getConfig();
 
@@ -62,20 +66,19 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       }
 
       return () => {
-        socket && socket.disconnect();
+        socket && socket.close();
       };
 
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [workspaceStore.workspace]);
 
-    async function initSocket() {
-      const socket = io(publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST, {
-        query: {
-          workspaceId: workspaceStore.workspace.id,
-          userId: user.id,
-        },
-        withCredentials: true,
-      });
+    function initSocket() {
+      const base = publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST;
+      if (!base || !workspaceStore.workspace?.id) {
+        return;
+      }
+      const url = `${base}/api/v1/sync_actions/stream?workspaceId=${workspaceStore.workspace.id}&userId=${user.id}`;
+      const socket = new EventSource(url, { withCredentials: true });
       setSocket(socket);
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -106,15 +109,22 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         [MODELS.Support]: supportStore,
       };
 
-      socket.on('message', async (newMessage: string) => {
-        const data = JSON.parse(newMessage);
+      socket.onmessage = async (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
 
         await saveSocketData([data], MODEL_STORE_MAP);
         localStorage.setItem(
           `lastSequenceId_${hash(hashKey)}`,
           `${data.sequenceId}`,
         );
-      });
+      };
+
+      // EventSource reconnects automatically on drop; on reconnect the
+      // client will re-run delta to reconcile anything missed.
+      socket.onerror = () => {
+        // No-op: the browser handles reconnect. Kept to avoid console noise
+        // and to give a single place to log in the future.
+      };
     }
 
     if (workspaceStore?.workspace) {

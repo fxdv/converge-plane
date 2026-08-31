@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"converge/internal/auth"
+	"converge/internal/broadcast"
 	"converge/internal/config"
 	"log/slog"
 )
@@ -24,10 +25,12 @@ type API struct {
 	cfg  config.Config
 	log  *slog.Logger
 	auth *auth.Service
+	// bcast fans out committed change records to realtime subscribers.
+	bcast *broadcast.Broadcaster
 }
 
 func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service) *API {
-	return &API{pool: pool, cfg: cfg, log: log, auth: authSvc}
+	return &API{pool: pool, cfg: cfg, log: log, auth: authSvc, bcast: broadcast.New()}
 }
 
 // Principal is the authenticated human caller, derived exclusively from
@@ -62,6 +65,18 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/workspaces/onboarding", a.handleOnboarding)
 		r.Get("/sync_actions/bootstrap", a.handleSync)
 		r.Get("/sync_actions/delta", a.handleSync)
+		// M2: issue mutations + realtime.
+		r.Post("/issues", a.handleCreateIssue)
+		r.Post("/issues/{id}", a.handleUpdateIssue)
+		r.Delete("/issues/{id}", a.handleDeleteIssue)
+		r.Post("/issues/{id}/move", a.handleMoveIssue)
+		r.Post("/issues/{id}/subscribe", a.handleSubscribeIssue)
+		r.Post("/issue_comments", a.handleCreateComment)
+		r.Post("/issue_comments/{id}", a.handleUpdateComment)
+		r.Delete("/issue_comments/{id}", a.handleDeleteComment)
+		r.Get("/issue_comments/{id}", a.handleGetComment)
+		r.Get("/issue_comments/{id}/replies", a.handleGetCommentReplies)
+		r.Get("/sync_actions/stream", a.handleStream)
 	})
 }
 
