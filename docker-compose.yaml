@@ -21,13 +21,16 @@ services:
     restart: unless-stopped
 
   # One-shot demo-data seeder: creates the Acme workspace on a fresh
-  # database and exits 0 (idempotent) when it already exists.
+  # database and exits 0 (idempotent) when it already exists. It is in
+  # the `seed` profile (enabled by default via COMPOSE_PROFILES in
+  # .env.example) so a production database can stay demo-free.
   seed:
     build:
       context: ./server
       dockerfile: Dockerfile
     container_name: converge-seed
     command: ["seed"]
+    profiles: ["seed"]
     environment:
       CONVERGE_DATABASE_URL: postgresql://${POSTGRES_USER:-converge}:${POSTGRES_PASSWORD:-converge}@postgres:5432/${POSTGRES_DB:-converge}?sslmode=disable
     depends_on:
@@ -90,8 +93,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      seed:
-        condition: service_completed_successfully
     ports:
       - "3000:3000"
     restart: unless-stopped
