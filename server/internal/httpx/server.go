@@ -82,8 +82,13 @@ func New(d Dependencies) *Server {
 		Addr:              "", // set in Run
 		Handler:           r,
 		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		// No WriteTimeout: the SSE stream is a long-lived response. A
+		// global write cap (60s) killed every stream on a timer, making
+		// "live" updates wait up to a minute for the reconnect reconcile.
+		// Streams self-terminate on client disconnect (the 15s keepalive
+		// pings fail) and the broadcaster drops slow subscribers; regular
+		// handlers write their whole response in one shot.
+		IdleTimeout: 120 * time.Second,
 	}
 	return &Server{srv: srv, log: d.Logger}
 }

@@ -14,8 +14,8 @@ export function getDeltaRecords(
   modelNames: string[],
   lastSequenceId: string,
   userId: string,
-) {
-  return ajaxGet({
+): Promise<BootstrapResponse> {
+  return ajaxGet<BootstrapResponse, XHRErrorResponse>({
     url: `/api/v1/sync_actions/delta`,
     query: {
       workspaceId,
