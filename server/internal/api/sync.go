@@ -3,13 +3,13 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
 )
 
 // syncActionRecord matches the web client's SyncActionRecord.
@@ -105,14 +105,41 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		// Bootstrap: the client passes a comma-separated MODELS list. Unknown
-		// or not-yet-shipped models simply yield no records.
+		// Bootstrap: the client passes a comma-separated MODELS list.
+		// Unknown or not-yet-shipped models simply yield no records.
+		//
+		// Collectors run concurrently: each is one independent indexed
+		// query, so wall time is the slowest collector rather than the
+		// sum of all of them (the sequential loop made a 9-model
+		// bootstrap pay 9 serial round-trips). Record order is not
+		// significant: the client upserts by model id and takes the
+		// watermark from lastSequenceId.
+		names := make([]string, 0, 8)
+		seen := make(map[string]bool, 8)
 		for _, name := range strings.Split(q.Get("modelNames"), ",") {
-			recs, err := a.collectModel(r.Context(), strings.TrimSpace(name), workspaceID)
-			if err != nil {
-				a.internalError(w, err)
-				return
+			name = strings.TrimSpace(name)
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
 			}
+		}
+		byModel := make([][]syncActionRecord, len(names))
+		var g errgroup.Group
+		for i, name := range names {
+			g.Go(func() error {
+				recs, err := a.collectModel(r.Context(), name, workspaceID)
+				if err != nil {
+					return err
+				}
+				byModel[i] = recs
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			a.internalError(w, err)
+			return
+		}
+		for _, recs := range byModel {
 			records = append(records, recs...)
 		}
 	}
@@ -767,5 +794,3 @@ func (a *API) broadcastRecord(rec syncActionRecord) {
 	a.log.Debug("realtime publish", "workspace", rec.WorkspaceID,
 		"model", rec.ModelName, "action", rec.Action, "delivered", n)
 }
-
-var _ = fmt.Sprintf
