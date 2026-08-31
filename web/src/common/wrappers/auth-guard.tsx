@@ -1,7 +1,7 @@
 import { Loader } from '@converge/ui/components/loader';
 import { useRouter } from 'next/router';
 import React, { cloneElement } from 'react';
-import Session from 'supertokens-web-js/recipe/session';
+import { Session } from 'common/auth';
 
 interface Props {
   children: React.ReactElement;

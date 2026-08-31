@@ -15,15 +15,13 @@ import en from 'javascript-time-ago/locale/en';
 import React from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Hydrate, QueryClientProvider } from 'react-query';
-import { SuperTokensWrapper } from 'supertokens-auth-react';
-
-import { initSuperTokens } from 'common/init-config';
+import { initSession } from 'common/init-config';
 import { useGetQueryClient } from 'common/lib/react-query-client';
 import { SCOPES } from 'common/scopes';
 
 import { StoreContext, storeContextStore } from 'store/global-context-provider';
 
-initSuperTokens();
+initSession();
 
 TimeAgo.addDefaultLocale(en);
 
@@ -39,36 +37,34 @@ export const MyApp: NextComponentType<
   const getLayout = Component.getLayout || ((page: React.ReactNode) => page);
 
   return (
-    <SuperTokensWrapper>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="light"
-        enableSystem
-        disableTransitionOnChange
-      >
-        <HotkeysProvider initiallyActiveScopes={[SCOPES.Global]}>
-          <TooltipProvider delayDuration={500}>
-            <StoreContext.Provider value={storeContextStore}>
-              <QueryClientProvider client={queryClientRef.current}>
-                <Hydrate state={dehydratedState}>
-                  <div
-                    className={cn(
-                      'min-h-screen font-sans antialiased flex',
-                      GeistSans.variable,
-                      GeistMono.variable,
-                    )}
-                  >
-                    {getLayout(<Component {...pageProps} />)}
-                  </div>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <HotkeysProvider initiallyActiveScopes={[SCOPES.Global]}>
+        <TooltipProvider delayDuration={500}>
+          <StoreContext.Provider value={storeContextStore}>
+            <QueryClientProvider client={queryClientRef.current}>
+              <Hydrate state={dehydratedState}>
+                <div
+                  className={cn(
+                    'min-h-screen font-sans antialiased flex',
+                    GeistSans.variable,
+                    GeistMono.variable,
+                  )}
+                >
+                  {getLayout(<Component {...pageProps} />)}
+                </div>
 
-                  <Toaster />
-                </Hydrate>
-              </QueryClientProvider>
-            </StoreContext.Provider>
-          </TooltipProvider>
-        </HotkeysProvider>
-      </ThemeProvider>
-    </SuperTokensWrapper>
+                <Toaster />
+              </Hydrate>
+            </QueryClientProvider>
+          </StoreContext.Provider>
+        </TooltipProvider>
+      </HotkeysProvider>
+    </ThemeProvider>
   );
 };
 

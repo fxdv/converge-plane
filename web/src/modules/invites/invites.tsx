@@ -3,7 +3,7 @@ import { Button } from '@converge/ui/components/button';
 import { useToast } from '@converge/ui/components/use-toast';
 import { useRouter } from 'next/router';
 import React from 'react';
-import { SessionAuth, signOut } from 'supertokens-auth-react/recipe/session';
+import { SessionAuth, signOut } from 'common/auth';
 
 import { AuthLayout } from 'common/layouts/auth-layout';
 import type { Invite } from 'common/types';
