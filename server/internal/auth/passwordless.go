@@ -322,9 +322,8 @@ func (s *Service) handleConsumeCode(w http.ResponseWriter, r *http.Request) {
 		hashValue(code)); err != nil {
 		s.log.Error("mark code consumed", "error", err)
 	}
-	s.auditSession(ctx, accountID, clientIP(r), r.UserAgent())
-
 	material := s.issueSession(accountID)
+	s.auditSession(ctx, accountID, material.AccessToken, clientIP(r), r.UserAgent())
 	s.SetSessionMaterial(w, material)
 
 	s.log.Info("user authenticated", "account_id", accountID, "email", email, "new_user", created)
@@ -378,7 +377,7 @@ func (s *Service) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	material := s.issueSession(accountID)
-	s.auditSession(r.Context(), accountID, clientIP(r), r.UserAgent())
+	s.auditSession(r.Context(), accountID, material.AccessToken, clientIP(r), r.UserAgent())
 	s.SetSessionMaterial(w, material)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "OK",
@@ -446,11 +445,11 @@ func (s *Service) handleEmailExists(w http.ResponseWriter, r *http.Request) {
 
 // auditSession records a session lifecycle event for operator visibility.
 // Failures are logged, never fatal to the auth response.
-func (s *Service) auditSession(ctx context.Context, accountID, ip, userAgent string) {
+func (s *Service) auditSession(ctx context.Context, accountID, accessToken, ip, userAgent string) {
 	if _, err := s.pool.Exec(ctx, `
 		insert into sessions (account_id, token_hash, expires_at, user_agent, ip)
 		values ($1, $2, now() + $3::interval, $4, $5)`,
-		accountID, "hmac-session", intervalSQL(s.cfg.SessionTTL), userAgent, ip); err != nil {
+		accountID, hashValue(accessToken), intervalSQL(s.cfg.SessionTTL), userAgent, ip); err != nil {
 		s.log.Warn("session audit insert failed", "error", err)
 	}
 }
