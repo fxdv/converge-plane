@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.24-alpine AS build
+# The Go toolchain must satisfy the version directive in go.mod.
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 ARG VERSION=0.1.0-dev
 ARG COMMIT=dev

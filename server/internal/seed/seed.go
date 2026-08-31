@@ -30,7 +30,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		return "", fmt.Errorf("check existing workspace: %w", err)
 	}
 	if exists {
-		return demoEmail, fmt.Errorf("demo workspace %q already exists; nothing to do", demoSlug)
+		// Idempotent by contract: a re-run is a no-op and a success, so
+		// one-shot runners (docker compose seed service) exit 0 every time.
+		log.Info("seed skipped: demo workspace already exists", "slug", demoSlug)
+		return demoEmail, nil
 	}
 
 	tx, err := pool.Begin(ctx)
