@@ -348,12 +348,15 @@ func (a *API) collectLabels(ctx context.Context, workspaceID string, emit emitFn
 }
 
 // descriptionForClient projects the stored rich-text jsonb into the
-// string the client's editor consumes. The editor tries JSON.parse and
-// uses parsed.json ?? parsed, falling back to the raw string, so:
-//   - the Tegon document format ({"json":...,"text":...}) passes through
-//     verbatim so rich content survives the round-trip;
-//   - a bare JSON string (legacy/seed plain text) is unquoted;
-//   - anything else falls back to its plain-text projection.
+// string the client's editor consumes. The editor does JSON.parse(value)
+// and uses parsed.json ?? parsed, falling back to the raw string — so
+// the stored document must come back exactly as it went in:
+//   - any JSON object passes through verbatim. The client sends both the
+//     {"json":...,"text":...} wrapper and bare ProseMirror docs
+//     ({"type":"doc",...}); the editor consumes either form;
+//   - a JSON string scalar (plain text, how toJSONB stores non-JSON input)
+//     is unquoted back to its text;
+//   - anything else (null, numbers) serializes as empty.
 func descriptionForClient(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "null" {
@@ -363,18 +366,12 @@ func descriptionForClient(raw string) string {
 	if err := json.Unmarshal([]byte(raw), &s); err == nil {
 		return s
 	}
-	var doc struct {
-		JSON json.RawMessage `json:"json"`
-		Text string          `json:"text"`
-	}
-	if err := json.Unmarshal([]byte(raw), &doc); err == nil && (len(doc.JSON) > 0 || doc.Text != "") {
-		return raw
-	}
-	var obj struct {
-		Plain string `json:"plain"`
-	}
-	if err := json.Unmarshal([]byte(raw), &obj); err == nil {
-		return obj.Plain
+	var v any
+	if err := json.Unmarshal([]byte(raw), &v); err == nil {
+		switch v.(type) {
+		case map[string]any, []any:
+			return raw
+		}
 	}
 	return ""
 }
@@ -391,14 +388,15 @@ const issueColumns = `
 // issueRow is one issues-table row with everything the client shape
 // needs, shared by the sync collectors and the mutation handlers.
 type issueRow struct {
-	ID, TeamID                  string
-	Number, Priority, SortOrder int
-	Title, DescRaw              string
-	Status                      string
-	CreatedAt, UpdatedAt        time.Time
-	CreatedByID, AssigneeID     *string
-	ParentID, StatusID          *string
-	LabelIDs, Children          []string
+	ID, TeamID              string
+	Number, SortOrder       int
+	Priority                *int // nullable: the client domain is number | null
+	Title, DescRaw          string
+	Status                  string
+	CreatedAt, UpdatedAt    time.Time
+	CreatedByID, AssigneeID *string
+	ParentID, StatusID      *string
+	LabelIDs, Children      []string
 }
 
 // issueData serializes an issue row in the exact shape of the client's
