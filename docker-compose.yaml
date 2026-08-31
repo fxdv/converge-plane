@@ -6,8 +6,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-converge}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-converge}
       POSTGRES_DB: ${POSTGRES_DB:-converge}
+    # Bound to loopback: local tooling (go run, psql) still connects via
+    # localhost, but the database is not exposed to the network. Remove
+    # the prefix to publish it (not recommended).
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +18,22 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
+    restart: unless-stopped
+
+  # One-shot demo-data seeder: creates the Acme workspace on a fresh
+  # database and exits 0 (idempotent) when it already exists.
+  seed:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: converge-seed
+    command: ["seed"]
+    environment:
+      CONVERGE_DATABASE_URL: postgresql://${POSTGRES_USER:-converge}:${POSTGRES_PASSWORD:-converge}@postgres:5432/${POSTGRES_DB:-converge}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   api:
     build:
@@ -30,16 +49,31 @@ services:
       CONVERGE_PUBLIC_URL: ${CONVERGE_PUBLIC_URL:-http://localhost:3001}
       CONVERGE_WEB_ORIGIN: ${CONVERGE_WEB_ORIGIN:-http://localhost:3000}
       CONVERGE_LOG_LEVEL: ${CONVERGE_LOG_LEVEL:-info}
+      # Dev conveniences: the sign-in response includes the magic link, so
+      # a local setup without an email provider is sign-in-able. Set
+      # false in any real deployment.
+      CONVERGE_DEV_MODE: ${CONVERGE_DEV_MODE:-true}
       # Signs session tokens; must be a long random value in real
       # deployments (e.g.: openssl rand -hex 32).
       CONVERGE_SESSION_SECRET: ${CONVERGE_SESSION_SECRET:-converge-dev-session-secret-do-not-use-in-prod}
+      # Set true when the deployment is behind TLS.
+      CONVERGE_SECURE_COOKIES: ${CONVERGE_SECURE_COOKIES:-false}
+      CONVERGE_HTTP_TIMEOUT: ${CONVERGE_HTTP_TIMEOUT:-30s}
+      CONVERGE_DB_MIN_CONNS: ${CONVERGE_DB_MIN_CONNS:-2}
+      CONVERGE_DB_MAX_CONNS: ${CONVERGE_DB_MAX_CONNS:-20}
     ports:
       - "3001:3001"
+    healthcheck:
+      # /readyz verifies the database connection, so `web` only starts
+      # once the API is fully up.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     restart: unless-stopped
 
-  # The web app builds in the same image and serves the Next.js standalone
-  # output. For local development you can skip this service and run
-  # `pnpm dev` on the host instead (faster iteration).
+  # Serves the Next.js app and proxies /api/* to the API service.
   web:
     build:
       context: .
@@ -48,8 +82,16 @@ services:
         NEXT_PUBLIC_BACKEND_HOST: ${NEXT_PUBLIC_BACKEND_HOST:-http://localhost:3001}
         NEXT_PUBLIC_BASE_HOST: ${NEXT_PUBLIC_BASE_HOST:-http://localhost:3000}
     container_name: converge-web
+    environment:
+      # Server-side proxy override: the container reaches the API over the
+      # internal docker network while the browser still targets
+      # NEXT_PUBLIC_BACKEND_HOST (published on :3001) for SSE.
+      API_PROXY_TARGET: http://api:3001
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
     ports:
       - "3000:3000"
     restart: unless-stopped

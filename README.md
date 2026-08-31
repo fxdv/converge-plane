@@ -3,20 +3,22 @@
 **A fast, self-hostable issue tracker for software teams.**
 
 Converge gives small and medium engineering teams the common issue loop done well:
-capture, prioritize, assign, discuss, find, and complete work — with an
+capture, prioritize, assign, discuss, and complete work — with an
 excellent list and Kanban experience, team-scoped organization, keyboard
 efficiency, and a deliberately small operating footprint (one Go binary +
 PostgreSQL).
 
 ## Features
 
-- Issues with team identifiers, statuses, priorities, assignees, and labels
-- List and Kanban views with grouping, filtering, and saved views
-- Comments, activity history, and sub-issues
-- Workspace and team membership with roles, invites, and suspension
-- Full-text search (PostgreSQL-backed, no extra services)
-- Realtime updates over server-sent events
-- Self-host with `docker compose up` — one app plus PostgreSQL
+- Issues with team identifiers, statuses, priorities, assignees, labels, and sub-issues
+- List and Kanban views with real-time updates (server-sent events)
+- Comments and activity history
+- Magic-link sign-in; workspace onboarding and roles
+- Self-host with `docker compose up --build` — one app plus PostgreSQL
+
+Team/workspace administration (invites, suspension, saved views, full-text
+search) is landing in the next release; the schema and client are already in
+place. See [docs/spec/09-mvp-roadmap.md](docs/spec/09-mvp-roadmap.md).
 
 ## Quickstart
 
@@ -26,18 +28,17 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Then open <http://localhost:3000> and sign in.
-
-> The sign-in flow, database seeding, and onboarding are being built out in
-> the first milestones; see [docs/spec](docs/spec) for the product
-> specification and roadmap.
+Then open <http://localhost:3000>, sign in with `demo@converge.dev`
+(dev mode shows the magic link directly since no email provider is
+configured), and explore the seeded **Acme** workspace.
 
 ## Development
 
 ```sh
-# prerequisites: Go 1.24+, Node 20+, pnpm 10
+# prerequisites: Go 1.25+, Node 20+, pnpm 10
+cp .env.example .env
 docker compose up -d postgres          # database only
-cd server && go run ./cmd/converge       # API on :3001
+cd server && go run ./cmd/converge     # API on :3001
 cd .. && pnpm install && pnpm dev      # web on :3000
 ```
 
@@ -45,12 +46,12 @@ cd .. && pnpm install && pnpm dev      # web on :3000
 
 | Path | Contents |
 | --- | --- |
-| `server/` | Go API server (single binary): HTTP, auth, domain services, migrations |
-| `web/` | Web application (Next.js) — forked from Tegon, being adapted for Converge |
-| `packages/` | Shared workspace packages (types, UI kit, API client) forked from Tegon |
+| `server/` | Go API server (single binary): HTTP, auth, domain services, migrations, seed |
+| `web/` | Web application (Next.js) — forked from Tegon, adapted for Converge |
+| `packages/` | Shared workspace packages (types, UI kit, API client) |
 | `tooling/` | Workspace lint/typecheck configs |
 | `docs/spec/` | Product specification (authoritative) and delivery roadmap |
-| `deploy/` | Deployment and operations material |
+| `deploy/` | [Deployment and operations guide](deploy/README.md) |
 
 ## Provenance
 

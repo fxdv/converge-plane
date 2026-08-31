@@ -15,5 +15,11 @@
   "dependencies": {
     "dotenv-cli": "^7.4.4",
     "turbo": "^2.0.9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver"
+    ]
   }
 }

@@ -10,7 +10,12 @@ import getConfig from 'next/config';
 
 const { publicRuntimeConfig } = getConfig();
 
-const API_URL = publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST;
+// API_PROXY_TARGET (server-side only) overrides the build-time backend
+// host: in the docker compose image the proxy must reach the internal
+// `api` service while the browser's SSE stream still targets
+// NEXT_PUBLIC_BACKEND_HOST. Unset in local dev, where both are the same.
+const API_URL =
+  process.env.API_PROXY_TARGET || publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST;
 
 const proxy = httpProxy.createProxyServer();
 
@@ -45,8 +50,8 @@ export default (req, res) => {
       target: API_URL,
       changeOrigin: true,
       // Preserve the original path (including the /api prefix).
-      // socket.io connections go directly to the API host, not
-      // through this proxy, so no websocket upgrade handling is needed.
+      // The SSE stream connects directly to the backend host, not through
+      // this proxy, so no upgrade handling is needed.
     });
   });
 };
