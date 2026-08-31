@@ -128,12 +128,11 @@ func (a *API) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if req.StateID != nil && *req.StateID != "" {
-		ok := a.statusExistsForTeam(ctx, *req.StateID, *req.TeamID)
-		if !ok {
-			writeError(w, http.StatusUnprocessableEntity, "stateId does not belong to the team workflow")
-			return
-		}
+	// An issue must be created in a status: the client's Issue model types
+	// stateId as a strict string, and Tegon's schema requires it.
+	if req.StateID == nil || *req.StateID == "" || !a.statusExistsForTeam(ctx, *req.StateID, *req.TeamID) {
+		writeError(w, http.StatusUnprocessableEntity, "stateId must be one of the team workflow statuses")
+		return
 	}
 
 	tx, err := a.pool.Begin(ctx)
@@ -206,7 +205,9 @@ func (a *API) insertIssueTx(ctx context.Context, tx pgx.Tx, p *Principal, worksp
 	}
 	assignee := nullForEmpty(req.AssigneeID)
 	parent := nullForEmpty(req.ParentID)
-	stateID := nullForEmpty(req.StateID)
+	// stateId is guaranteed present and validated by the handler; the
+	// column is NOT NULL (the client cannot render a statusless issue).
+	stateID := req.StateID
 	description := ""
 	if req.Description != nil {
 		description = *req.Description
@@ -298,8 +299,8 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate referenced objects against the issue's workspace.
-	if req.StateID != nil && *req.StateID != "" && !a.statusExistsForTeam(ctx, *req.StateID, row.TeamID) {
-		writeError(w, http.StatusUnprocessableEntity, "stateId does not belong to the team workflow")
+	if req.StateID != nil && (*req.StateID == "" || !a.statusExistsForTeam(ctx, *req.StateID, row.TeamID)) {
+		writeError(w, http.StatusUnprocessableEntity, "stateId must be one of the team workflow statuses")
 		return
 	}
 	if req.AssigneeID != nil && *req.AssigneeID != "" {
@@ -399,7 +400,7 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		}
 	}
 	if req.StateID != nil && strval(req.StateID) != strval(row.StatusID) {
-		if _, err := tx.Exec(ctx, `update issues set status_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, nullForEmpty(req.StateID)); err != nil {
+		if _, err := tx.Exec(ctx, `update issues set status_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, *req.StateID); err != nil {
 			return false, err
 		}
 		if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "status",
