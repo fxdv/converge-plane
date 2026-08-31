@@ -15,14 +15,19 @@ export function WorkspaceSettings() {
   const router = useRouter();
   const settingsSection = router.query
     .settingsSection as SECTION_COMPONENTS_KEYS;
-  const SectionComponent = settingsSection
-    ? SECTION_COMPONENTS[settingsSection]
-    : SECTION_COMPONENTS.overview;
+  // Unknown sections (links left over from a previous release) fall back
+  // to the overview instead of crashing on an undefined component.
+  const SectionComponent =
+    settingsSection in SECTION_COMPONENTS
+      ? SECTION_COMPONENTS[settingsSection]
+      : SECTION_COMPONENTS.overview;
 
   return (
     <div className="h-[100vh] flex flex-col w-full">
       <ContentBox>
-        <Header title={SECTION_TITLES[settingsSection]} />
+        <Header
+          title={SECTION_TITLES[settingsSection] ?? SECTION_TITLES.overview}
+        />
         <ScrollArea className="flex grow h-full">
           <div className="w-full p-4">
             <SectionComponent />

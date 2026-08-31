@@ -27,7 +27,6 @@ import { useUpdateTeamMutation } from 'services/team';
 
 import { DeleteTeamButton } from './delete-team-button';
 import { OverviewSchema } from './overview.interface';
-import { Preferences } from './preferences';
 
 export const Overview = observer(() => {
   const currentTeam = useCurrentTeam();
@@ -121,8 +120,6 @@ export const Overview = observer(() => {
         </div>
       </SettingSection>
 
-      <Separator className="my-4" />
-      <Preferences />
       <Separator className="my-4" />
 
       <SettingSection title="Danger zone" description="proceed with caution">

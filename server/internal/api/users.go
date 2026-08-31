@@ -137,6 +137,38 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// handleUpdateUser implements PUT /api/v1/users. Only the display name
+// is mutable: the email is the identity key of the magic-link auth flow,
+// and the username the client shows is derived from it, so neither is
+// accepted as input. The refreshed account (with workspaces and invites)
+// is returned by reusing handleGetUser so both endpoints stay in lockstep.
+func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		Fullname *string `json:"fullname"`
+	}
+	if err := jsonDecode(r, &req); err != nil || req.Fullname == nil {
+		writeError(w, http.StatusBadRequest, "fullname is required")
+		return
+	}
+	name := strings.TrimSpace(*req.Fullname)
+	if name == "" || len(name) > 255 {
+		writeError(w, http.StatusUnprocessableEntity, "fullname must be 1-255 chars")
+		return
+	}
+	if _, err := a.pool.Exec(r.Context(),
+		"update accounts set name = $2, version = version + 1, updated_at = now() where id = $1",
+		p.AccountID, name); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	a.handleGetUser(w, r)
+}
+
 // handleGetUsersByIds implements GET /api/v1/users?userIds=a,b,c —
 // the client's bulk user lookup for rendering member/assignee names.
 // It mirrors Tegon's getUsersbyId: the users' first (oldest-workspace)

@@ -12,7 +12,6 @@ import { useCurrentTeam } from 'hooks/teams';
 
 import { useContextStore } from 'store/global-context-provider';
 
-import { BottomBar } from './bottom-bar';
 import { Header } from './header';
 import { Nav } from './nav';
 import { TeamList } from './team-list';
@@ -65,7 +64,6 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
               />
               <TeamList />
             </div>
-            <BottomBar />
           </div>
         )}
 

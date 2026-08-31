@@ -69,9 +69,12 @@ export function ProfileForm() {
               <FormItem>
                 <FormLabel>Username</FormLabel>
                 <FormControl>
-                  <Input placeholder="elonmusk" {...field} />
+                  <Input placeholder="elonmusk" disabled {...field} />
                 </FormControl>
-
+                <p className="text-xs text-muted-foreground">
+                  Your username is derived from your email address and cannot be
+                  changed.
+                </p>
                 <FormMessage />
               </FormItem>
             )}
