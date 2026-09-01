@@ -245,5 +245,6 @@ v1 is a single API instance by design:
 - The database is the scaling bottleneck to watch first; the read paths
   are index-backed (set-based single queries, no N+1 in the sync feed).
 
-Horizontal fan-out lands after the v1 feature surface is complete; the
-`Broadcaster` seam is the single integration point.
+The v1 feature surface is complete; horizontal fan-out (shared broker
+behind the `Broadcaster` seam) is the next infrastructure step, not a
+feature dependency.

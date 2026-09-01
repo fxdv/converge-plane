@@ -13,7 +13,7 @@ export interface Invite {
   id: string;
   workspaceId: string;
   workspace: Workspace;
-  status: 'ACCEPTED' | 'INVITED';
+  status: 'ACCEPTED' | 'DECLINED' | 'INVITED';
 }
 
 export interface User {

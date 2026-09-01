@@ -27,6 +27,15 @@ export function Invites() {
         });
 
         window.location.reload();
+      } else if (data.status === 'DECLINED') {
+        toast({
+          title: 'Invitation declined',
+          description: 'You have declined this invitation',
+        });
+
+        // The user context caches the invite list; reload to drop the
+        // now-revoked invite and let the redirect logic re-evaluate.
+        window.location.reload();
       }
     },
   });
