@@ -10,15 +10,22 @@ export interface InviteUsersParams {
   emailIds: string;
   teamIds: string[];
   role: RoleEnum;
+  workspaceId?: string;
 }
 
-export function inviteUsers({ emailIds, teamIds, role }: InviteUsersParams) {
+export function inviteUsers({
+  emailIds,
+  teamIds,
+  role,
+  workspaceId,
+}: InviteUsersParams) {
   return ajaxPost({
     url: `/api/v1/workspaces/invite_users`,
     data: {
       emailIds,
       teamIds,
       role,
+      workspaceId,
     },
   });
 }

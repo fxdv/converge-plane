@@ -24,6 +24,8 @@ import { z } from 'zod';
 
 import { useCreateTeamMutation } from 'services/team';
 
+import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
+
 import { SettingSection } from '../setting-section';
 
 export const CreateNewTeamSchema = z.object({
@@ -52,6 +54,8 @@ export function CreateNewTeam() {
   });
   const { toast } = useToast();
 
+  const workspace = useCurrentWorkspace();
+
   const { mutate: createTeam } = useCreateTeamMutation({
     onSuccess: (data: Team) => {
       toast({
@@ -71,7 +75,12 @@ export function CreateNewTeam() {
     identifier: string;
     teamType: TeamTypeEnum;
   }) => {
-    createTeam({ name, identifier, preferences: { teamType } });
+    createTeam({
+      name,
+      identifier,
+      workspaceId: workspace?.id,
+      preferences: { teamType },
+    });
   };
 
   return (
