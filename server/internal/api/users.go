@@ -71,6 +71,12 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		Username: strings.SplitN(p.Email, "@", 2)[0],
 		Role:     "USER",
 		Image:    "",
+		// Non-nil by wire contract: a brand-new account (no memberships,
+		// no invites) must serialize [] not null — the client calls
+		// .find/.length on both collections, and a JSON null would crash
+		// the sign-in -> onboarding journey.
+		Workspaces: []workspaceSummary{},
+		Invites:    []inviteSummary{},
 	}
 
 	rows, err := a.pool.Query(ctx, `
