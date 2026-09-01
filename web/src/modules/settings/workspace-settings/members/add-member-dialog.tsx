@@ -35,6 +35,8 @@ import type { TeamType } from 'common/types';
 
 import { useInviteUsersMutation } from 'services/workspace';
 
+import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
+
 import { useContextStore } from 'store/global-context-provider';
 
 interface AddMemberDialogProps {
@@ -65,6 +67,8 @@ export function AddMemberDialog({ setDialogOpen }: AddMemberDialogProps) {
     setDialogOpen(false);
   };
 
+  const workspace = useCurrentWorkspace();
+
   const { mutate: inviteUsers, isLoading } = useInviteUsersMutation({
     onSuccess: () => {
       toast({
@@ -94,6 +98,7 @@ export function AddMemberDialog({ setDialogOpen }: AddMemberDialogProps) {
       teamIds,
       emailIds,
       role,
+      workspaceId: workspace?.id,
     });
   };
 

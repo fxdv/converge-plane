@@ -78,6 +78,37 @@ func (a *API) Mount(r chi.Router) {
 		r.Get("/issue_comments/{id}", a.handleGetComment)
 		r.Get("/issue_comments/{id}/replies", a.handleGetCommentReplies)
 		r.Get("/sync_actions/stream", a.handleStream)
+		// M5: teams (the teamId wildcard below never collides with these
+		// static-first routes; chi prefers the static segment, and the
+		// workflow handlers reject non-UUID first segments with 404).
+		r.Post("/teams", a.handleCreateTeam)
+		r.Post("/teams/{id}", a.handleUpdateTeam)
+		r.Delete("/teams/{id}", a.handleDeleteTeam)
+		r.Get("/teams", a.handleListTeams)
+		r.Get("/teams/{id}", a.handleGetTeam)
+		r.Get("/teams/name/{slug}", a.handleGetTeamByName)
+		r.Post("/teams/{id}/add-member", a.handleAddTeamMember)
+		r.Post("/teams/{id}/remove-member", a.handleRemoveTeamMember)
+		r.Post("/teams/{id}/preferences", a.handleUpdateTeamPreferences)
+		// M5: workflows ride the client's quirky /{teamId}/workflows path.
+		r.Post("/{teamId}/workflows", a.handleCreateWorkflow)
+		r.Post("/{teamId}/workflows/{workflowId}", a.handleUpdateWorkflow)
+		r.Get("/{teamId}/workflows", a.handleListWorkflows)
+		// M5: labels, views, workspace administration, search.
+		r.Post("/labels", a.handleCreateLabel)
+		r.Post("/labels/{id}", a.handleUpdateLabel)
+		r.Delete("/labels/{id}", a.handleDeleteLabel)
+		r.Get("/labels", a.handleListLabels)
+		r.Post("/views", a.handleCreateView)
+		r.Post("/views/{id}", a.handleUpdateView)
+		r.Delete("/views/{id}", a.handleDeleteView)
+		r.Get("/views/{id}", a.handleGetView)
+		r.Post("/workspaces", a.handleUpdateWorkspace)
+		r.Post("/workspaces/preferences", a.handleUpdateWorkspacePreferences)
+		r.Post("/workspaces/invite_users", a.handleInviteUsers)
+		r.Post("/workspaces/invite_action", a.handleInviteAction)
+		r.Post("/workspaces/suspend", a.handleSuspendMember)
+		r.Get("/search", a.handleSearch)
 	})
 }
 

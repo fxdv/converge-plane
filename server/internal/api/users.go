@@ -79,11 +79,16 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		Invites:    []inviteSummary{},
 	}
 
+	// Active and suspended memberships are both listed, and the
+	// membership state is what the client renders: a suspended member
+	// (workspaceRes.status === 'SUSPENDED' in user-data-wrapper) sees
+	// the suspended screen on their next load instead of a silently
+	// empty workspace list.
 	rows, err := a.pool.Query(ctx, `
-		select w.id, w.name, w.slug, w.status, wm.role
+		select w.id, w.name, w.slug, wm.status, wm.role
 		from workspaces w
 		join workspace_members wm on wm.workspace_id = w.id
-		where wm.account_id = $1 and wm.status = 'active'
+		where wm.account_id = $1 and wm.status in ('active', 'suspended')
 		order by w.created_at`, p.AccountID)
 	if err != nil {
 		a.internalError(w, err)
@@ -114,7 +119,7 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 
 	var inviteRows pgx.Rows
 	inviteRows, err = a.pool.Query(ctx, `
-		select i.id, i.workspace_id, w.name, w.slug, w.status
+		select i.id, i.workspace_id, w.id, w.name, w.slug, w.status
 		from invitations i
 		join workspaces w on w.id = i.workspace_id
 		where i.email = $1 and i.consumed_at is null and i.revoked_at is null
@@ -127,7 +132,7 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	for inviteRows.Next() {
 		var inv inviteSummary
 		var status string
-		if err := inviteRows.Scan(&inv.ID, &inv.WorkspaceID, &inv.Workspace.Name, &inv.Workspace.Slug, &status); err != nil {
+		if err := inviteRows.Scan(&inv.ID, &inv.WorkspaceID, &inv.Workspace.ID, &inv.Workspace.Name, &inv.Workspace.Slug, &status); err != nil {
 			inviteRows.Close()
 			a.internalError(w, err)
 			return

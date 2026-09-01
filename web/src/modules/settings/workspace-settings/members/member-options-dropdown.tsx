@@ -13,6 +13,8 @@ import React from 'react';
 import { useRemoveTeamMemberMutation } from 'services/team';
 import { useSuspendUserMutation } from 'services/workspace';
 
+import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
+
 interface MemberOptionsDropdownProps {
   userId: string;
   teamId: string;
@@ -27,6 +29,7 @@ export function MemberOptionsDropdown({
   isSuspended,
 }: MemberOptionsDropdownProps) {
   const { toast } = useToast();
+  const workspace = useCurrentWorkspace();
   const { mutate: removeMember } = useRemoveTeamMemberMutation({
     onError: (err: string) => {
       toast({
@@ -72,6 +75,7 @@ export function MemberOptionsDropdown({
                   onClick={() => {
                     suspendUser({
                       userId,
+                      workspaceId: workspace?.id,
                     });
                   }}
                 >

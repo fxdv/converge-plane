@@ -187,6 +187,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]sy
 		return a.collectComments(ctx, workspaceID, emit)
 	case "IssueHistory":
 		return a.collectHistory(ctx, workspaceID, emit)
+	case "View":
+		return a.collectViews(ctx, workspaceID, emit)
 	default:
 		return nil, nil
 	}
@@ -212,25 +214,13 @@ func clientRole(role string) string {
 }
 
 func (a *API) collectWorkspace(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
-	var (
-		id, slug, name string
-		createdAt      time.Time
-		updatedAt      time.Time
-	)
-	err := a.pool.QueryRow(ctx,
+	var r workspaceRow
+	if err := a.pool.QueryRow(ctx,
 		"select id, slug, name, created_at, updated_at from workspaces where id = $1",
-		workspaceID).Scan(&id, &slug, &name, &createdAt, &updatedAt)
-	if err != nil {
+		workspaceID).Scan(&r.ID, &r.Slug, &r.Name, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
-	rec, err := emit(id, map[string]any{
-		"id":             id,
-		"slug":           slug,
-		"name":           name,
-		"createdAt":      createdAt.Format(iso),
-		"updatedAt":      updatedAt.Format(iso),
-		"actionsEnabled": false,
-	})
+	rec, err := emit(r.ID, a.workspaceData(r))
 	if err != nil {
 		return nil, err
 	}
@@ -238,41 +228,25 @@ func (a *API) collectWorkspace(ctx context.Context, workspaceID string, emit emi
 }
 
 func (a *API) collectMembers(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
-	rows, err := a.pool.Query(ctx, `
-		select wm.id, wm.created_at, wm.updated_at, wm.role, wm.status,
-		       wm.account_id, wm.workspace_id,
-		       coalesce((select array_agg(tm.team_id) from team_members tm
-		                 where tm.account_id = wm.account_id), '{}')
+	// Every lifecycle state (active, invited, suspended): the client's
+	// members UI renders suspended and invited rows in their own
+	// sections, and a status-filtered sync would make them invisible.
+	rows, err := a.pool.Query(ctx, `select `+memberColumns+`
 		from workspace_members wm
-		where wm.workspace_id = $1 and wm.status = 'active'
+		where wm.workspace_id = $1
 		order by wm.created_at`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []syncActionRecord
+	out := []syncActionRecord{}
 	for rows.Next() {
-		var (
-			id, role, status, accountID, workspaceIDRow string
-			createdAt, updatedAt                        time.Time
-			teamIDs                                     []string
-		)
-		if err := rows.Scan(&id, &createdAt, &updatedAt, &role, &status,
-			&accountID, &workspaceIDRow, &teamIDs); err != nil {
+		var r memberRow
+		if err := scanMemberRow(rows, &r); err != nil {
 			return nil, err
 		}
-		rec, err := emit(id, map[string]any{
-			"id":          id,
-			"createdAt":   createdAt.Format(iso),
-			"updatedAt":   updatedAt.Format(iso),
-			"role":        clientRole(role),
-			"status":      strings.ToUpper(status),
-			"userId":      accountID,
-			"workspaceId": workspaceIDRow,
-			"teamIds":     teamIDs,
-			"settings":    map[string]any{},
-		})
+		rec, err := emit(r.ID, a.memberData(r))
 		if err != nil {
 			return nil, err
 		}
@@ -282,8 +256,7 @@ func (a *API) collectMembers(ctx context.Context, workspaceID string, emit emitF
 }
 
 func (a *API) collectTeams(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
-	rows, err := a.pool.Query(ctx, `
-		select id, created_at, updated_at, name, identifier, workspace_id
+	rows, err := a.pool.Query(ctx, `select `+teamColumns+`
 		from teams where workspace_id = $1 and status = 'active'
 		order by position, created_at`, workspaceID)
 	if err != nil {
@@ -291,25 +264,13 @@ func (a *API) collectTeams(ctx context.Context, workspaceID string, emit emitFn)
 	}
 	defer rows.Close()
 
-	var out []syncActionRecord
+	out := []syncActionRecord{}
 	for rows.Next() {
-		var (
-			id, name, identifier, wsID string
-			createdAt, updatedAt       time.Time
-		)
-		if err := rows.Scan(&id, &createdAt, &updatedAt, &name, &identifier, &wsID); err != nil {
+		var r teamRow
+		if err := scanTeamRow(rows, &r); err != nil {
 			return nil, err
 		}
-		rec, err := emit(id, map[string]any{
-			"id":           id,
-			"createdAt":    createdAt.Format(iso),
-			"updatedAt":    updatedAt.Format(iso),
-			"name":         name,
-			"identifier":   identifier,
-			"workspaceId":  wsID,
-			"currentCycle": nil,
-			"preferences":  map[string]any{"teamType": "engineering", "cyclesEnabled": false},
-		})
+		rec, err := emit(r.ID, a.teamData(r))
 		if err != nil {
 			return nil, err
 		}
@@ -319,8 +280,14 @@ func (a *API) collectTeams(ctx context.Context, workspaceID string, emit emitFn)
 }
 
 func (a *API) collectWorkflows(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
+	// No team-status filter on purpose: archived teams keep their
+	// workflow statuses in sync because existing issues still resolve
+	// their status name against them (same rule as collectIssues).
+	// Qualified: the teams join brings its own id/name/timestamp columns
+	// into scope, so every select must be table-qualified.
 	rows, err := a.pool.Query(ctx, `
-		select ws.id, ws.created_at, ws.updated_at, ws.name, ws.position, ws.color, ws.category, ws.team_id
+		select ws.id, ws.name, ws.description, ws.position, ws.color,
+		       ws.category, ws.team_id, ws.created_at, ws.updated_at
 		from workflow_statuses ws
 		join teams t on t.id = ws.team_id
 		where t.workspace_id = $1 and ws.status = 'active'
@@ -330,27 +297,13 @@ func (a *API) collectWorkflows(ctx context.Context, workspaceID string, emit emi
 	}
 	defer rows.Close()
 
-	var out []syncActionRecord
+	out := []syncActionRecord{}
 	for rows.Next() {
-		var (
-			id, name, color, category, teamID string
-			position                          int
-			createdAt, updatedAt              time.Time
-		)
-		if err := rows.Scan(&id, &createdAt, &updatedAt, &name, &position, &color, &category, &teamID); err != nil {
+		var r workflowRow
+		if err := scanWorkflowRow(rows, &r); err != nil {
 			return nil, err
 		}
-		rec, err := emit(id, map[string]any{
-			"id":          id,
-			"createdAt":   createdAt.Format(iso),
-			"updatedAt":   updatedAt.Format(iso),
-			"name":        name,
-			"position":    position,
-			"description": "",
-			"color":       color,
-			"category":    category,
-			"teamId":      teamID,
-		})
+		rec, err := emit(r.ID, a.workflowData(r))
 		if err != nil {
 			return nil, err
 		}
@@ -360,8 +313,7 @@ func (a *API) collectWorkflows(ctx context.Context, workspaceID string, emit emi
 }
 
 func (a *API) collectLabels(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
-	rows, err := a.pool.Query(ctx, `
-		select id, created_at, updated_at, name, color, workspace_id
+	rows, err := a.pool.Query(ctx, `select `+labelColumns+`
 		from labels where workspace_id = $1 and status = 'active'
 		order by created_at`, workspaceID)
 	if err != nil {
@@ -369,26 +321,13 @@ func (a *API) collectLabels(ctx context.Context, workspaceID string, emit emitFn
 	}
 	defer rows.Close()
 
-	var out []syncActionRecord
+	out := []syncActionRecord{}
 	for rows.Next() {
-		var (
-			id, name, color, wsID string
-			createdAt, updatedAt  time.Time
-		)
-		if err := rows.Scan(&id, &createdAt, &updatedAt, &name, &color, &wsID); err != nil {
+		var r labelRow
+		if err := scanLabelRow(rows, &r); err != nil {
 			return nil, err
 		}
-		rec, err := emit(id, map[string]any{
-			"id":          id,
-			"createdAt":   createdAt.Format(iso),
-			"updatedAt":   updatedAt.Format(iso),
-			"name":        name,
-			"color":       color,
-			"description": "",
-			"workspaceId": wsID,
-			"teamId":      nil,
-			"groupId":     nil,
-		})
+		rec, err := emit(r.ID, a.labelData(r))
 		if err != nil {
 			return nil, err
 		}
@@ -741,6 +680,17 @@ func (a *API) collectOutbox(ctx context.Context, workspaceID string, afterSeq in
 		})
 	}
 	return out, rows.Err()
+}
+
+// auditTx appends a workspace audit row inside the caller's transaction
+// (docs/spec/07 audit taxonomy: team lifecycle, membership and invite
+// changes, suspension). objectID may be empty for row-less events.
+func (a *API) auditTx(ctx context.Context, tx pgx.Tx, workspaceID, actorID, action, objectType, objectID string) error {
+	_, err := tx.Exec(ctx, `
+		insert into audit_events (workspace_id, actor_id, action, object_type, object_id)
+		values ($1, $2, $3, $4, $5)`,
+		workspaceID, actorID, action, objectType, nullForEmpty(&objectID))
+	return err
 }
 
 // emitChange claims the next sync sequence for the workspace, writes the

@@ -10,6 +10,13 @@ export class CreateTeamDto {
   @IsString()
   identifier: string;
 
+  // The settings form renders inside one workspace, but the team
+  // mutation endpoint does not imply it; the id is sent explicitly so
+  // multi-workspace users always target the right tenant.
+  @IsOptional()
+  @IsString()
+  workspaceId?: string;
+
   @IsOptional()
   @IsString()
   icon?: string;
