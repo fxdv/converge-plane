@@ -17,7 +17,7 @@ export const WorkspaceStore: IAnyStateTreeNode = types
     usersOnWorkspaces: types.array(UsersOnWorkspace),
   })
   .actions((self) => {
-    const update = (workspace: WorkspaceType) => {
+    const update = (workspace: WorkspaceType | undefined) => {
       self.workspace = workspace;
     };
     const updateUsers = (userRecord: UsersOnWorkspaceType, id: string) => {

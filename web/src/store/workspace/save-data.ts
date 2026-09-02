@@ -24,13 +24,39 @@ export async function saveWorkspaceData(
           settings: record.data.settings,
         };
 
-        await convergeDatabase.usersOnWorkspaces.put(userOnWorkspace);
+        switch (record.action) {
+          case 'I': {
+            await convergeDatabase.usersOnWorkspaces.put(userOnWorkspace);
 
-        // Update the store
-        return (
-          workspaceStore &&
-          (await workspaceStore.updateUsers(userOnWorkspace, record.data.id))
-        );
+            // Update the store
+            return (
+              workspaceStore &&
+              (await workspaceStore.updateUsers(userOnWorkspace, record.data.id))
+            );
+          }
+
+          case 'U': {
+            await convergeDatabase.usersOnWorkspaces.put(userOnWorkspace);
+
+            // Update the store
+            return (
+              workspaceStore &&
+              (await workspaceStore.updateUsers(userOnWorkspace, record.data.id))
+            );
+          }
+
+          case 'D': {
+            // DELETE records carry only the id (sync contract): the row
+            // is gone, so the cache entry and the MST node are removed by
+            // id. A partial record must never be upserted into the tree —
+            // the model's required fields would fail validation and take
+            // the app down with it.
+            const id = record.data?.id ?? record.modelId;
+            await convergeDatabase.usersOnWorkspaces.delete(id);
+            return workspaceStore && (await workspaceStore.deleteUser(id));
+          }
+        }
+        return null;
       }
 
       const workspace = {
@@ -43,10 +69,34 @@ export async function saveWorkspaceData(
         slug: record.data.slug,
       };
 
-      await convergeDatabase.workspaces.put(workspace);
+      switch (record.action) {
+        case 'I': {
+          await convergeDatabase.workspaces.put(workspace);
 
-      // Update the store
-      return workspaceStore && (await workspaceStore.update(workspace));
+          // Update the store
+          return workspaceStore && (await workspaceStore.update(workspace));
+        }
+
+        case 'U': {
+          await convergeDatabase.workspaces.put(workspace);
+
+          // Update the store
+          return workspaceStore && (await workspaceStore.update(workspace));
+        }
+
+        case 'D': {
+          const id = record.data?.id ?? record.modelId;
+          await convergeDatabase.workspaces.delete(id);
+          // The store is anchored on this workspace; a deletion un-anchors
+          // it (the union admits undefined and the app falls back to the
+          // workspace picker).
+          if (workspaceStore && workspaceStore.workspace?.id === id) {
+            return workspaceStore.update(undefined);
+          }
+          return null;
+        }
+      }
+      return null;
     }),
   );
 }
