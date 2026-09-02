@@ -16,10 +16,22 @@ Authorization is a domain capability, not controller middleware sprinkled across
 
 Workspace Owner/Admin has explicit, disclosed administrative access to all teams and acts as Team Manager. This simple baseline is an open privacy decision at OD-06; no implementation may accidentally create a different rule.
 
+### Agent principals — M6
+
+An agent is a machine **account** (`accounts.kind = 'agent'`) that joins the workspace as a full member, not a scoped external credential:
+
+- Authenticates exclusively with a long-lived API token (`conv_agent_…`, SHA-256 at rest, 10-year bound, shown once, revocable/rotatable); it can never take a magic-link session.
+- Carries the workspace role `AGENT` (wire role `AGENT`), which maps to the `MEMBER` row of every permission row below: agents work issues in their teams (create/update/comment/subscribe, move through states) but never admin anything — workspace, team, workflow, label, view, invite, or other agents.
+- Is visible in the member list and sync feed, assignable to issues, and suspended/reactivated exactly like a human member; suspension revokes the agent's tokens (a per-agent kill switch), and reactivation requires a rotated token.
+- Is created and deleted only by workspace owner/admin. Each agent is a distinct account, so issue assignment, comments, issue history, and audit rows attribute to the individual agent: a swarm scales per member.
+- Is rate-limited per account like every other principal (a runaway agent cannot starve the workspace).
+
+Synthetic reserved-domain emails (`ag-<ws8>-<name>@converge.local`) keep agent identities deterministic and globally unique under the accounts email constraint; the sign-in and invitation flows reject these addresses.
+
 ### Machine principals — LATER
 
 - `INTEGRATION`: provider connection owned by one workspace with allowed team IDs and explicit scopes.
-- `SERVICE_TOKEN`: workspace-owned automation identity with scopes, expiry, creator, and optional team grants.
+- `SERVICE_TOKEN`: workspace-owned automation identity with scopes, expiry, creator, and optional team grants. M6 agents subsume the common case (a workspace automation identity with team grants); a narrower scoped token remains possible for providers that should not be members.
 - `PERSONAL_TOKEN`: acts as its user but cannot exceed current user/tenant/team permissions; it also has narrower token scopes.
 
 Machine principals never inherit the installer/creator’s full authority after creation.

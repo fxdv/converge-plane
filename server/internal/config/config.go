@@ -54,6 +54,12 @@ type Config struct {
 	// DBMinConns and DBMaxConns bound the connection pool.
 	DBMinConns int32
 	DBMaxConns int32
+	// RateLimitRPS is the sustained per-account request rate; 0 disables
+	// the limiter entirely.
+	RateLimitRPS float64
+	// RateLimitBurst bounds a short per-account burst above the sustained
+	// rate.
+	RateLimitBurst int64
 	// Version is the build version, injected at link time.
 	Version string
 }
@@ -74,6 +80,8 @@ type Config struct {
 //	CONVERGE_SESSION_SECRET    session HMAC key        (dev fallback when unset)
 //	CONVERGE_ACCESS_TOKEN_TTL  access token lifetime   (default "1h")
 //	CONVERGE_REFRESH_TOKEN_TTL refresh token lifetime  (default "720h")
+//	CONVERGE_RATE_LIMIT_RPS    per-account rps, 0=off (default "10")
+//	CONVERGE_RATE_LIMIT_BURST  per-account burst      (default "50")
 //	CONVERGE_DEV_MODE          true = dev conveniences (magic link in API)
 func Load() (Config, error) {
 	cfg := Config{
@@ -91,6 +99,8 @@ func Load() (Config, error) {
 		AccessTokenTTL:    time.Hour,
 		RefreshTokenTTL:   30 * 24 * time.Hour,
 		CodeTTL:           15 * time.Minute,
+		RateLimitRPS:      10,
+		RateLimitBurst:    50,
 	}
 
 	if v := os.Getenv("CONVERGE_SECURE_COOKIES"); v == "true" {
@@ -140,6 +150,21 @@ func Load() (Config, error) {
 	}
 	if cfg.DBMinConns < 0 || cfg.DBMaxConns <= 0 || cfg.DBMinConns > cfg.DBMaxConns {
 		return cfg, fmt.Errorf("invalid pool bounds: min=%d max=%d (require 0 <= min <= max, max > 0)", cfg.DBMinConns, cfg.DBMaxConns)
+	}
+
+	if v := os.Getenv("CONVERGE_RATE_LIMIT_RPS"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil || f < 0 {
+			return cfg, fmt.Errorf("invalid CONVERGE_RATE_LIMIT_RPS %q: number >= 0 (0 disables)", v)
+		}
+		cfg.RateLimitRPS = f
+	}
+	if v := os.Getenv("CONVERGE_RATE_LIMIT_BURST"); v != "" {
+		b, err := strconv.ParseInt(v, 10, 32)
+		if err != nil || b < 0 {
+			return cfg, fmt.Errorf("invalid CONVERGE_RATE_LIMIT_BURST %q: integer >= 0", v)
+		}
+		cfg.RateLimitBurst = int64(b)
 	}
 
 	switch strings.ToLower(cfg.LogLevel) {

@@ -43,11 +43,11 @@ surface for the whole workforce.
 - Comments and activity history
 - Teams with their own workflows; workspace administration with invites, roles, and member suspension
 - Magic-link sign-in; workspace onboarding and roles
+- **Agent actors**: agents join the workspace as members, authenticate with API tokens, take assignments, comment, and move issues through workflows — attributed per agent, suspendable per agent, and rate-limited per account. Create a swarm from Settings → Members and run the demo agents in `server/tools/swarm/` to watch them work
 - Self-host with `docker compose up --build` — one app plus PostgreSQL
 
-Coming up next: projects, cycles, notifications, issue relations, and
-attachments, followed by a versioned public API, webhooks, and scoped
-machine identities for long-running agent work. See
+Coming up next: projects, cycles, notifications, issue relations,
+attachments, and a versioned public API with webhooks. See
 [docs/spec/09-mvp-roadmap.md](docs/spec/09-mvp-roadmap.md).
 
 ## Quickstart
