@@ -515,9 +515,71 @@ func (a *API) collectComments(ctx context.Context, workspaceID string, emit emit
 	return out, rows.Err()
 }
 
+// historyData maps a generic activity/audit row to the client's
+// IssueHistory shape (pure, so the wire contract is unit-testable;
+// collectHistory feeds it the issue_history columns). Only
+// status/assignee/priority/labels transitions are user-visible in v1.
+func historyData(id string, createdAt, updatedAt time.Time, actorID *string, issueID, action, field string, from, to *string) map[string]any {
+	// Every from/to field is union(..., null) without undefined in the
+	// client model, so all of them must be present (null when unset).
+	data := map[string]any{
+		"id":              id,
+		"createdAt":       createdAt.Format(iso),
+		"updatedAt":       updatedAt.Format(iso),
+		"userId":          nullOrEmpty(strval(actorID)),
+		"issueId":         nullOrEmpty(issueID),
+		"addedLabelIds":   []string{},
+		"removedLabelIds": []string{},
+		"fromPriority":    nil,
+		"toPriority":      nil,
+		"fromStateId":     nil,
+		"toStateId":       nil,
+		"fromEstimate":    nil,
+		"toEstimate":      nil,
+		"fromAssigneeId":  nil,
+		"toAssigneeId":    nil,
+		"fromParentId":    nil,
+		"toParentId":      nil,
+		"relationChanges": nil,
+		"sourceMetadata":  nil,
+	}
+	switch field {
+	case "status":
+		data["fromStateId"] = nullOrEmpty(strval(from))
+		data["toStateId"] = nullOrEmpty(strval(to))
+	case "labels":
+		// from/to carry JSON arrays of label ids.
+		if f := strval(from); f != "" {
+			var arr []string
+			if json.Unmarshal([]byte(f), &arr) == nil {
+				data["removedLabelIds"] = arr
+			}
+		}
+		if t := strval(to); t != "" {
+			var arr []string
+			if json.Unmarshal([]byte(t), &arr) == nil {
+				data["addedLabelIds"] = arr
+			}
+		}
+	case "assignee":
+		data["fromAssigneeId"] = nullOrEmpty(strval(from))
+		data["toAssigneeId"] = nullOrEmpty(strval(to))
+	case "priority":
+		if f := strval(from); f != "" {
+			data["fromPriority"], _ = strconv.Atoi(f)
+		}
+		if t := strval(to); t != "" {
+			data["toPriority"], _ = strconv.Atoi(t)
+		}
+	}
+	if action == "created" {
+		data["toStateId"] = nullOrEmpty(strval(to))
+	}
+	return data
+}
+
 // collectHistory maps the activity/audit rows to the client's
-// IssueHistory shape. Only status/assignee/priority transitions are
-// user-visible in v1.
+// IssueHistory shape (see historyData).
 func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
 	rows, err := a.pool.Query(ctx, `
 		-- issue_history rows are append-only: created_at doubles as updated_at.
@@ -544,61 +606,7 @@ func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitF
 			return nil, err
 		}
 
-		// Every from/to field is union(..., null) without undefined in the
-		// client model, so all of them must be present (null when unset).
-		data := map[string]any{
-			"id":              id,
-			"createdAt":       createdAt.Format(iso),
-			"updatedAt":       updatedAt.Format(iso),
-			"userId":          nullOrEmpty(strval(actorID)),
-			"issueId":         nullOrEmpty(issueID),
-			"addedLabelIds":   []string{},
-			"removedLabelIds": []string{},
-			"fromPriority":    nil,
-			"toPriority":      nil,
-			"fromStateId":     nil,
-			"toStateId":       nil,
-			"fromEstimate":    nil,
-			"toEstimate":      nil,
-			"fromAssigneeId":  nil,
-			"toAssigneeId":    nil,
-			"fromParentId":    nil,
-			"toParentId":      nil,
-			"relationChanges": nil,
-			"sourceMetadata":  nil,
-		}
-		switch field {
-		case "status":
-			data["fromStateId"] = nullOrEmpty(strval(from))
-			data["toStateId"] = nullOrEmpty(strval(to))
-		case "labels":
-			// from/to carry JSON arrays of label ids.
-			if f := strval(from); f != "" {
-				var arr []string
-				if json.Unmarshal([]byte(f), &arr) == nil {
-					data["removedLabelIds"] = arr
-				}
-			}
-			if t := strval(to); t != "" {
-				var arr []string
-				if json.Unmarshal([]byte(t), &arr) == nil {
-					data["addedLabelIds"] = arr
-				}
-			}
-		case "assignee":
-			data["fromAssigneeId"] = nullOrEmpty(strval(from))
-			data["toAssigneeId"] = nullOrEmpty(strval(to))
-		case "priority":
-			if f := strval(from); f != "" {
-				data["fromPriority"], _ = strconv.Atoi(f)
-			}
-			if t := strval(to); t != "" {
-				data["toPriority"], _ = strconv.Atoi(t)
-			}
-		}
-		if action == "created" {
-			data["toStateId"] = nullOrEmpty(strval(to))
-		}
+		data := historyData(id, createdAt, updatedAt, actorID, issueID, action, field, from, to)
 
 		rec, err := emit(id, data)
 		if err != nil {
