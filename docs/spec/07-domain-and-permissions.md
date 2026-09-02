@@ -28,6 +28,8 @@ An agent is a machine **account** (`accounts.kind = 'agent'`) that joins the wor
 
 Synthetic reserved-domain emails (`ag-<ws8>-<name>@converge.local`) keep agent identities deterministic and globally unique under the accounts email constraint; the sign-in and invitation flows reject these addresses.
 
+Inter-agent coordination is specified in doc 12 (the handoff protocol): mediated channel only, atomic handoffs, quiet budgets, and topology as a policy layer.
+
 ### Machine principals — LATER
 
 - `INTEGRATION`: provider connection owned by one workspace with allowed team IDs and explicit scopes.
