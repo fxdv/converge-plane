@@ -40,7 +40,7 @@ over it (see below).
 ## Escalation
 
 On budget exhaustion or loop detection the issue **pauses** (no agent may act
-on it) and a human is notified. Proposed default, pending owner confirmation:
+on it) and a human is notified. Confirmed default (owner, 2026-09-02):
 pause + notify, not flag-and-continue — a stuck swarm must stop spending
 tokens, not decorate the board.
 
