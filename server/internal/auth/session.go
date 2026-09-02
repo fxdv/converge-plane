@@ -255,8 +255,20 @@ func (s *Service) ClearSessionMaterial(w http.ResponseWriter) {
 // accountFromRequest extracts a candidate account id from the session
 // material the request carries (Bearer token or st-access-token cookie
 // envelope).
+//
+// Bearer values with the API-token prefix (machine actors, M6) take a
+// distinct path into ValidateAPIToken: one indexed lookup, no HMAC.
+// Session tokens stay on the stateless path, so web traffic is
+// unaffected.
 func (s *Service) accountFromRequest(r *http.Request) string {
 	if t := bearerToken(r); t != "" {
+		if strings.HasPrefix(t, APITokenPrefix) {
+			id, ok := s.ValidateAPIToken(r.Context(), t)
+			if ok {
+				return id
+			}
+			return ""
+		}
 		if id, ok := s.ValidateAccess(t); ok {
 			return id
 		}

@@ -33,6 +33,7 @@ type userResponse struct {
 	Workspaces []workspaceSummary `json:"workspaces"`
 	Invites    []inviteSummary    `json:"invites"`
 	Role       string             `json:"role"`
+	Kind       string             `json:"kind"`
 	Image      string             `json:"image"`
 }
 
@@ -46,6 +47,7 @@ type publicUser struct {
 	Email    string `json:"email"`
 	Image    string `json:"image"`
 	Role     string `json:"role"`
+	Kind     string `json:"kind"`
 }
 
 // handleGetUser implements GET /api/v1/users. With a userIds query
@@ -70,6 +72,7 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		Fullname: p.Fullname,
 		Username: strings.SplitN(p.Email, "@", 2)[0],
 		Role:     "USER",
+		Kind:     p.Kind,
 		Image:    "",
 		// Non-nil by wire contract: a brand-new account (no memberships,
 		// no invites) must serialize [] not null — the client calls
@@ -191,7 +194,7 @@ func (a *API) handleGetUsersByIds(w http.ResponseWriter, r *http.Request, ids []
 		return
 	}
 	rows, err := a.pool.Query(r.Context(), `
-		select a.id, a.name, a.email, a.avatar_url,
+		select a.id, a.name, a.email, a.avatar_url, a.kind,
 		       coalesce((
 		         select wm.role
 		         from workspace_members wm
@@ -211,7 +214,7 @@ func (a *API) handleGetUsersByIds(w http.ResponseWriter, r *http.Request, ids []
 		var u publicUser
 		var avatar *string
 		var role string
-		if err := rows.Scan(&u.ID, &u.Fullname, &u.Email, &avatar, &role); err != nil {
+		if err := rows.Scan(&u.ID, &u.Fullname, &u.Email, &avatar, &u.Kind, &role); err != nil {
 			rows.Close()
 			a.internalError(w, err)
 			return

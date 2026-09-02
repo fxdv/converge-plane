@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"converge/internal/auth"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -320,6 +321,12 @@ func (a *API) handleInviteUsers(w http.ResponseWriter, r *http.Request) {
 		local := strings.SplitN(email, "@", 2)[0]
 		accountID, err := a.ensureAccountTx(ctx, tx, email, local)
 		if err != nil {
+			// errInviteAgent surfaces here: the kind check lives in the
+			// account resolution, one step ahead of the membership write.
+			if errors.Is(err, errInviteAgent) {
+				writeError(w, http.StatusUnprocessableEntity, err.Error())
+				return
+			}
 			a.internalError(w, err)
 			return
 		}
@@ -369,24 +376,38 @@ var (
 	errMemberSuspended = errors.New("is suspended and cannot be re-invited")
 )
 
+// errInviteAgent is the client-explainable failure for inviting an
+// agent identity: agents join through the agent API, never through a
+// human invitation.
+var errInviteAgent = errors.New("that address belongs to an agent account; agents join through the agent API")
+
 // ensureAccountTx returns the account id for an invited email, creating
 // the account when it does not exist yet (name from the local part, the
-// same derivation the magic-link sign-in uses).
+// same derivation the magic-link sign-in uses). Agent accounts are
+// rejected: an invitation materializes a human seat.
 func (a *API) ensureAccountTx(ctx context.Context, tx pgx.Tx, email, name string) (string, error) {
 	var id *string
+	// A zero-row result is the conflict case (the account already
+	// exists): pgx reports it as ErrNoRows even into a pointer target,
+	// and the fallback SELECT below is the source of truth. Any other
+	// error is real.
 	err := tx.QueryRow(ctx, `
 		insert into accounts (email, name) values ($1, $2)
 		on conflict (email) do nothing
 		returning id`, email, name).Scan(&id)
-	if err != nil {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
 	}
 	if id != nil {
 		return *id, nil
 	}
-	err = tx.QueryRow(ctx, "select id from accounts where email = $1", email).Scan(&id)
+	var kind string
+	err = tx.QueryRow(ctx, "select id, kind from accounts where email = $1", email).Scan(&id, &kind)
 	if err != nil {
 		return "", err
+	}
+	if kind == auth.AccountKindAgent {
+		return "", errInviteAgent
 	}
 	return *id, nil
 }
@@ -697,6 +718,17 @@ func (a *API) handleSuspendMember(w http.ResponseWriter, r *http.Request) {
 		// request is rejected at the session middleware.
 		if _, err := tx.Exec(ctx, `
 			update sessions set revoked_at = now()
+			where account_id = $1 and revoked_at is null`, req.UserID); err != nil {
+			a.internalError(w, err)
+			return
+		}
+		// M6: agents authenticate with API tokens instead of sessions,
+		// so revoke those too — a suspended agent's next request is a
+		// 401 at the middleware. On reactivation the membership returns
+		// but the tokens stay revoked: the admin rotates fresh ones, the
+		// same semantics as a leaked-credential rotation.
+		if _, err := tx.Exec(ctx, `
+			update api_tokens set revoked_at = now()
 			where account_id = $1 and revoked_at is null`, req.UserID); err != nil {
 			a.internalError(w, err)
 			return

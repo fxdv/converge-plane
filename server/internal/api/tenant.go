@@ -27,18 +27,29 @@ type API struct {
 	auth *auth.Service
 	// bcast fans out committed change records to realtime subscribers.
 	bcast *broadcast.Broadcaster
+	// limiter bounds per-account request rates (swarm flood guard).
+	limiter *accountRateLimiter
 }
 
 func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service) *API {
-	return &API{pool: pool, cfg: cfg, log: log, auth: authSvc, bcast: broadcast.New()}
+	return &API{
+		pool:    pool,
+		cfg:     cfg,
+		log:     log,
+		auth:    authSvc,
+		bcast:   broadcast.New(),
+		limiter: newAccountRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
+	}
 }
 
-// Principal is the authenticated human caller, derived exclusively from
-// the server-side session — never from request parameters.
+// Principal is the authenticated caller, derived exclusively from the
+// session material (web session or agent API token) — never from
+// request parameters. Kind distinguishes human from agent accounts.
 type Principal struct {
 	AccountID string
 	Email     string
 	Fullname  string
+	Kind      string
 }
 
 type ctxKey string
@@ -60,7 +71,9 @@ func (a *API) Mount(r chi.Router) {
 	a.auth.Mount(r)
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(a.sessionMiddleware)
+		// The guard runs after the principal is resolved: unauthenticated
+		// probes pay the middleware and nothing else.
+		r.Use(a.sessionMiddleware, a.rateLimitGuard)
 		r.Get("/users", a.handleGetUser)
 		r.Put("/users", a.handleUpdateUser)
 		r.Post("/workspaces/onboarding", a.handleOnboarding)
@@ -108,6 +121,12 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/workspaces/invite_users", a.handleInviteUsers)
 		r.Post("/workspaces/invite_action", a.handleInviteAction)
 		r.Post("/workspaces/suspend", a.handleSuspendMember)
+		// M6: agent actors (swarm-capable machine members).
+		r.Post("/workspaces/{id}/agents", a.handleCreateAgent)
+		r.Get("/workspaces/{id}/agents", a.handleListAgents)
+		r.Post("/workspaces/{id}/agents/{accountId}/token", a.handleRotateAgentToken)
+		r.Post("/workspaces/{id}/agents/{accountId}/token/revoke", a.handleRevokeAgentToken)
+		r.Delete("/workspaces/{id}/agents/{accountId}", a.handleDeleteAgent)
 		r.Get("/search", a.handleSearch)
 	})
 }
@@ -126,8 +145,8 @@ func (a *API) sessionMiddleware(next http.Handler) http.Handler {
 		var p Principal
 		p.AccountID = accountID
 		if err := a.pool.QueryRow(r.Context(),
-			"select email, name from accounts where id = $1 and status = 'active'",
-			accountID).Scan(&p.Email, &p.Fullname); err != nil {
+			"select email, name, kind from accounts where id = $1 and status = 'active'",
+			accountID).Scan(&p.Email, &p.Fullname, &p.Kind); err != nil {
 			a.log.Error("principal lookup failed", "error", err, "account_id", accountID)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)

@@ -133,6 +133,16 @@ func (s *Service) handleCreateCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// M6: agent identities authenticate with API tokens only; a magic
+	// link for an agent email would hand a human the agent's account.
+	if kind, err := s.accountKindByEmail(r.Context(), email); err != nil {
+		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
+		return
+	} else if kind == AccountKindAgent {
+		writeError(w, http.StatusForbidden, "AGENT_ACCOUNT", "agent accounts cannot sign in")
+		return
+	}
+
 	code, err := newCode()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not create code")
@@ -306,9 +316,16 @@ func (s *Service) handleConsumeCode(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		created = true
 	case errors.Is(err, pgx.ErrNoRows):
-		err = s.pool.QueryRow(ctx, "select id from accounts where email = $1", email).Scan(&accountID)
+		var kind string
+		err = s.pool.QueryRow(ctx,
+			"select id, kind from accounts where email = $1", email).Scan(&accountID, &kind)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
+			return
+		}
+		// M6: an agent account must never take a browser session.
+		if kind == AccountKindAgent {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "AGENT_ACCOUNT"})
 			return
 		}
 	default:
@@ -462,6 +479,21 @@ func (s *Service) sessionBody(m SessionMaterial) map[string]any {
 		"expires":         m.AccessExpiry.UnixMilli(),
 		"sessionDataInDB": map[string]any{},
 	}
+}
+
+// accountKindByEmail reports the kind of the account behind an email
+// ("human" when no account exists yet) so the sign-in flow can reject
+// agent identities before issuing or consuming a code.
+func (s *Service) accountKindByEmail(ctx context.Context, email string) (string, error) {
+	var kind string
+	err := s.pool.QueryRow(ctx, "select kind from accounts where email = $1", email).Scan(&kind)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AccountKindHuman, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return kind, nil
 }
 
 // ResolveAccountID resolves the calling account from the request session
