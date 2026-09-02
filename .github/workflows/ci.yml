@@ -40,3 +40,5 @@ jobs:
         env:
           NEXT_PUBLIC_BACKEND_HOST: http://localhost:3001
           NEXT_PUBLIC_BASE_HOST: http://localhost:3000
+      - name: Wire contract (client MST models)
+        run: pnpm --filter=web test
