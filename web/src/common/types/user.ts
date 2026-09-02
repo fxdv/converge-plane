@@ -24,5 +24,8 @@ export interface User {
   workspaces: Workspace[];
   invites: Invite[];
   role: Role;
+  // 'agent' marks machine accounts (M6); absent/undefined on older
+  // responses and treats the user as human.
+  kind?: 'human' | 'agent';
   image?: string;
 }

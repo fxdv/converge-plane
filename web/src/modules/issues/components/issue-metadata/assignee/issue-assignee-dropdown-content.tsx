@@ -102,7 +102,7 @@ export function IssueAssigneeDropdownContent({
               )}
               <label
                 htmlFor={multiple ? userData.id : undefined}
-                className="flex gap-2 grow"
+                className="flex gap-2 grow items-center"
               >
                 <AvatarText
                   text={userData.fullname}
@@ -110,6 +110,11 @@ export function IssueAssigneeDropdownContent({
                 />
 
                 {userData.fullname}
+                {user.kind === 'agent' && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-grayAlpha-100 text-muted-foreground">
+                    Agent
+                  </span>
+                )}
               </label>
             </div>
           </DropdownItem>
