@@ -15,6 +15,7 @@ import { UserContext } from 'store/user-context';
 
 import { AddAgentDialog } from './add-agent-dialog';
 import { AddMemberDialog } from './add-member-dialog';
+import { AgentsBriefingDialog } from './agents-briefing-dialog';
 import { MemberItem } from './member-item';
 
 export const Members = observer(() => {
@@ -22,6 +23,7 @@ export const Members = observer(() => {
   const { workspaceStore } = useContextStore();
   const [newMemberDialog, setNewMemberDialog] = React.useState(false);
   const [newAgentDialog, setNewAgentDialog] = React.useState(false);
+  const [briefingDialog, setBriefingDialog] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState('');
   const currentUser = React.useContext(UserContext);
   const userRole = workspaceStore.getUserData(currentUser.id)?.role;
@@ -61,6 +63,9 @@ export const Members = observer(() => {
             <div className="flex flex-col">
               <div className="flex justify-between items-center">
                 <div className="flex gap-2">
+                  <Button variant="ghost" onClick={() => setBriefingDialog(true)}>
+                    How agents work
+                  </Button>
                   <Button
                     variant="secondary"
                     onClick={() => setNewMemberDialog(true)}
@@ -128,6 +133,12 @@ export const Members = observer(() => {
       )}
       {newAgentDialog && (
         <AddAgentDialog setDialogOpen={setNewAgentDialog} />
+      )}
+      {briefingDialog && (
+        <AgentsBriefingDialog
+          open={briefingDialog}
+          onOpenChange={setBriefingDialog}
+        />
       )}
     </>
   );
