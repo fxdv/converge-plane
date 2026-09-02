@@ -208,6 +208,8 @@ func clientRole(role string) string {
 	switch strings.ToLower(role) {
 	case "owner", "admin":
 		return "ADMIN"
+	case "agent":
+		return "AGENT"
 	default:
 		return "USER"
 	}
