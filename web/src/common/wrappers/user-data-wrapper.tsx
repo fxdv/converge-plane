@@ -23,8 +23,11 @@ export function UserDataWrapper(props: Props): React.ReactElement {
     replace,
   } = useRouter();
 
-  if (!isLoading && !isError) {
-    const workspaceRes = data.workspaces.find(
+  // Defense on the auth-critical path: a null `workspaces` collection
+  // (the wire contract says [] — server guarantees it) must degrade to
+  // the normal flow, never crash the sign-in journey.
+  if (!isLoading && !isError && data) {
+    const workspaceRes = (data.workspaces ?? []).find(
       (work) => work.slug === workspaceSlug,
     );
 
