@@ -10,6 +10,8 @@ import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
+import { safePriorityIndex } from 'common/priority';
+
 import { usePriorities } from 'hooks/priorities';
 
 import {
@@ -38,9 +40,13 @@ export const IssuePriorityDropdown = observer(
     variant = IssuePriorityDropdownVariant.DEFAULT,
   }: IssuePriorityProps) => {
     const [open, setOpen] = React.useState(false);
-    const PriorityIcon = PriorityIcons[value ?? 0];
 
     const Priorities = usePriorities();
+
+    // The wire allows any integer priority (Tegon domain); the icon and
+    // label maps only cover 0..4, so normalize before indexing.
+    const priorityIndex = safePriorityIndex(value);
+    const PriorityIcon = PriorityIcons[priorityIndex];
 
     function getTrigger() {
       if (variant === IssuePriorityDropdownVariant.NO_BACKGROUND) {
@@ -56,7 +62,7 @@ export const IssuePriorityDropdown = observer(
             )}
           >
             <PriorityIcon.icon size={16} />
-            {Priorities[value]}
+            {Priorities[priorityIndex]}
           </Button>
         );
       }
@@ -74,7 +80,7 @@ export const IssuePriorityDropdown = observer(
           >
             <PriorityIcon.icon size={20} className={cn('mr-2')} />
 
-            <span> {Priorities[value]}</span>
+            <span> {Priorities[priorityIndex]}</span>
           </Button>
         );
       }
@@ -91,7 +97,7 @@ export const IssuePriorityDropdown = observer(
             className={cn('mr-2 text-muted-foreground')}
           />
 
-          {Priorities[value]}
+          {Priorities[priorityIndex]}
         </Button>
       );
     }

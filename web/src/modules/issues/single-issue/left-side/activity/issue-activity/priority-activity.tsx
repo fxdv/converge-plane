@@ -3,6 +3,8 @@ import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
+import { safePriorityIndex } from 'common/priority';
+
 import { PriorityIcons } from 'modules/issues/components';
 
 import { type IssueHistoryType } from 'common/types';
@@ -18,8 +20,9 @@ export const PriorityActivity = observer(
   ({ issueHistory, fullname, showTime = false }: PriorityActivityProps) => {
     const Priorities = usePriorities();
 
-    const priorityText = Priorities[issueHistory.toPriority];
-    const PriorityIcon = PriorityIcons[issueHistory.toPriority];
+    const priorityIndex = safePriorityIndex(issueHistory.toPriority);
+    const priorityText = Priorities[priorityIndex];
+    const PriorityIcon = PriorityIcons[priorityIndex];
 
     return (
       <TimelineItem
