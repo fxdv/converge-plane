@@ -84,6 +84,11 @@ export function IssueAssigneeDropdown({
                 className="h-5 w-5 text-[9px] mr-2"
               />
               {getUserFromUsersData(users, value)?.fullname}
+              {getUserFromUsersData(users, value)?.kind === 'agent' && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-grayAlpha-100 text-muted-foreground">
+                  Agent
+                </span>
+              )}
             </>
           ) : (
             <div className="text-muted-foreground flex">

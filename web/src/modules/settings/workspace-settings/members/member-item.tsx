@@ -17,6 +17,7 @@ interface MemberItemProps {
   teamId?: string;
   isAdmin?: boolean;
   isSuspended?: boolean;
+  isAgent?: boolean;
 }
 
 export const MemberItem = observer(
@@ -28,6 +29,7 @@ export const MemberItem = observer(
     teamId,
     isAdmin,
     isSuspended,
+    isAgent,
   }: MemberItemProps) => {
     const { workspaceStore } = useContextStore();
 
@@ -47,7 +49,14 @@ export const MemberItem = observer(
           <AvatarText text={name} className="text-base w-8 h-8 rounded-md" />
 
           <div className="flex flex-col">
-            <div>{name}</div>
+            <div className="flex items-center gap-2">
+              <div>{name}</div>
+              {isAgent && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-grayAlpha-100 text-muted-foreground">
+                  Agent
+                </span>
+              )}
+            </div>
             <div className="text-muted-foreground">{email}</div>
           </div>
         </div>

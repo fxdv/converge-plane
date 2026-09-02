@@ -13,6 +13,7 @@ import { useUsersData } from 'hooks/users';
 import { useContextStore } from 'store/global-context-provider';
 import { UserContext } from 'store/user-context';
 
+import { AddAgentDialog } from './add-agent-dialog';
 import { AddMemberDialog } from './add-member-dialog';
 import { MemberItem } from './member-item';
 
@@ -20,9 +21,14 @@ export const Members = observer(() => {
   const { users, isLoading } = useUsersData(false);
   const { workspaceStore } = useContextStore();
   const [newMemberDialog, setNewMemberDialog] = React.useState(false);
+  const [newAgentDialog, setNewAgentDialog] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState('');
   const currentUser = React.useContext(UserContext);
   const userRole = workspaceStore.getUserData(currentUser.id)?.role;
+
+  const isAgent = (user: User) =>
+    user.kind === 'agent' ||
+    workspaceStore.getUserData(user.id)?.role === 'AGENT';
 
   const getUsers = (isSuspened: boolean = false) => {
     const nonSuspendedUsers = users.filter((user) =>
@@ -54,12 +60,22 @@ export const Members = observer(() => {
           {!isLoading && (
             <div className="flex flex-col">
               <div className="flex justify-between items-center">
-                <Button
-                  variant="secondary"
-                  onClick={() => setNewMemberDialog(true)}
-                >
-                  Add member
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setNewMemberDialog(true)}
+                  >
+                    Add member
+                  </Button>
+                  {userRole === 'ADMIN' && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => setNewAgentDialog(true)}
+                    >
+                      Add agent
+                    </Button>
+                  )}
+                </div>
 
                 <div className="flex">
                   <Input
@@ -77,6 +93,7 @@ export const Members = observer(() => {
                     name={userData.fullname}
                     email={userData.email}
                     isAdmin={userRole === 'ADMIN'}
+                    isAgent={isAgent(userData)}
                     className={index === users.length - 1 && 'pb-0 !border-b-0'}
                   />
                 ))}
@@ -93,6 +110,7 @@ export const Members = observer(() => {
                       name={userData.fullname}
                       email={userData.email}
                       isSuspended
+                      isAgent={isAgent(userData)}
                       isAdmin={userRole === 'ADMIN'}
                       className={
                         index === users.length - 1 && 'pb-0 !border-b-0'
@@ -107,6 +125,9 @@ export const Members = observer(() => {
       </SettingSection>
       {newMemberDialog && (
         <AddMemberDialog setDialogOpen={setNewMemberDialog} />
+      )}
+      {newAgentDialog && (
+        <AddAgentDialog setDialogOpen={setNewAgentDialog} />
       )}
     </>
   );
