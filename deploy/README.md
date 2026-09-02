@@ -60,6 +60,8 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_HTTP_TIMEOUT`    | `30s`                               | Per-request read timeout                              |
 | `CONVERGE_DB_MIN_CONNS`    | `2` (compose) / `1` (binary)        | Connection pool floor                                 |
 | `CONVERGE_DB_MAX_CONNS`    | `20`                                | Connection pool ceiling                               |
+| `CONVERGE_RATE_LIMIT_RPS`  | `10`                                | Per-account sustained request rate; `0` disables     |
+| `CONVERGE_RATE_LIMIT_BURST`| `50`                                | Per-account burst above the sustained rate           |
 | `CONVERGE_SECURE_COOKIES`  | `false`                             | `Secure` cookie flag; set `true` behind TLS          |
 | `CONVERGE_SESSION_SECRET`  | dev fallback                        | HMAC key for session tokens — **set a real value**   |
 | `CONVERGE_ACCESS_TOKEN_TTL`| `1h`                                | Client access-token lifetime                          |
