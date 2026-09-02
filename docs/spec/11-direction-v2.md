@@ -117,16 +117,25 @@ Alternatives rejected: single artifact in v1 (blocking risk)
 Documents updated: docker-compose.yaml, this document
 ```
 
-## Open items carried into v1
+## Open items and work plan (v1 → v1.1)
 
 | ID | Item | Gate |
 | --- | --- | --- |
 | OD-15 | Concrete p95 performance budgets at 10k issues / 1k team / 100 sessions | v1 acceptance |
-| OD-19 | Telemetry: off by default, operator opt-in, no issue content | before any analytics dependency (forked web ships PostHog + Sentry — **both must be disabled/removed in the trim milestone**) |
+| OD-19 | Telemetry: removed from the forked web in the M3 trim (PostHog + Sentry); if analytics ever returns: off by default, operator opt-in, no issue content | **Resolved (M3)** |
 | OD-21/22 | Browser matrix, WCAG 2.2 AA process | v1 acceptance |
+| A1 | Crash-class sweep: audit client MST models and value-lookups against the Go wire contract (role, DELETE records, and priority found organically so far — all fixed; the rest must be audited, not discovered) | v1 acceptance |
+| A2 | Wire-contract tests: server Go tests for every model's I/U/D payload + a client MST replay harness — makes A1 a permanent guarantee (CI currently runs `go test ./...` against zero test files) | v1 acceptance |
+| A3 | Real invite email (SMTP) + production transport flags in the deploy guide (dev magic-link only today) | v1 acceptance |
+| C | Multi-instance: shared broker (NATS/Redis) behind the `Broadcaster` seam + distributed rate limit — the delta endpoint keeps such a deployment *correct* until then | before horizontal scale |
+| D1 | Handoff protocol (doc 12): `issue_handoffs` + `POST /issues/{id}/handoff` + quiet budget/loop guard + client handoff flow, timeline item, board chip — server-first | post-v1 (D workstream) |
+| D2 | Swarm panel: live roster, handoff trail, token burn — topology-agnostic watchability | post-v1 |
+| D3 | LLM agent runtime: inbox = assignments + incoming handoffs, summaries as untrusted data, act → hand back, per-agent spend | post-v1 |
+| D4 | Topology selector as a fleet setting (Settings → Agents) | v1.1+ — only after D3 yields usage data for both modes (doc 12) |
+| B | R-9 client-state rewrite (drop IndexedDB + sequence-delta for server-authoritative + bounded cache) — explicitly **v1.1, not pre-release**: the sync layer is load-bearing and was just stabilized (M6 sync fix); rewriting it is churn with no user-visible return | v1.1 |
 | NEW | Final trademark/domain validation for "Converge" | public launch |
 | NEW | Go module path on first public release | public launch |
-| NEW | Web standalone Docker layout verification | M1 |
+| NEW | Web standalone Docker layout verification | M1 — **resolved (M4)** |
 
 ## Consequences accepted
 
