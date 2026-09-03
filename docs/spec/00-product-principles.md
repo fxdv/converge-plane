@@ -24,6 +24,18 @@ This specification defines the product to build. Tegon is evidence of product be
 | [09 — Delivery roadmap](09-mvp-roadmap.md) | Release commitments and exit gates |
 | [10 — Open decisions](10-open-decisions.md) | Unresolved choices, defaults, owners, decision gates |
 
+[product-spec.tex](product-spec.tex) is the **integrated product specification**: the
+post-pivot product (statement, personas, features, domain, API, swarm,
+architecture, roadmap, moat) as one typeset document, compiled to
+`product-spec.pdf`. It integrates 00–12 in post-pivot terms; the numbered
+documents remain the detailed contracts. It is traceable to the codebase:
+every feature carries a `cs:domain:token` tag, code references the same
+token with a `spec cs:domain:token` comment, and the specsync checker
+(`server/tools/specsync`, run in the Go test gate) fails on drift in either
+direction. Where product-spec.tex and a numbered document conflict, the
+numbered document defines its detailed contract and product-spec.tex
+defines product intent; a conflict is a bug to fix in one of them.
+
 The earlier `greenfield-spec/` census remains historical research. It is superseded wherever its classifications or delivery bands differ from this directory.
 
 ## Product statement
