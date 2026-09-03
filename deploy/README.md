@@ -9,6 +9,7 @@ operating it day to day.
 
 - [Single host](#single-host)
 - [Environment reference](#environment-reference)
+- [Invitation mail](#invitation-mail)
 - [TLS and reverse proxy](#tls-and-reverse-proxy)
 - [Production checklist](#production-checklist)
 - [Backups](#backups)
@@ -68,6 +69,12 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_REFRESH_TOKEN_TTL` | `720h`                            | Refresh-token lifetime (sign-in session length)      |
 | `CONVERGE_DEV_MODE`        | `true` (compose)                    | Magic link in sign-in response — **off in prod**     |
 | `CONVERGE_AUTO_MIGRATE`    | on                                | Apply schema migrations at startup                    |
+| `CONVERGE_SMTP_HOST`       | `""`                              | SMTP server for invitation mail; unset = log driver  |
+| `CONVERGE_SMTP_PORT`       | `587`                             | SMTP port                                             |
+| `CONVERGE_SMTP_USER`       | `""`                              | SMTP auth username                                    |
+| `CONVERGE_SMTP_PASS`       | `""`                              | SMTP auth password                                    |
+| `CONVERGE_SMTP_FROM`       | `no-reply@converge.local`         | From: address on outgoing mail                        |
+| `CONVERGE_SMTP_TLS`        | `starttls`                        | `starttls` \| `off` \| `implicit`                     |
 
 ### Web (build-time, baked into the image)
 
@@ -95,6 +102,25 @@ configuration. Docker compose reads `.env` in the repository root.
 rebuilding the web image. In the common single-domain layout (below) the
 browser reaches everything through one origin, so the default build args keep
 working without rebuilds.
+
+## Invitation mail
+
+Workspace invitations send an email through the `CONVERGE_SMTP_*`
+variables (stdlib SMTP; `starttls` by default, `implicit` for
+port-465-style endpoints, `off` for a local relay). The email carries a
+sign-in link; opening it signs the invitee in and lands on the
+accept/decline invitation screen.
+
+When `CONVERGE_SMTP_HOST` is unset the API runs the **log driver**:
+the full message (including the link) is written to the API log. That
+is the working setup for local development and any deployment that
+does not need real delivery — the invitation itself (rows, invites
+page) exists regardless; only the email is suppressed.
+
+Mail is best-effort: invitations are committed before mail is
+attempted, a delivery failure is logged and dropped, and the recovery
+is a re-invite. v1 sends mail serially in the background after the
+invite response.
 
 ## TLS and reverse proxy
 
@@ -171,6 +197,7 @@ the API port directly).
 - [ ] `CONVERGE_SESSION_SECRET` set to `openssl rand -hex 32` output
 - [ ] `CONVERGE_DEV_MODE=false` (dev mode leaks the magic link into the API)
 - [ ] `CONVERGE_SECURE_COOKIES=true` (TLS only)
+- [ ] `CONVERGE_SMTP_HOST` set (or accept that invitations are logged, not delivered)
 - [ ] `COMPOSE_PROFILES` line removed from `.env` (no demo workspace)
 - [ ] Postgres not reachable off the host (compose binds `127.0.0.1`; keep it that way)
 - [ ] Reverse proxy terminates TLS and streams `/api/*` without buffering

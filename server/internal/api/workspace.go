@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"converge/internal/auth"
+	"converge/internal/notify"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -253,6 +254,14 @@ func (a *API) handleInviteUsers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	// The invitation mail names the workspace; read it up front so the
+	// background dispatch below needs no further request-context work.
+	var workspaceName string
+	if err := a.pool.QueryRow(ctx,
+		"select name from workspaces where id = $1", workspaceID).Scan(&workspaceName); err != nil {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
 	// The client's RoleEnum sends ADMIN|USER; the schema stores
 	// admin|member. BOT/AGENT cannot be invited (no machine sign-in).
 	memberRole := "member"
@@ -366,7 +375,45 @@ func (a *API) handleInviteUsers(w http.ResponseWriter, r *http.Request) {
 	for i := range records {
 		a.broadcastRecord(records[i])
 	}
+	// Invitation mail is best-effort and off the request path: every
+	// row is committed, so a delivery failure must never fail the
+	// response (the invites page and a re-invite are the recovery).
+	a.dispatchInviteMail(workspaceName, p, results)
 	writeJSON(w, http.StatusCreated, results)
+}
+
+// dispatchInviteMail sends the invitation emails in the background: one
+// goroutine per batch, one send per address (a serial loop — a burst of
+// parallel SMTP sessions would trip provider rate limits for no benefit
+// in v1). A per-batch deadline bounds the SMTP exchanges; failures are
+// logged and dropped, one per address, so a single bad recipient never
+// starves the rest of the batch.
+func (a *API) dispatchInviteMail(workspaceName string, inviter *Principal, results map[string]string) {
+	emails := make([]string, 0, len(results))
+	for email, status := range results {
+		if status == "INVITED" {
+			emails = append(emails, email)
+		}
+	}
+	if len(emails) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	go func() {
+		defer cancel()
+		for _, email := range emails {
+			link, err := a.auth.CodeForEmail(ctx, email)
+			if err != nil {
+				a.log.Error("invite email: could not issue sign-in code", "email", email, "error", err)
+				continue
+			}
+			msg := notify.InviteMessage(email, inviter.Fullname, workspaceName, link, a.cfg.CodeTTL)
+			if err := a.notify.Send(ctx, msg); err != nil {
+				a.log.Error("invite email: send failed", "email", email, "error", err)
+				continue
+			}
+		}
+	}()
 }
 
 // inviteMembershipTx failures that are client-explainable validation

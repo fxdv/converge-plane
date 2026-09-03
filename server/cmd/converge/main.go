@@ -25,6 +25,7 @@ import (
 	"converge/internal/httpx"
 	"converge/internal/logging"
 	"converge/internal/migrate"
+	"converge/internal/notify"
 	"converge/internal/seed"
 )
 
@@ -89,7 +90,20 @@ func run() (err error) {
 	defer database.Close()
 
 	authSvc := auth.NewService(database.Pool, cfg, logger)
-	apiSvc := api.New(database.Pool, cfg, logger, authSvc)
+	notifySvc := notify.New(notify.Config{
+		Host: cfg.SMTPHost,
+		Port: cfg.SMTPPort,
+		User: cfg.SMTPUser,
+		Pass: cfg.SMTPPass,
+		From: cfg.SMTPFrom,
+		TLS:  cfg.SMTPTLS,
+	}, logger)
+	if notifySvc.Enabled() {
+		logger.Info("smtp driver active", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom, "tls", cfg.SMTPTLS)
+	} else {
+		logger.Info("mail log driver active (no smtp host; messages incl. links go to the log)")
+	}
+	apiSvc := api.New(database.Pool, cfg, logger, authSvc, notifySvc)
 
 	server := httpx.New(httpx.Dependencies{
 		Logger:      logger,

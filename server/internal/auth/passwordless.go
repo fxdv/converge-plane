@@ -143,17 +143,8 @@ func (s *Service) handleCreateCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := newCode()
+	code, preAuthSessionID, deviceID, err := s.issueCode(r.Context(), email)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not create code")
-		return
-	}
-	preAuthSessionID := newID()
-	deviceID := newID()
-	if _, err := s.pool.Exec(r.Context(), `
-		insert into auth_codes (email, token_hash, expires_at, pre_auth_session_id, device_id)
-		values ($1, $2, $3, $4, $5)`,
-		email, hashValue(code), time.Now().Add(s.cfg.CodeTTL), preAuthSessionID, deviceID); err != nil {
 		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not create code")
 		return
 	}
@@ -162,11 +153,42 @@ func (s *Service) handleCreateCode(w http.ResponseWriter, r *http.Request) {
 	s.writeCreateCodeResponse(w, preAuthSessionID, deviceID, code)
 }
 
+// issueCode persists a fresh single-use sign-in code for email and
+// returns the code with the ids the magic link needs.
+func (s *Service) issueCode(ctx context.Context, email string) (code, preAuthSessionID, deviceID string, err error) {
+	code, err = newCode()
+	if err != nil {
+		return "", "", "", err
+	}
+	preAuthSessionID = newID()
+	deviceID = newID()
+	if _, err = s.pool.Exec(ctx, `
+		insert into auth_codes (email, token_hash, expires_at, pre_auth_session_id, device_id)
+		values ($1, $2, $3, $4, $5)`,
+		email, hashValue(code), time.Now().Add(s.cfg.CodeTTL), preAuthSessionID, deviceID); err != nil {
+		return "", "", "", err
+	}
+	return code, preAuthSessionID, deviceID, nil
+}
+
 // magicLink builds the verify URL the email provider would send. The v17
 // client reads the link code from the URL hash fragment and the
 // preAuthSessionId from the query string.
 func (s *Service) magicLink(preAuthSessionID, code string) string {
 	return fmt.Sprintf("%s/auth/verify?preAuthSessionId=%s#%s", s.cfg.WebOrigin, preAuthSessionID, code)
+}
+
+// CodeForEmail issues a fresh sign-in code for email and returns the
+// magic link. Invitation mail carries this link: consuming it signs the
+// invitee in (the account already exists — the invite materialized it)
+// and the client then routes to the pending invitation to accept or
+// decline.
+func (s *Service) CodeForEmail(ctx context.Context, email string) (string, error) {
+	code, preAuthSessionID, _, err := s.issueCode(ctx, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return "", fmt.Errorf("issue code for %s: %w", email, err)
+	}
+	return s.magicLink(preAuthSessionID, code), nil
 }
 
 // writeCreateCodeResponse emits the v16 create-code body. The magic link

@@ -16,6 +16,7 @@ import (
 	"converge/internal/auth"
 	"converge/internal/broadcast"
 	"converge/internal/config"
+	"converge/internal/notify"
 	"log/slog"
 )
 
@@ -25,18 +26,21 @@ type API struct {
 	cfg  config.Config
 	log  *slog.Logger
 	auth *auth.Service
+	// notify delivers transactional mail (workspace invitations).
+	notify *notify.Service
 	// bcast fans out committed change records to realtime subscribers.
 	bcast *broadcast.Broadcaster
 	// limiter bounds per-account request rates (swarm flood guard).
 	limiter *accountRateLimiter
 }
 
-func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service) *API {
+func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service, notifySvc *notify.Service) *API {
 	return &API{
 		pool:    pool,
 		cfg:     cfg,
 		log:     log,
 		auth:    authSvc,
+		notify:  notifySvc,
 		bcast:   broadcast.New(),
 		limiter: newAccountRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
 	}
