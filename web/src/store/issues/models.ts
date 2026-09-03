@@ -23,6 +23,10 @@ export const Issue = types.model('Issue', {
   projectMilestoneId: types.union(types.string, types.null, types.undefined),
   sourceMetadata: types.union(types.string, types.null, types.undefined),
   children: types.array(types.string),
+  // D1: agent swarm paused on this issue (escalation flag). Agents
+  // cannot act; a human mutation resumes it. Old payloads (outbox
+  // retention) predate the field, so it is optional with a default.
+  agentPaused: types.optional(types.boolean, false),
 });
 
 export const IssuesMap = types.map(Issue);

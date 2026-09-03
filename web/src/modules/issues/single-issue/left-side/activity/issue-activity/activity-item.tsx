@@ -4,7 +4,9 @@ import * as React from 'react';
 import type { IssueType, User } from 'common/types';
 import type { IssueHistoryType } from 'common/types';
 
+import { HandoffActivity } from './handoff-activity';
 import { LabelActivity } from './label-activity';
+import { PausedActivity } from './paused-activity';
 import { PriorityActivity } from './priority-activity';
 import { RelatedActivity } from './related-activity';
 import { StatusActivity } from './status-activity';
@@ -28,6 +30,34 @@ export const ActivityItem = observer(
       const localItems = [];
       let setShowTime = true;
       let index = 0;
+
+      // D1: the handoff row is the work transition with its summary
+      // note (docs/spec/12); the pause row is the escalation event.
+      // Both are keyed on the history action, not the summary — a
+      // pause also carries one (the reason).
+      if (issueHistory.action === 'handoff') {
+        localItems.push(
+          <HandoffActivity
+            fullname={user.fullname}
+            issueHistory={issueHistory}
+            showTime={setShowTime}
+            key={index}
+          />,
+        );
+        index = index + 1;
+        setShowTime = false;
+      } else if (issueHistory.action === 'paused') {
+        localItems.push(
+          <PausedActivity
+            fullname={user.fullname}
+            issueHistory={issueHistory}
+            showTime={setShowTime}
+            key={index}
+          />,
+        );
+        index = index + 1;
+        setShowTime = false;
+      }
 
       if (issueHistory.removedLabelIds.length > 0) {
         localItems.push(

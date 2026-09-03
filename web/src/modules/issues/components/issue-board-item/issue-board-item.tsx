@@ -12,6 +12,8 @@ import {
   IssueStatusDropdownVariant,
 } from 'modules/issues/components';
 
+import { Warning } from '@converge/ui/icons';
+
 import { IssueViewContext } from 'components/side-issue-view';
 import { useTeamWithId } from 'hooks/teams/use-current-team';
 
@@ -112,7 +114,17 @@ export const BoardIssueItem = observer(
               teamIdentifier={team.identifier}
             />
           </div>
-          <div className="text-muted-foreground font-mono">{`${team.identifier}-${issue.number}`}</div>
+          <div className="flex items-center gap-2">
+            {/* D1: escalation flag — the swarm is paused on this issue;
+                a human must look (agents are blocked from acting). */}
+            {issue.agentPaused && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                <Warning size={12} />
+                needs human
+              </span>
+            )}
+            <div className="text-muted-foreground font-mono">{`${team.identifier}-${issue.number}`}</div>
+          </div>
         </div>
         <div className="flex">
           <div className="line-clamp-2">{issue.title}</div>

@@ -58,13 +58,28 @@ func (a *API) issueAccess(ctx context.Context, principal *Principal, issueID str
 }
 
 // writeHistoryTx appends one activity row inside the caller's
-// transaction. from/to are opaque strings (ids or JSON arrays).
-func (a *API) writeHistoryTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID, issueID, actorID, action, field, from, to string) error {
-	_, err := tx.Exec(ctx, `
-		insert into issue_history (workspace_id, team_id, issue_id, actor_id, action, field, from_value, to_value)
-		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''))`,
-		workspaceID, teamID, issueID, actorID, action, field, from, to)
-	return err
+// transaction and emits it on the sync feed (IssueHistory model),
+// returning the record for the caller to broadcast after commit.
+// from/to are opaque strings (ids or JSON arrays); summary carries the
+// handoff note (D1) and stays null on every other row.
+func (a *API) writeHistoryTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID, issueID, actorID, action, field, from, to, summary string) (syncActionRecord, error) {
+	var id string
+	err := tx.QueryRow(ctx, `
+		insert into issue_history (workspace_id, team_id, issue_id, actor_id, action, field, from_value, to_value, summary)
+		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), nullif($9, ''))
+		returning id`,
+		workspaceID, teamID, issueID, actorID, action, field, from, to, summary).Scan(&id)
+	if err != nil {
+		return syncActionRecord{}, err
+	}
+	// created_at doubles as updated_at (append-only); read it back for
+	// the wire payload rather than trusting the client's clock.
+	var createdAt time.Time
+	if err := tx.QueryRow(ctx, "select created_at from issue_history where id = $1", id).Scan(&createdAt); err != nil {
+		return syncActionRecord{}, err
+	}
+	return a.emitChange(ctx, tx, workspaceID, "IssueHistory", id, "CREATE",
+		historyData(id, createdAt, createdAt, &actorID, issueID, action, field, ptrOrNull(from), ptrOrNull(to), ptrOrNull(summary)))
 }
 
 // issueRequest is the client's create/patch payload (partial updates:
@@ -165,7 +180,8 @@ func (a *API) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Activity: the issue was created in its starting status.
-	if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, id, p.AccountID, "created", "status", "", strval(row.StatusID)); err != nil {
+	histRec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, id, p.AccountID, "created", "status", "", strval(row.StatusID), "")
+	if err != nil {
 		a.internalError(w, err)
 		return
 	}
@@ -178,6 +194,7 @@ func (a *API) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.broadcastRecord(rec)
+	a.broadcastRecord(histRec)
 	writeJSON(w, http.StatusCreated, a.issueData(row))
 }
 
@@ -235,7 +252,7 @@ func (a *API) issueByIDTx(ctx context.Context, tx pgx.Tx, id string) (issueRow, 
 		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.LabelIDs, &r.Children)
+		&r.AgentPaused, &r.LabelIDs, &r.Children)
 	return r, err
 }
 
@@ -273,6 +290,9 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	row, workspaceID, ok := a.issueAccess(ctx, p, id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !a.agentPausedGuard(w, p, row) {
 		return
 	}
 	// Cross-team updates apply the same move path (the client's patch and
@@ -331,7 +351,7 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	changed, err := a.applyIssuePatchTx(ctx, tx, p, workspaceID, row, req)
+	changed, historyRecs, err := a.applyIssuePatchTx(ctx, tx, p, workspaceID, row, req)
 	if err != nil {
 		a.internalError(w, err)
 		return
@@ -362,17 +382,21 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.broadcastRecord(rec)
+	for i := range historyRecs {
+		a.broadcastRecord(historyRecs[i])
+	}
 	writeJSON(w, http.StatusOK, a.issueData(fresh))
 }
 
 // applyIssuePatchTx applies the requested fields inside the caller's
 // transaction and writes activity history for user-visible changes.
 // It reports whether anything changed.
-func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, workspaceID string, row issueRow, req issueRequest) (bool, error) {
+func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, workspaceID string, row issueRow, req issueRequest) (bool, []syncActionRecord, error) {
 	changed := false
+	historyRecs := make([]syncActionRecord, 0, 4)
 	if req.Title != nil && strings.TrimSpace(*req.Title) != "" && len(*req.Title) <= 255 && *req.Title != row.Title {
 		if _, err := tx.Exec(ctx, `update issues set title = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, strings.TrimSpace(*req.Title)); err != nil {
-			return false, err
+			return false, nil, err
 		}
 		row.Title = strings.TrimSpace(*req.Title)
 		changed = true
@@ -381,7 +405,7 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		next := toJSONB(*req.Description)
 		if next != row.DescRaw {
 			if _, err := tx.Exec(ctx, `update issues set description = $2::jsonb, version = version + 1, updated_at = now() where id = $1`, row.ID, next); err != nil {
-				return false, err
+				return false, nil, err
 			}
 			row.DescRaw = next
 			changed = true
@@ -389,52 +413,58 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 	}
 	if req.StateID != nil && strval(req.StateID) != strval(row.StatusID) {
 		if _, err := tx.Exec(ctx, `update issues set status_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, *req.StateID); err != nil {
-			return false, err
+			return false, nil, err
 		}
-		if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "status",
-			strval(row.StatusID), *req.StateID); err != nil {
-			return false, err
+		rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "status",
+			strval(row.StatusID), *req.StateID, "")
+		if err != nil {
+			return false, nil, err
 		}
+		historyRecs = append(historyRecs, rec)
 		row.StatusID = ptrOrNull(*req.StateID)
 		changed = true
 	}
 	if req.AssigneeID != nil && strval(req.AssigneeID) != strval(row.AssigneeID) {
 		if _, err := tx.Exec(ctx, `update issues set assignee_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, nullForEmpty(req.AssigneeID)); err != nil {
-			return false, err
+			return false, nil, err
 		}
-		if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "assignee",
-			strval(row.AssigneeID), *req.AssigneeID); err != nil {
-			return false, err
+		rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "assignee",
+			strval(row.AssigneeID), *req.AssigneeID, "")
+		if err != nil {
+			return false, nil, err
 		}
+		historyRecs = append(historyRecs, rec)
 		row.AssigneeID = ptrOrNull(*req.AssigneeID)
 		changed = true
 	}
 	if req.Priority != nil && (row.Priority == nil || *row.Priority != *req.Priority) {
 		if _, err := tx.Exec(ctx, `update issues set priority = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, req.Priority); err != nil {
-			return false, err
+			return false, nil, err
 		}
 		from := ""
 		if row.Priority != nil {
 			from = strconv.Itoa(*row.Priority)
 		}
-		if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "priority",
-			from, strconv.Itoa(*req.Priority)); err != nil {
-			return false, err
+		rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "priority",
+			from, strconv.Itoa(*req.Priority), "")
+		if err != nil {
+			return false, nil, err
 		}
+		historyRecs = append(historyRecs, rec)
 		next := *req.Priority
 		row.Priority = &next
 		changed = true
 	}
 	if req.SortOrder != nil && *req.SortOrder != row.SortOrder {
 		if _, err := tx.Exec(ctx, `update issues set sort_order = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, *req.SortOrder); err != nil {
-			return false, err
+			return false, nil, err
 		}
 		row.SortOrder = *req.SortOrder
 		changed = true
 	}
 	if req.ParentID != nil && strval(req.ParentID) != strval(row.ParentID) {
 		if _, err := tx.Exec(ctx, `update issues set parent_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, nullForEmpty(req.ParentID)); err != nil {
-			return false, err
+			return false, nil, err
 		}
 		row.ParentID = ptrOrNull(*req.ParentID)
 		changed = true
@@ -443,25 +473,36 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		old, _ := json.Marshal(row.LabelIDs)
 		same, err := a.sameLabelSet(ctx, tx, row.ID, req.LabelIDs)
 		if err != nil {
-			return false, err
+			return false, nil, err
 		}
 		if !same {
 			if _, err := tx.Exec(ctx, `delete from issue_labels where issue_id = $1`, row.ID); err != nil {
-				return false, err
+				return false, nil, err
 			}
 			for _, labelID := range req.LabelIDs {
 				if _, err := tx.Exec(ctx, `insert into issue_labels (issue_id, label_id) values ($1, $2) on conflict do nothing`, row.ID, labelID); err != nil {
-					return false, err
+					return false, nil, err
 				}
 			}
 			row.LabelIDs = append([]string(nil), req.LabelIDs...)
-			if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "labels", string(old), mustJSONArray(req.LabelIDs)); err != nil {
-				return false, err
+			rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "labels", string(old), mustJSONArray(req.LabelIDs), "")
+			if err != nil {
+				return false, nil, err
 			}
+			historyRecs = append(historyRecs, rec)
 			changed = true
 		}
 	}
-	return changed, nil
+	// D1 escalation recovery: a human mutation on a paused issue resumes
+	// the swarm. (Agents never reach this: the paused guard rejects
+	// them before the transaction opens.)
+	if changed && row.AgentPaused {
+		if _, err := tx.Exec(ctx, "update issues set agent_paused = false where id = $1", row.ID); err != nil {
+			return false, nil, err
+		}
+		row.AgentPaused = false
+	}
+	return changed, historyRecs, nil
 }
 
 // sameLabelSet reports whether the issue's current label set equals next.
@@ -499,6 +540,9 @@ func (a *API) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	if !a.agentPausedGuard(w, p, row) {
+		return
+	}
 
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
@@ -511,7 +555,8 @@ func (a *API) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	if err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, id, p.AccountID, "deleted", "status", strval(row.StatusID), ""); err != nil {
+	histRec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, id, p.AccountID, "deleted", "status", strval(row.StatusID), "", "")
+	if err != nil {
 		a.internalError(w, err)
 		return
 	}
@@ -525,6 +570,7 @@ func (a *API) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.broadcastRecord(rec)
+	a.broadcastRecord(histRec)
 	writeJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 
@@ -547,6 +593,9 @@ func (a *API) handleMoveIssue(w http.ResponseWriter, r *http.Request) {
 	row, workspaceID, ok := a.issueAccess(ctx, p, id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !a.agentPausedGuard(w, p, row) {
 		return
 	}
 	// The destination must be in the same workspace.

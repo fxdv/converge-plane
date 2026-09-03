@@ -162,12 +162,21 @@ func TestIssueDataWireContract(t *testing.T) {
 	if m["assigneeId"] != nil {
 		t.Errorf("assigneeId must be explicit null when unset, got %v", m["assigneeId"])
 	}
+	// D1: agentPaused must always be present and a JSON boolean (the
+	// client model is a plain boolean; a missing key would crash it).
+	if _, ok := m["agentPaused"].(bool); !ok {
+		t.Errorf("agentPaused must serialize as a boolean, got %v (%T)", m["agentPaused"], m["agentPaused"])
+	}
+
 	// null priority must survive the round trip as null (client: number|null)
 	row := issueRow{ID: "i2", TeamID: "t1", Number: 8, Title: "T", Status: "active",
-		CreatedAt: wireNow, UpdatedAt: wireNow, StatusID: &stateID}
+		CreatedAt: wireNow, UpdatedAt: wireNow, StatusID: &stateID, AgentPaused: true}
 	m2 := wirePayload(t, a.issueData(row))
 	if m2["priority"] != nil {
 		t.Errorf("unset priority must serialize null, got %v", m2["priority"])
+	}
+	if m2["agentPaused"] != true {
+		t.Errorf("paused flag must serialize true, got %v", m2["agentPaused"])
 	}
 }
 
@@ -270,16 +279,16 @@ func TestHistoryDataWireContract(t *testing.T) {
 	str := func(s string) *string { return &s }
 	// Every from/to field must be present (null when unset) and the label
 	// arrays must always exist.
-	m := wirePayload(t, historyData("h1", wireNow, wireNow, nil, "i1", "updated", "unknown", nil, nil))
+	m := wirePayload(t, historyData("h1", wireNow, wireNow, nil, "i1", "updated", "unknown", nil, nil, nil))
 	for _, k := range []string{"id", "createdAt", "updatedAt"} {
 		requireString(t, m, k)
 	}
 	requireArray(t, m, "addedLabelIds")
 	requireArray(t, m, "removedLabelIds")
-	for _, k := range []string{"userId", "issueId", "fromPriority", "toPriority",
+	for _, k := range []string{"userId", "issueId", "action", "fromPriority", "toPriority",
 		"fromStateId", "toStateId", "fromEstimate", "toEstimate",
 		"fromAssigneeId", "toAssigneeId", "fromParentId", "toParentId",
-		"relationChanges", "sourceMetadata",
+		"relationChanges", "sourceMetadata", "summary",
 	} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("history field %q missing (must be present, null ok)", k)
@@ -287,13 +296,13 @@ func TestHistoryDataWireContract(t *testing.T) {
 	}
 
 	// status transition
-	m = wirePayload(t, historyData("h2", wireNow, wireNow, str("u1"), "i1", "updated", "status", str("s1"), str("s2")))
+	m = wirePayload(t, historyData("h2", wireNow, wireNow, str("u1"), "i1", "updated", "status", str("s1"), str("s2"), nil))
 	if m["fromStateId"] != "s1" || m["toStateId"] != "s2" {
 		t.Errorf("status transition not mapped: %v", m)
 	}
 
 	// label transition (JSON arrays in from/to)
-	m = wirePayload(t, historyData("h3", wireNow, wireNow, str("u1"), "i1", "updated", "labels", str(`["l1","l2"]`), str(`["l3"]`)))
+	m = wirePayload(t, historyData("h3", wireNow, wireNow, str("u1"), "i1", "updated", "labels", str(`["l1","l2"]`), str(`["l3"]`), nil))
 	if arr := m["removedLabelIds"].([]any); len(arr) != 2 || arr[0] != "l1" {
 		t.Errorf("removedLabelIds mismatch: %v", m["removedLabelIds"])
 	}
@@ -302,21 +311,37 @@ func TestHistoryDataWireContract(t *testing.T) {
 	}
 
 	// assignee transition
-	m = wirePayload(t, historyData("h4", wireNow, wireNow, str("u1"), "i1", "updated", "assignee", nil, str("u2")))
+	m = wirePayload(t, historyData("h4", wireNow, wireNow, str("u1"), "i1", "updated", "assignee", nil, str("u2"), nil))
 	if m["fromAssigneeId"] != nil || m["toAssigneeId"] != "u2" {
 		t.Errorf("assignee transition not mapped: %v", m)
 	}
 
 	// priority transition (numeric, incl. out-of-domain 5)
-	m = wirePayload(t, historyData("h5", wireNow, wireNow, str("u1"), "i1", "updated", "priority", str("2"), str("5")))
+	m = wirePayload(t, historyData("h5", wireNow, wireNow, str("u1"), "i1", "updated", "priority", str("2"), str("5"), nil))
 	if m["fromPriority"] != float64(2) || m["toPriority"] != float64(5) {
 		t.Errorf("priority transition not mapped: %v", m)
 	}
 
 	// creation
-	m = wirePayload(t, historyData("h6", wireNow, wireNow, str("u1"), "i1", "created", "status", nil, str("s1")))
+	m = wirePayload(t, historyData("h6", wireNow, wireNow, str("u1"), "i1", "created", "status", nil, str("s1"), nil))
 	if m["toStateId"] != "s1" {
 		t.Errorf("created must set toStateId: %v", m)
+	}
+
+	// handoff (D1): assignee transition + summary note; summary must be
+	// present (null) on every non-handoff row and carry the note here.
+	m = wirePayload(t, historyData("h7", wireNow, wireNow, str("a1"), "i1", "handoff", "assignee", str("a1"), str("a2"), str("found the bug")))
+	if m["action"] != "handoff" {
+		t.Errorf("handoff action not carried: %v", m["action"])
+	}
+	if m["fromAssigneeId"] != "a1" || m["toAssigneeId"] != "a2" {
+		t.Errorf("handoff assignee transition not mapped: %v", m)
+	}
+	if m["summary"] != "found the bug" {
+		t.Errorf("handoff summary not carried: %v", m["summary"])
+	}
+	if m["fromStateId"] != nil || m["toStateId"] != nil {
+		t.Errorf("handoff must not invent state values: %v", m)
 	}
 }
 

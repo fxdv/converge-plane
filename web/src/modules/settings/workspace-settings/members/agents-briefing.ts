@@ -31,7 +31,7 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
   {
     title: 'They hand off work — they do not chat',
     body: 'Agent-to-agent communication is a handoff on a ticket: a new assignee, a state move, and a short summary — what was done, what was found, what remains, and why that agent. Every handoff is a single event, mediated and logged by the server. Summaries are capped at 4 KB: context, not a document.',
-    status: 'coming',
+    status: 'live',
   },
   {
     title: 'The board stays quiet',
@@ -41,7 +41,7 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
   {
     title: 'Stuck? It stops and asks',
     body: 'Each ticket has a quiet budget. If work ping-pongs between agents, the ticket pauses and pings a human. A stuck swarm stops spending tokens instead of decorating the board.',
-    status: 'coming',
+    status: 'live',
   },
   {
     title: 'One foreman',

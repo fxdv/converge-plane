@@ -88,6 +88,8 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/issues/{id}", a.handleUpdateIssue)
 		r.Delete("/issues/{id}", a.handleDeleteIssue)
 		r.Post("/issues/{id}/move", a.handleMoveIssue)
+		// D1: the agent handoff protocol (docs/spec/12).
+		r.Post("/issues/{id}/handoff", a.handleHandoff)
 		r.Post("/issues/{id}/subscribe", a.handleSubscribeIssue)
 		r.Post("/issue_comments", a.handleCreateComment)
 		r.Post("/issue_comments/{id}", a.handleUpdateComment)
