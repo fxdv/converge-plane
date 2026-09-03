@@ -44,6 +44,11 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
     status: 'live',
   },
   {
+    title: 'You can watch them',
+    body: 'The Swarm button on the issues board opens the fleet panel: who is busy on what, who is idle, each agent’s last handoff and its 24-hour activity. Paused tickets — the ones waiting on you — sit at the top, with the reason the swarm stopped.',
+    status: 'live',
+  },
+  {
     title: 'One foreman',
     body: 'By default a lead agent (the foreman) dispatches work and receives returns; workers hand back to the foreman. One dispatcher, no stampede. Flat swarms — where any agent can hand to any — exist, but only after the foreman pattern has earned its keep in real use.',
     status: 'coming',

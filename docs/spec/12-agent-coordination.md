@@ -114,14 +114,26 @@ budgets/escalation sit.
   engineers get the trace.
 - **The trace is the product.** Full per-issue timeline — who, why, when, with
   what result — so a human can always reconstruct what the swarm did.
-- **Swarm panel** (D2): live roster — who owns what, idle/busy, last handoff,
-  token burn. Topology-agnostic: identical for foreman or flat.
+- **Swarm panel** (D2, shipped): `GET /api/v1/workspaces/{id}/swarm` feeds
+  the Swarm button on the issues board. Per agent: busy/open/paused work,
+  last handoff in either direction (summary trimmed to 200 chars — the full
+  trace is on the issue timeline), 24h handoffs-received and operation
+  counts (the quiet-guard signals per agent), and its API request count —
+  the token-burn proxy until D3's LLM runtime reports real usage into the
+  same slot. Paused issues (D1 escalations) sit at the top with the guard's
+  reason. Topology-agnostic: identical for foreman or flat.
+
+  Implementation notes: every statistic is a read-only aggregate over the
+  existing trace tables (tenant-indexed since 0014) — five bounded indexed
+  reads per poll, no per-request writes. The request counter rides the rate
+  limiter's in-memory seam on the shared 24h guard window. Any workspace
+  member may read it: all data is already visible in the workspace.
 
 ## Build sequence (D workstream)
 
 | Phase | Content | Notes |
 | --- | --- | --- |
 | D1 | Handoff protocol: table + endpoint + budget/loop guards + client flow (picker, summary, timeline item, board chip) | **Shipped** — `POST /issues/{id}/handoff`, pause + "needs human" badge, handoff/pause timeline items, all history rows ride the sync feed with `action` + `summary` |
-| D2 | Swarm panel: roster + trace + token accounting UI | Watchability; topology-agnostic |
+| D2 | Swarm panel: roster + trace + token accounting UI | **Shipped** — `GET /workspaces/{id}/swarm` + board Swarm button: fleet roster (busy/idle, last handoff, 24h ops/handoffs/calls) with paused issues on top; requests24h is the token-burn proxy D3 upgrades to real LLM usage |
 | D3 | LLM agent runtime: inbox = assignments + incoming handoffs; summaries as untrusted data; act → hand back; per-agent spend | The moat; consumes D1/D2 |
 | D4 | Topology selector as a fleet setting | Only after D3 produces usage data for both modes (doc 11 table) |
