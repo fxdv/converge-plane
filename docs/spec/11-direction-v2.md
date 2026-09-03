@@ -128,8 +128,8 @@ Documents updated: docker-compose.yaml, this document
 | A2 | Wire-contract tests: server Go tests for every model's I/U/D payload + a client MST replay harness — makes A1 a permanent guarantee (CI currently runs `go test ./...` against zero test files) | v1 acceptance |
 | A3 | Real invite email (SMTP) + production transport flags in the deploy guide (dev magic-link only today) | v1 acceptance |
 | C | Multi-instance: shared broker (NATS/Redis) behind the `Broadcaster` seam + distributed rate limit — the delta endpoint keeps such a deployment *correct* until then | before horizontal scale |
-| D1 | Handoff protocol (doc 12): `issue_handoffs` + `POST /issues/{id}/handoff` + quiet budget/loop guard + client handoff flow, timeline item, board chip — server-first | **Done** — shipped with pause + "needs human" badge; next is D2 |
-| D2 | Swarm panel: live roster, handoff trail, token burn — topology-agnostic watchability | post-v1 |
+| D1 | Handoff protocol (doc 12): `issue_handoffs` + `POST /issues/{id}/handoff` + quiet budget/loop guard + client handoff flow, timeline item, board chip — server-first | **Done** — shipped with pause + "needs human" badge; next is D3 |
+| D2 | Swarm panel: live roster, handoff trail, token burn — topology-agnostic watchability | **Done** — Swarm button on the issues board: fleet roster (busy/idle, last handoff, 24h accounting) with paused issues on top; request-count burn proxy until D3 |
 | D3 | LLM agent runtime: inbox = assignments + incoming handoffs, summaries as untrusted data, act → hand back, per-agent spend | post-v1 |
 | D4 | Topology selector as a fleet setting (Settings → Agents) | v1.1+ — only after D3 yields usage data for both modes (doc 12) |
 | B | R-9 client-state rewrite (drop IndexedDB + sequence-delta for server-authoritative + bounded cache) — explicitly **v1.1, not pre-release**: the sync layer is load-bearing and was just stabilized (M6 sync fix); rewriting it is churn with no user-visible return | v1.1 |
