@@ -1,4 +1,6 @@
 // swarm.go — D2: the swarm panel (docs/spec/12).
+// spec cs:swarm:panel
+// spec cs:swarm:metrics
 //
 // GET /api/v1/workspaces/{id}/swarm serves the issues board's swarm
 // panel: a live fleet roster (who owns what, busy/idle, last handoff,

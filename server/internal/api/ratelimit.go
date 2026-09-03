@@ -1,4 +1,5 @@
 // ratelimit.go — per-account token-bucket rate limiting (M6 hardening).
+// spec cs:arch:seams
 //
 // A swarm of agents is an intentional flood vector the single-instance
 // API must absorb without degradation. The limiter bounds each account

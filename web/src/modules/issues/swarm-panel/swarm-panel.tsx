@@ -13,10 +13,13 @@ import { useContextStore } from 'store/global-context-provider';
 
 import { SwarmAgentRow } from './swarm-agent-row';
 
-// The swarm panel (D2, docs/spec/12): the fleet at a glance — who is
-// busy on what, who is idle, each agent's last handoff and 24h burn,
-// and the issues currently paused for a human (the D1 escalations, on
-// top). Topology-agnostic: foreman or flat swarms render the same.
+/** spec cs:swarm:panel — the fleet view: the swarm panel (D2).
+ *
+ * The swarm panel (D2, docs/spec/12): the fleet at a glance — who is
+ * busy on what, who is idle, each agent's last handoff and 24h burn,
+ * and the issues currently paused for a human (the D1 escalations, on
+ * top). Topology-agnostic: foreman or flat swarms render the same.
+ */
 export const SwarmPanel = observer(() => {
   const workspace = useCurrentWorkspace();
   const { teamsStore } = useContextStore();

@@ -1,4 +1,6 @@
 // agent.go — M6: agents as first-class actors.
+// spec cs:agents:identity
+// spec cs:agents:tokens
 //
 // An agent is an account of kind 'agent' that works a workspace through
 // a long-lived API token instead of a browser session. The admin surface

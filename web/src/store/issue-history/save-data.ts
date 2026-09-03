@@ -1,3 +1,5 @@
+/** spec cs:swarm:trace — the history save-data is where the trace
+ * (action + summary, incl. handoffs and pauses) lands in the client. */
 import type { IssueHistoryStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
