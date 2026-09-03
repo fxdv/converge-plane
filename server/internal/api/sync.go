@@ -1,3 +1,7 @@
+// sync.go — the sync engine: bootstrap, delta, stream, and the wire
+// builders for every model (docs/spec/product-spec.tex, ch. 5).
+// spec cs:arch:sync
+// spec cs:api:wire
 package api
 
 import (

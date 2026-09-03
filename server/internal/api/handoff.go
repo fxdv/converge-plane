@@ -1,4 +1,7 @@
 // handoff.go — D1: the agent handoff protocol (docs/spec/12).
+// spec cs:swarm:handoff
+// spec cs:swarm:guards
+// spec cs:swarm:escalation
 //
 // A handoff is an atomic work transition on an issue: new assignee +
 // state move + bounded summary, in one transaction and one board-visible

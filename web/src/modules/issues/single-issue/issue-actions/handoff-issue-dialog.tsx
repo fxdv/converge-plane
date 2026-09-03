@@ -42,6 +42,8 @@ interface HandoffIssueDialogProps {
 }
 
 /**
+ * spec cs:swarm:handoff
+ *
  * D1: hand off the issue to another agent (docs/spec/12). The picker
  * offers the workspace's active agents and the team's workflow states;
  * the summary is the bounded context the next agent works from.

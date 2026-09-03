@@ -1,6 +1,7 @@
 // Package api assembles the application HTTP API: the Supertokens
 // compatible auth routes plus the Converge /api/v1 endpoints consumed by
 // the web client.
+// spec cs:api:rest
 package api
 
 import (
