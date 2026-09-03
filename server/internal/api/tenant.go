@@ -128,6 +128,8 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/workspaces/invite_action", a.handleInviteAction)
 		r.Post("/workspaces/suspend", a.handleSuspendMember)
 		// M6: agent actors (swarm-capable machine members).
+		// D2: the swarm panel's fleet roster (read-only, any member).
+		r.Get("/workspaces/{id}/swarm", a.handleSwarmStatus)
 		r.Post("/workspaces/{id}/agents", a.handleCreateAgent)
 		r.Get("/workspaces/{id}/agents", a.handleListAgents)
 		r.Post("/workspaces/{id}/agents/{accountId}/token", a.handleRotateAgentToken)
