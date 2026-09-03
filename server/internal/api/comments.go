@@ -75,6 +75,9 @@ func (a *API) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	if !a.agentPausedGuard(w, p, row) {
+		return
+	}
 	if req.ParentID != "" && !a.commentInIssue(ctx, req.ParentID, row.ID) {
 		writeError(w, http.StatusUnprocessableEntity, "parentId is not a comment on this issue")
 		return
@@ -156,6 +159,9 @@ func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	if !a.agentPausedGuard(w, p, row) {
+		return
+	}
 	if req.ParentID != "" && !a.commentInIssue(ctx, req.ParentID, row.ID) {
 		writeError(w, http.StatusUnprocessableEntity, "parentId is not a comment on this issue")
 		return
@@ -208,9 +214,12 @@ func (a *API) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
-	c, _, workspaceID, _, _, ok := a.commentAccess(ctx, p, id)
+	c, row, workspaceID, _, _, ok := a.commentAccess(ctx, p, id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !a.agentPausedGuard(w, p, row) {
 		return
 	}
 

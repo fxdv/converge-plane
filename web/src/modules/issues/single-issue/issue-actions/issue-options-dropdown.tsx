@@ -9,6 +9,8 @@ import {
 import { ArrowForwardLine, MoreLine } from '@converge/ui/icons';
 import React from 'react';
 
+import { HandoffIssueDialog } from './handoff-issue-dialog';
+
 import { AddIssueRelationModal } from 'modules/issues/components/modals';
 import { MoveIssueToTeamDialog } from 'modules/shortcuts/dialogs';
 
@@ -33,6 +35,7 @@ export function IssueOptionsDropdown() {
   const [deleteIssueDialog, setDeleteIssueDialog] = React.useState(false);
 
   const [moveIssueDialog, setMoveIssueDialog] = React.useState(false);
+  const [handoffDialog, setHandoffDialog] = React.useState(false);
 
   return (
     <>
@@ -54,6 +57,10 @@ export function IssueOptionsDropdown() {
               <DropdownItem Icon={ArrowForwardLine} title="Move to team" />
             </DropdownMenuItem>
           )}
+
+          <DropdownMenuItem onClick={() => setHandoffDialog(true)}>
+            <DropdownItem Icon={ArrowForwardLine} title="Hand off to agent…" />
+          </DropdownMenuItem>
 
           <RelatedDropdownItems
             setRelatedModal={setRelatedModal}
@@ -80,6 +87,7 @@ export function IssueOptionsDropdown() {
         open={moveIssueDialog}
         setOpen={setMoveIssueDialog}
       />
+      <HandoffIssueDialog open={handoffDialog} onOpenChange={setHandoffDialog} />
     </>
   );
 }

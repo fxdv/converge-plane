@@ -35,6 +35,12 @@ export const IssueHistory = types.model({
   toAssigneeId: types.union(types.string, types.null),
   fromParentId: types.union(types.string, types.null),
   toParentId: types.union(types.string, types.null),
+  // D1: what happened (handoff, paused, ...) — the client's
+  // discriminator for summary-carrying rows. Optional: payloads
+  // retained before D1 predate the field.
+  action: types.union(types.string, types.null, types.undefined),
+  // D1: handoff summary note (null on every non-handoff row).
+  summary: types.union(types.string, types.null, types.undefined),
   relationChanges: types.union(types.null, RelationChangeModel),
   sourceMetadata: types.union(types.null, types.string, types.undefined),
 });

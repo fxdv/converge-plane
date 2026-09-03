@@ -32,6 +32,7 @@ export async function saveIssuesData(
         projectId: record.data.projectId,
         projectMilestoneId: record.data.projectMilestoneId,
         sourceMetadata: JSON.stringify(record.data.sourceMetadata),
+        agentPaused: record.data.agentPaused ?? false,
       };
 
       switch (record.action) {

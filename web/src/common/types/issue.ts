@@ -25,6 +25,8 @@ export interface IssueType {
   stateId: string;
   subscriberIds: string[];
   sourceMetadata?: string;
+  // D1: agent swarm paused on this issue ("needs human" badge).
+  agentPaused?: boolean;
 
   projectId?: string;
   cycleId?: string;
@@ -57,6 +59,10 @@ export interface IssueHistoryType {
   toAssigneeId?: string;
   fromParentId?: string;
   toParentId?: string;
+  // D1: what happened (handoff, paused, ...) + the handoff summary
+  // note (present on handoff rows, null otherwise).
+  action?: string | null;
+  summary?: string | null;
   relationChanges?: {
     isDeleted?: boolean;
     issueId?: string;

@@ -373,6 +373,7 @@ const issueColumns = `
 		i.id, i.team_id, i.number, i.priority, i.sort_order, i.title,
 		i.description, i.status, i.created_at, i.updated_at,
 		i.created_by, i.assignee_id, i.parent_id, i.status_id,
+		i.agent_paused,
 		coalesce((select array_agg(il.label_id) from issue_labels il where il.issue_id = i.id), '{}'),
 		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}')`
 
@@ -388,6 +389,9 @@ type issueRow struct {
 	CreatedByID, AssigneeID *string
 	ParentID, StatusID      *string
 	LabelIDs, Children      []string
+	// AgentPaused is the D1 escalation flag: agents may not act on a
+	// paused issue, humans act freely and resume it.
+	AgentPaused bool
 }
 
 // issueData serializes an issue row in the exact shape of the client's
@@ -418,6 +422,7 @@ func (a *API) issueData(r issueRow) map[string]any {
 		"projectMilestoneId": nil,
 		"sourceMetadata":     nil,
 		"children":           r.Children,
+		"agentPaused":        r.AgentPaused,
 	}
 }
 
@@ -428,7 +433,7 @@ func (a *API) issueByID(ctx context.Context, id string) (issueRow, error) {
 		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.LabelIDs, &r.Children); err != nil {
+		&r.AgentPaused, &r.LabelIDs, &r.Children); err != nil {
 		return r, err
 	}
 	return r, nil
@@ -451,7 +456,7 @@ func (a *API) collectIssues(ctx context.Context, workspaceID string, emit emitFn
 		if err := rows.Scan(&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 			&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 			&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-			&r.LabelIDs, &r.Children); err != nil {
+			&r.AgentPaused, &r.LabelIDs, &r.Children); err != nil {
 			return nil, err
 		}
 		rec, err := emit(r.ID, a.issueData(r))
@@ -518,16 +523,20 @@ func (a *API) collectComments(ctx context.Context, workspaceID string, emit emit
 // historyData maps a generic activity/audit row to the client's
 // IssueHistory shape (pure, so the wire contract is unit-testable;
 // collectHistory feeds it the issue_history columns). Only
-// status/assignee/priority/labels transitions are user-visible in v1.
-func historyData(id string, createdAt, updatedAt time.Time, actorID *string, issueID, action, field string, from, to *string) map[string]any {
+// status/assignee/priority/labels transitions are user-visible in v1;
+// summary carries the handoff note (D1) — null on every other row.
+func historyData(id string, createdAt, updatedAt time.Time, actorID *string, issueID, action, field string, from, to, summary *string) map[string]any {
 	// Every from/to field is union(..., null) without undefined in the
 	// client model, so all of them must be present (null when unset).
 	data := map[string]any{
-		"id":              id,
-		"createdAt":       createdAt.Format(iso),
-		"updatedAt":       updatedAt.Format(iso),
-		"userId":          nullOrEmpty(strval(actorID)),
-		"issueId":         nullOrEmpty(issueID),
+		"id":        id,
+		"createdAt": createdAt.Format(iso),
+		"updatedAt": updatedAt.Format(iso),
+		"userId":    nullOrEmpty(strval(actorID)),
+		"issueId":   nullOrEmpty(issueID),
+		// D1: the client history model needs the action to tell a
+		// handoff from a pause (both carry a summary).
+		"action":          action,
 		"addedLabelIds":   []string{},
 		"removedLabelIds": []string{},
 		"fromPriority":    nil,
@@ -542,6 +551,7 @@ func historyData(id string, createdAt, updatedAt time.Time, actorID *string, iss
 		"toParentId":      nil,
 		"relationChanges": nil,
 		"sourceMetadata":  nil,
+		"summary":         nullOrEmpty(strval(summary)),
 	}
 	switch field {
 	case "status":
@@ -584,7 +594,7 @@ func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitF
 	rows, err := a.pool.Query(ctx, `
 		-- issue_history rows are append-only: created_at doubles as updated_at.
 		select h.id, h.created_at, h.created_at, h.actor_id, h.issue_id,
-		       h.action, h.field, h.from_value, h.to_value
+		       h.action, h.field, h.from_value, h.to_value, h.summary
 		from issue_history h
 		where h.workspace_id = $1
 		order by h.created_at`, workspaceID)
@@ -598,15 +608,15 @@ func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitF
 		var (
 			id, issueID, action, field string
 			actorID                    *string
-			from, to                   *string
+			from, to, summary          *string
 			createdAt, updatedAt       time.Time
 		)
 		if err := rows.Scan(&id, &createdAt, &updatedAt, &actorID, &issueID,
-			&action, &field, &from, &to); err != nil {
+			&action, &field, &from, &to, &summary); err != nil {
 			return nil, err
 		}
 
-		data := historyData(id, createdAt, updatedAt, actorID, issueID, action, field, from, to)
+		data := historyData(id, createdAt, updatedAt, actorID, issueID, action, field, from, to, summary)
 
 		rec, err := emit(id, data)
 		if err != nil {

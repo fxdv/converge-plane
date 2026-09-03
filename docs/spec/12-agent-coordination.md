@@ -44,11 +44,25 @@ on it) and a human is notified. Confirmed default (owner, 2026-09-02):
 pause + notify, not flag-and-continue — a stuck swarm must stop spending
 tokens, not decorate the board.
 
+As shipped (D1), the pause is `issues.agent_paused`: agents get a
+422 on every issue mutation (handoff, update, move, delete, comment);
+humans act freely, and any human mutation on the paused issue resumes
+it — the human's fix is the unblock. The notification surfaces as the
+board's "needs human" badge and a timeline event carrying the guard's
+reason.
+
 ## Data and API
 
 - `issue_handoffs(id, workspace_id, issue_id, from_account_id,
   to_account_id, state_id, summary, created_at)` + a per-issue handoff counter
   for the loop guard.
+
+  **Quiet-guard constants (shipped, D1):** loop = the same account is the
+  handoff **target** ≥3 times in 24 h; budget = ≥50 agent-authored
+  `issue_history` rows on the issue in 24 h; summary cap = 4096 bytes.
+  Both guards read under the issue's per-team advisory lock, in the same
+  transaction that applies the handoff, so two concurrent handoffs cannot
+  race past each other.
 - A handoff is also an `issue_history` row (`action = 'handoff'`) and an
   audit event, so the trace exists in every existing surface.
 - `POST /api/v1/issues/{id}/handoff {toAccountId, stateId, summary}` — the
@@ -107,7 +121,7 @@ budgets/escalation sit.
 
 | Phase | Content | Notes |
 | --- | --- | --- |
-| D1 | Handoff protocol: table + endpoint + budget/loop guards + client flow (picker, summary, timeline item, board chip) | Server-first; builds on M6; small |
+| D1 | Handoff protocol: table + endpoint + budget/loop guards + client flow (picker, summary, timeline item, board chip) | **Shipped** — `POST /issues/{id}/handoff`, pause + "needs human" badge, handoff/pause timeline items, all history rows ride the sync feed with `action` + `summary` |
 | D2 | Swarm panel: roster + trace + token accounting UI | Watchability; topology-agnostic |
 | D3 | LLM agent runtime: inbox = assignments + incoming handoffs; summaries as untrusted data; act → hand back; per-agent spend | The moat; consumes D1/D2 |
 | D4 | Topology selector as a fleet setting | Only after D3 produces usage data for both modes (doc 11 table) |

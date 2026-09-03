@@ -66,6 +66,7 @@ const issue = (
   stateId: 's1',
   subscriberIds: [],
   children: [],
+  agentPaused: false,
   ...over,
 });
 
@@ -142,9 +143,47 @@ describe('Issue model', () => {
     );
     assert.throws(() => Issue.create({ ...issue(), labelIds: null } as never));
   });
+  it('accepts the D1 agentPaused escalation flag (both values)', () => {
+    assert.equal(
+      Issue.create(issue({ agentPaused: true }) as never).agentPaused,
+      true,
+    );
+    assert.equal(Issue.create(issue() as never).agentPaused, false);
+  });
+  it('defaults agentPaused on pre-D1 payloads (outbox retention)', () => {
+    const { agentPaused: _omitted, ...legacy } = issue();
+    assert.equal(Issue.create(legacy as never).agentPaused, false);
+  });
 });
 
 describe('IssueHistory model', () => {
+  it('accepts a D1 handoff row (action + summary)', () => {
+    const node = IssueHistory.create({
+      id: 'h7',
+      createdAt: stamp,
+      updatedAt: stamp,
+      userId: 'a1',
+      issueId: 'i1',
+      action: 'handoff',
+      summary: 'found the bug',
+      addedLabelIds: [],
+      removedLabelIds: [],
+      fromPriority: null,
+      toPriority: null,
+      fromStateId: null,
+      toStateId: null,
+      fromEstimate: null,
+      toEstimate: null,
+      fromAssigneeId: 'a1',
+      toAssigneeId: 'a2',
+      fromParentId: null,
+      toParentId: null,
+      relationChanges: null,
+      sourceMetadata: null,
+    } as never);
+    assert.equal(node.action, 'handoff');
+    assert.equal(node.summary, 'found the bug');
+  });
   it('accepts a fully-null transition (every field present, null)', () => {
     const node = IssueHistory.create({
       id: 'h1',
