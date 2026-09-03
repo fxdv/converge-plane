@@ -64,6 +64,14 @@ services:
       CONVERGE_HTTP_TIMEOUT: ${CONVERGE_HTTP_TIMEOUT:-30s}
       CONVERGE_DB_MIN_CONNS: ${CONVERGE_DB_MIN_CONNS:-2}
       CONVERGE_DB_MAX_CONNS: ${CONVERGE_DB_MAX_CONNS:-20}
+      # Invitation mail; unset host = log driver (messages + link to the
+      # API log). See deploy/README.md → Invitation mail.
+      CONVERGE_SMTP_HOST: ${CONVERGE_SMTP_HOST:-}
+      CONVERGE_SMTP_PORT: ${CONVERGE_SMTP_PORT:-587}
+      CONVERGE_SMTP_USER: ${CONVERGE_SMTP_USER:-}
+      CONVERGE_SMTP_PASS: ${CONVERGE_SMTP_PASS:-}
+      CONVERGE_SMTP_FROM: ${CONVERGE_SMTP_FROM:-}
+      CONVERGE_SMTP_TLS: ${CONVERGE_SMTP_TLS:-starttls}
     ports:
       - "3001:3001"
     healthcheck:

@@ -60,6 +60,20 @@ type Config struct {
 	// RateLimitBurst bounds a short per-account burst above the sustained
 	// rate.
 	RateLimitBurst int64
+	// SMTPHost is the SMTP server for transactional mail (workspace
+	// invitations). Empty selects the log driver: the full message
+	// (including its link) is written to the API log, so a deployment
+	// without an email provider stays invite-able.
+	SMTPHost string
+	// SMTPPort is the SMTP port.
+	SMTPPort int
+	// SMTPUser and SMTPPass authenticate to the SMTP server when set.
+	SMTPUser string
+	SMTPPass string
+	// SMTPFrom is the From: address on outgoing mail.
+	SMTPFrom string
+	// SMTPTLS selects the SMTP transport: starttls, off, implicit.
+	SMTPTLS string
 	// Version is the build version, injected at link time.
 	Version string
 }
@@ -83,6 +97,12 @@ type Config struct {
 //	CONVERGE_RATE_LIMIT_RPS    per-account rps, 0=off (default "10")
 //	CONVERGE_RATE_LIMIT_BURST  per-account burst      (default "50")
 //	CONVERGE_DEV_MODE          true = dev conveniences (magic link in API)
+//	CONVERGE_SMTP_HOST         smtp host, "" = log driver (default "")
+//	CONVERGE_SMTP_PORT         smtp port               (default "587")
+//	CONVERGE_SMTP_USER         smtp auth username      (default "")
+//	CONVERGE_SMTP_PASS         smtp auth password      (default "")
+//	CONVERGE_SMTP_FROM         from address            (default "no-reply@converge.local")
+//	CONVERGE_SMTP_TLS          starttls|off|implicit   (default "starttls")
 func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:          env("CONVERGE_HTTP_ADDR", ":3001"),
@@ -101,6 +121,8 @@ func Load() (Config, error) {
 		CodeTTL:           15 * time.Minute,
 		RateLimitRPS:      10,
 		RateLimitBurst:    50,
+		SMTPPort:          587,
+		SMTPTLS:           "starttls",
 	}
 
 	if v := os.Getenv("CONVERGE_SECURE_COOKIES"); v == "true" {
@@ -108,6 +130,25 @@ func Load() (Config, error) {
 	}
 	if v := os.Getenv("CONVERGE_DEV_MODE"); v == "true" {
 		cfg.DevMode = true
+	}
+	cfg.SMTPHost = os.Getenv("CONVERGE_SMTP_HOST")
+	cfg.SMTPUser = os.Getenv("CONVERGE_SMTP_USER")
+	cfg.SMTPPass = os.Getenv("CONVERGE_SMTP_PASS")
+	cfg.SMTPFrom = os.Getenv("CONVERGE_SMTP_FROM")
+	if v := os.Getenv("CONVERGE_SMTP_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil || port < 1 || port > 65535 {
+			return cfg, fmt.Errorf("invalid CONVERGE_SMTP_PORT %q: expected a port in 1-65535", v)
+		}
+		cfg.SMTPPort = port
+	}
+	if v := os.Getenv("CONVERGE_SMTP_TLS"); v != "" {
+		switch strings.ToLower(v) {
+		case "starttls", "off", "implicit":
+			cfg.SMTPTLS = strings.ToLower(v)
+		default:
+			return cfg, fmt.Errorf("invalid CONVERGE_SMTP_TLS %q: expected starttls, off or implicit", v)
+		}
 	}
 
 	if v := os.Getenv("CONVERGE_SESSION_SECRET"); v != "" {

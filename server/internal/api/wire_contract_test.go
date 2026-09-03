@@ -108,7 +108,7 @@ func TestMemberDataWireContract(t *testing.T) {
 		m := wirePayload(t, a.memberData(memberRow{
 			ID: "m1", Role: c.role, Status: c.status,
 			AccountID: "u1", WorkspaceID: "w1",
-			TeamIDs: nil, // must serialize [] not null
+			TeamIDs:   nil, // must serialize [] not null
 			CreatedAt: wireNow, UpdatedAt: wireNow,
 		}))
 		role := requireString(t, m, "role")
@@ -153,7 +153,7 @@ func TestIssueDataWireContract(t *testing.T) {
 	if v, ok := m["priority"].(float64); !ok || v != 5 {
 		t.Errorf("priority must pass through verbatim (5), got %v", m["priority"])
 	}
-	requireArray(t, m, "labelIds")   // [] not null
+	requireArray(t, m, "labelIds") // [] not null
 	requireArray(t, m, "subscriberIds")
 	requireArray(t, m, "children")
 	if m["dueDate"] != nil {
