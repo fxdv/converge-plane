@@ -1,0 +1,978 @@
+% ============================================================
+% Converge — Product Specification (integrated, typeset)
+% ============================================================
+% The canonical product document: what Converge is, what it does,
+% what it will do, and why it is defensible. It integrates the
+% numbered working contracts (00–12) in post-pivot terms. The
+% numbered documents remain the detailed contracts (screens,
+% journeys, interactions); this document is the authority for
+% product intent.
+%
+% Traceability: every feature carries a \cs{domain:token} tag.
+% Code references the same token with a "spec cs:domain:token"
+% comment; the specsync checker (server/tools/specsync, run in
+% the Go test gate) fails on drift in either direction.
+%
+% Status vocabulary: shipped / in progress / planned / gated / dropped.
+% [needs owner input] marks product judgments awaiting the owner's
+% teaching pass.
+
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.6cm]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  pdftitle={Converge — Product Specification},
+  pdfauthor={Converge},
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Converge — Product Specification}
+\fancyhead[R]{\small v1.0 \textbar\ \texorpdfstring{\today}{}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- traceability tags --------------------------------------
+% Each feature has exactly ONE canonical anchor in the document (\cs,
+% which also sets the label) and any number of reference-only mentions
+% (\csr). The specsync checker enforces this and the code-side
+% "spec cs:..." comments against these tokens.
+\newcommand{\cs}[1]{\,\texttt{\scriptsize[cs:#1]}\label{cs:#1}}
+\newcommand{\csr}[1]{\,\texttt{\scriptsize[cs:#1]}}
+
+% --- status vocabulary --------------------------------------
+\newcommand{\shipped}{\textbf{\textcolor{green!45!black}{shipped}}}
+\newcommand{\inprogress}{\textbf{\textcolor{orange!70!black}{in\ progress}}}
+\newcommand{\planned}{\textbf{\textcolor{blue!50!black}{planned}}}
+\newcommand{\gated}{\textbf{\textcolor{purple!60!black}{gated}}}
+\newcommand{\dropped}{\textbf{\textcolor{red!55!black}{dropped}}}
+
+% --- owner-input marker -------------------------------------
+\newcommand{\owner}[1]{\,\textcolor{red!60!black}{\textbf{[needs owner input: #1]}}}
+
+\begin{document}
+
+\begin{titlepage}
+\begin{center}
+{\Huge\bfseries Converge}\\[0.6cm]
+{\LARGE Product Specification}\\[1.2cm]
+{\large An issue tracker whose boards stay trustworthy
+when agents work them.}\\[1.6cm]
+\begin{tabular}{ll}
+\toprule
+Version & 1.0 (post-pivot, integrated)\\
+Date & \today\\
+Status & \inprogress\ --- owner teaching pass in progress\\
+Scope & Product intent, swarm contract, architecture, roadmap, moat\\
+Integrates & \texttt{docs/spec/00--12} (greenfield corpus, pre-pivot)\\
+License of product & AGPL-3.0-or-later\\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{titlepage}
+\pagenumbering{arabic}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\chapter{Product}
+\label{ch:product}
+
+\section{Statement}
+\cs{product:statement}
+
+For software teams who want machines to do work \emph{on their board},
+Converge is a self-hostable, open-source (AGPL) issue tracker in which
+agents are first-class coworkers.
+
+Converge makes the ordinary issue loop excellent --- capture, triage,
+assign, discuss, complete --- and then adds the property no other tracker
+has: when autonomous agents work the board, the board stays \emph{legible
+and governable}. Every machine action is mediated, attributed, budgeted,
+and traced; a stuck swarm stops and asks a human instead of decorating
+the board.
+
+\section{The pivot}
+\cs{product:pivot}
+
+The product is the revival path of the Tegon codebase (spec 11): the
+Tegon web UI, forked and renamed, with a new Go backend, a maintained
+auth boundary, and PostgreSQL as the only stateful dependency. Tegon is
+evidence of product behavior, not an implementation base; where the two
+differ, this specification controls.
+
+Two deliberate reversals of the pre-pivot corpus:
+
+\begin{itemize}
+\item \textbf{UI provenance.} The greenfield spec demanded original
+  implementation and identity. The pivot adopts the Tegon UI as a
+  starting asset (AGPL-compatible) and rebuilds the backend from scratch.
+\item \textbf{AI posture.} The greenfield spec listed built-in AI
+  (conversational assistant, AI writing, prompt administration, semantic
+  search) as explicit non-goals, and \emph{still} excludes them. What it
+  did not foresee is this product's actual AI surface: \textbf{agents are
+  not a built-in feature --- they are coworkers you bring}
+  (\S\ref{sec:agents-identity}). The server never runs a model, never
+  writes prompts, and never enriches content. It governs machine members:
+  identity, tokens, handoffs, budgets, escalation, and trace. The
+  non-goal stands for \emph{built-in} AI; the swarm is the product.
+\end{itemize}
+
+\section{Positioning}
+\cs{product:positioning}\owner{sharpen the one-paragraph pitch for
+  the README: issue trackers vs.\ Linear (SaaS, closed, no agent
+  governance), vs.\ self-hosted suites (no agent story at all), vs.\
+  agent platforms (no board semantics, no human trace).}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+& \textbf{Commodity trackers} & \textbf{Converge}\\
+\midrule
+Who works the board & humans & humans \emph{and} governed agents\\
+Machine actions & noise, or absent & mediated, attributed, budgeted, traced\\
+Stuck automation & floods the board & pauses, asks a human, resumes on human fix\\
+Watchability & none & fleet panel, per-issue trace, token burn\\
+Data location & vendor SaaS & self-hosted, AGPL, PostgreSQL\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Principles}
+\cs{product:principles}
+
+The pre-pivot principles survive the pivot unchanged; one is added for
+the agent era.
+
+\begin{enumerate}[label=\arabic*.]
+\item \textbf{Issue tracking first.} Every release improves the
+  capture-to-completion loop or makes it safer to operate.
+\item \textbf{Progressive complexity.} A first issue needs a title and a
+  team. Everything else appears only when shipped and relevant.
+\item \textbf{Fast by interaction, simple by architecture.} Dense views,
+  direct editing, optimistic feedback. Database replication into the
+  browser is not.
+\item \textbf{Server-authoritative tenancy.} The authenticated principal
+  and server-side object relations determine access. Client-supplied ids
+  are routing context, never authorization evidence.
+\item \textbf{Auditable mutation.} Security-relevant and user-visible
+  changes produce actor, tenant, object, timestamp, and before/after data.
+  This is the principle the swarm stands on: an agent's work is
+  reconstructable after the fact, exactly like a human's.
+\item \textbf{Predictable degradation.} Search, realtime, mail, or
+  external providers may fail without corrupting the core issue
+  transaction.
+\item \textbf{Small operational footprint.} One artifact, one database.
+  New stateful dependencies need measured justification.
+\item \textbf{No feature theater.} Navigation contains only working
+  capabilities with defined empty, loading, error, and permission states.
+\item \textbf{Machine actors are governed like people.} \emph{(post-pivot,
+  new.)} Every agent has an identity, a credential, a rate limit, an
+  operation budget, and an escalation path. No anonymous automation pool;
+  no agent action without attribution; no swarm behavior without a
+  circuit breaker.
+\end{enumerate}
+
+\section{Explicit non-goals}
+\cs{product:non-goals}
+
+\begin{itemize}
+\item Built-in conversational AI, AI issue writing, prompt/model
+  administration, vector or semantic search (the greenfield exclusion
+  stands for \emph{built-in} AI).
+\item Customer support inbox, CRM people/companies.
+\item Arbitrary remote executable actions or a marketplace; the trusted
+  server never imports third-party code or injects secrets into it.
+\item Full offline-first client database replication.
+\item Hidden administrator impersonation.
+\item Mobile-native applications in the initial roadmap.
+\item Public API stability commitments before the LATER release.
+\end{itemize}
+
+% ============================================================
+\chapter{Personas and Jobs}
+\label{ch:personas}
+
+\cs{persona:set}
+
+The pre-pivot personas survive the pivot. One new persona class appears
+with the swarm: the \emph{agent operator}.
+
+\begin{center}
+\begin{tabular}{@{}lp{0.26\textwidth}p{0.48\textwidth}l@{}}
+\toprule
+\textbf{ID} & \textbf{Persona} & \textbf{Primary need} & \textbf{Status}\\
+\midrule
+P-01 & Contributor & capture, understand, update, discuss work & \shipped\\
+P-02 & Team lead / triage owner & keep work actionable, prioritized, visible & \shipped\\
+P-03 & Workspace owner / admin & teams, access, structure, governance & \shipped\\
+P-04 & Self-host operator & deploy, monitor, back up, upgrade & \shipped\\
+P-05 & Planner / project lead & multi-issue outcomes, time-boxes & \planned\\
+P-06 & Integration admin & bounded external connections & \planned\\
+P-07 & API consumer & stable documented contract & \planned\\
+P-08 & \textbf{Agent operator} & run, watch, and unblock a swarm of agents & \inprogress\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{P-08 — Agent operator}
+\cs{persona:agent-operator}\owner{confirm: is P-08 a distinct persona or a
+  job overlay on P-02/P-03? Drafting it as distinct for now --- the
+  "watches the swarm" job is different enough from triage.}
+
+\textbf{Context:} the human who decided the team runs agents. Usually a
+team lead or admin; spends minutes, not hours, with the system: when
+something pauses, when an agent looks idle, when work needs re-routing.
+
+\begin{center}
+\begin{tabular}{@{}p{0.28\textwidth}p{0.34\textwidth}p{0.28\textwidth}@{}}
+\toprule
+\textbf{Job} & \textbf{Desired outcome} & \textbf{Failure to avoid}\\
+\midrule
+When I start my day, show me swarm health & Paused issues and idle agents
+  surface in one place & A swarm that fails silently off-screen\\
+When a swarm stalls, tell me why & The guard's own words: which loop,
+  which budget & A board of unexplained inaction\\
+When I unblock, resume the work & One human edit resumes the paused issue;
+  the agent picks up & Manual re-assignment theater\\
+When I add capacity, see where it lands & New agent shows in the roster;
+  its first handoff is traceable & Invisible workers\\
+When an agent misbehaves, stop it & Suspend = instant kill switch, token
+  revoked & A runaway spending budget on my board\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The cross-persona jobs of the pre-pivot spec (trust what you can see;
+understand what changed; recover from mistakes; know whether the system
+is working) extend unchanged to agent actions: an agent's work must be
+\emph{as} legible as a human's, or the board loses trust.
+
+% ============================================================
+\chapter{Features}
+\label{ch:features}
+
+The v1 surface as actually shipped, with the greenfield inventory's
+NEXT/LATER rows for the future. Statuses reflect the post-pivot delivery
+record (M1--M6, A1--A3, D1--D2).
+
+\section{Shipped surface}
+\cs{feat:core}
+
+\begin{center}
+% Tags sit inside the Feature cell: the visible tag is the code anchor
+% (specsync), and a widthed column keeps the table on the page.
+\begin{longtable}{@{}p{0.48\textwidth}p{0.30\textwidth}l@{}}
+\toprule
+\textbf{Feature} & \textbf{What it is} & \textbf{Status}\\
+\midrule
+\endhead
+Magic-link sign-in, sessions\cs{feat:auth} & Supertokens-compatible
+  boundary; secure server sessions; 1h access + refresh flow & \shipped\\
+Workspace invitations\cs{feat:invites} & Expiring, revocable,
+  role-scoped; transactional invitation mail (SMTP or log driver) & \shipped\\
+First-run onboarding\cs{feat:onboarding} & Atomic account/workspace/
+  team/default-workflow creation & \shipped\\
+Workspaces\cs{feat:workspaces} & Tenant root; slug routing; member
+  roles (owner/admin/member); suspension & \shipped\\
+Teams\cs{feat:teams} & Workspace-owned; membership; immutable
+  identifier once numbered & \shipped\\
+Issues\cs{feat:issues} & Team-keyed (ENG-42), title/description
+  (sanitized JSON rich text), priority, assignee, labels, parent links,
+  optimistic concurrency, archive lifecycle & \shipped\\
+Workflows\cs{feat:workflows} & Team statuses in six categories
+  (triage, backlog, unstarted, started, completed, canceled) & \shipped\\
+Labels\cs{feat:labels} & Workspace-scoped, colored, multi-assign & \shipped\\
+Comments and replies\cs{feat:comments} & One reply level; author
+  edit/delete; moderation by the right roles & \shipped\\
+Issue history / trace\cs{feat:history} & Append-only actor-attributed
+  rows for every meaningful change --- the trace the swarm builds on &
+  \shipped\\
+Search\cs{feat:search} & PostgreSQL full-text + trigram,
+  permission-scoped, deterministic & \shipped\\
+Saved views\cs{feat:views} & Filter + grouping + display, shared or
+  personal & \shipped\\
+List / Kanban\cs{feat:boards} & Virtualized; group by status, assignee,
+  label, priority, team; drag = one mutation & \shipped\\
+Sync engine\cs{feat:realtime} & Bootstrap / delta / SSE stream;
+  transactional outbox; sequence watermarks; stale-gap recovery &
+  \shipped\\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\section{Agent surface}
+\cs{feat:agents}
+
+\begin{center}
+\begin{longtable}{@{}p{0.48\textwidth}p{0.30\textwidth}l@{}}
+\toprule
+\textbf{Feature} & \textbf{What it is} & \textbf{Status}\\
+\midrule
+\endhead
+Agents as members\csr{agents:identity} & Machine accounts
+  (\texttt{kind=agent}), reserved \texttt{.local} email, workspace and
+  team membership, badges in every surface & \shipped\\
+Agent API tokens\cs{agents:tokens} & Hashed, expiring, revocable,
+  rotatable without dropping a live agent; plaintext shown once &
+  \shipped\\
+Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
+  tokens, agent stops mid-request; per-account rate limit applies &
+  \shipped\\
+Handoff protocol\csr{swarm:handoff} & The only agent-to-agent channel:
+  atomic assignee + state move + bounded summary (\S\ref{sec:handoff}) &
+  \shipped\\
+Quiet guards\csr{swarm:guards} & Per-issue loop + budget circuit
+  breakers; trip = pause, not flag (\S\ref{sec:guards}) & \shipped\\
+Swarm panel\csr{swarm:panel} & Fleet roster: busy/idle, last handoff,
+  24h accounting; paused issues on top (\S\ref{sec:panel}) & \shipped\\
+Agent runtime\csr{swarm:runtime} & Inbox, act, hand back; untrusted
+  summaries; per-agent spend (\S\ref{sec:runtime}) & \planned\\
+Topology policy\csr{swarm:topology} & Foreman (default) / flat;
+  selector gated (\S\ref{sec:topology}) & \inprogress\\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\section{NEXT --- collaboration and planning}
+\cs{feat:next}
+
+From the greenfield inventory, unchanged in intent: projects and derived
+progress; team cycles with rollover; issue hierarchy and
+blocks/related/duplicate relations; attachments; watchers; in-app Inbox
+and notifications; bounded bulk edit; due dates; personal bookmarks.
+Entry gate: the v1 core exit criteria stay green. \owner{confirm NEXT
+  ordering for the Converge line --- the greenfield order (views $\to$
+  relations $\to$ projects $\to$ cycles $\to$ attachments $\to$ inbox
+  $\to$ realtime $\to$ bulk) or should swarm work (D3) land first?}
+
+\section{LATER --- integrations and developer surface}
+\cs{feat:later}
+
+GitHub and Slack connections; issue templates; public API and SDK;
+personal/service tokens; outbound webhooks; authorized export. All
+remain LATER: the agent API (agent tokens against \texttt{/api/v1}) is
+already the de-facto integration contract the swarm runs on.
+
+\section{Dropped}
+\cs{feat:dropped}
+
+Built-in AI assistants, prompt administration, semantic/vector search,
+support/CRM modes, remote executable actions, hidden impersonation.
+Reversal requires a specification change, not a feature flag.
+
+% ============================================================
+\chapter{Domain and Authorization}
+\label{ch:domain}
+
+\section{Tenancy}
+\cs{domain:tenancy}
+
+Every persisted domain object has one authoritative workspace, directly
+or through an immutable parent relation (issue $\to$ team $\to$
+workspace; comment/history/handoff $\to$ issue). Object lookup and
+mutation occur through tenant-scoped queries; ``load by id, then hope''
+is prohibited. Team-restricted objects require workspace access
+\emph{and} team access, unless the disclosed owner/admin policy grants
+workspace-wide visibility.
+
+\section{Principals}
+\cs{domain:principals}
+
+Two principal kinds, one authorization layer:
+
+\begin{itemize}
+\item \textbf{Human} --- authenticated by web session (magic link);
+  workspace role owner / admin / member; lifecycle
+  active / invited / suspended.
+\item \textbf{Agent} --- authenticated by API token
+  (\texttt{conv\_agent\_…}); always workspace role \texttt{agent}
+  (machine marker); lifecycle active / suspended; may hold team
+  memberships.
+\end{itemize}
+
+The session middleware resolves \emph{exactly one} principal per request
+from session material --- never from request parameters. Every mutation
+handler re-derives authorization from that principal. Agent principals
+are distinguishable from human principals in every record (history,
+audit, handoff, rate limit, usage) --- this distinction is what makes the
+quiet guards, escalation, and burn reporting possible
+(\S\ref{sec:guards}).
+
+\section{Operation policy}
+\cs{domain:policy}
+
+Authorization is per-operation, checked server-side, and uniformly
+applied to HTTP reads, mutations, realtime subscriptions, and agent
+mutations. Representative rules:
+
+\begin{itemize}
+\item Create/update/move/delete issue: team member (team access + active
+  membership); workspace admin everywhere in the workspace.
+\item Handoff: current assignee \emph{or} workspace admin; target must be
+  an active agent member.
+\item Agent mutations on a paused issue: rejected (the issue is waiting
+  on a human). Human mutations: always allowed; a human mutation resumes
+  a paused issue.
+\item Agent administration (create, token rotation/revocation,
+  suspend): workspace admin only.
+\item Swarm status: any active workspace member --- the payload contains
+  no information a member could not already assemble from the sync feed.
+\item Suspension of any member (human or agent): admin; revokes tokens
+  and sessions immediately; audited.
+\end{itemize}
+
+% ============================================================
+\chapter{API and Sync Contract}
+\label{ch:api}
+
+\section{REST surface}
+\cs{api:rest}
+
+A single versioned \texttt{/api/v1} surface, consumed identically by the
+web client and by agents. Shipped endpoints:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Area} & \textbf{Endpoints (shipped)}\\
+\midrule
+Auth & code sign-in / consume / refresh, session revocation, user profile\\
+Workspaces & onboarding, update, preferences, invite, suspend member\\
+Teams & CRUD, member add/remove, preferences\\
+Workflows & per-team status CRUD\\
+Labels & CRUD\\
+Issues & create, update, delete, move, subscribe, \textbf{handoff},
+  swarm status\\
+Comments & CRUD, replies\\
+Agents & create, list, token rotate / revoke, delete\\
+Search & full-text + key search, permission-scoped\\
+Sync & bootstrap, delta, stream (SSE)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every mutation follows one shape: \textbf{validate $\to$ tenant-scoped
+transaction (with per-team advisory lock where ordering matters) $\to$
+outbox record $\to$ commit $\to$ broadcast}. The response and the sync
+feed speak the same vocabulary.
+
+\section{Sync engine}
+\cs{arch:sync}
+
+\begin{itemize}
+\item \textbf{Bootstrap} returns the full tenant object set (nine model
+  collectors, run concurrently) plus the server watermark.
+\item \textbf{Delta} returns outbox records newer than the client
+  watermark; if the client cursor predates the retained window, the delta
+  is marked \texttt{stale} and the client falls back to full bootstrap.
+  Gap recovery is structural, not best-effort.
+\item \textbf{Stream} is an SSE channel fanning out committed change
+  records to authorized subscribers; re-subscription re-checks
+  authorization.
+\item The client applies records to MST models and a bounded IndexedDB
+  cache; the server remains authoritative.
+\end{itemize}
+
+\section{Wire discipline}
+\cs{api:wire}
+
+The client's MST models are the contract: required fields always present,
+client-nullable fields explicit \texttt{null} (never missing), required
+arrays an empty list (never \texttt{null}), literal enums within the client
+vocabulary (the \texttt{OWNER$\to$ADMIN} normalization), DELETE records
+carry \texttt{\{id\}}. Both sides pin it permanently: Go wire-contract
+tests (server) and an MST replay harness (client) fail CI on drift.
+
+\section{Concurrency and safety}
+\cs{arch:locks}
+
+\begin{itemize}
+\item Per-team advisory locks serialize issue mutations (numbering,
+  handoff guards) so concurrent writers cannot race past each other.
+\item Issues carry a monotonic version (optimistic concurrency);
+  create is idempotent by client id.
+\item Per-account token-bucket rate limiting bounds any single principal
+  (human or agent); the same counter feeds swarm burn reporting
+  (\S\ref{sec:metrics}).
+\item Every security-relevant action writes an audit row: actor, tenant,
+  object, timestamp, kind.
+\end{itemize}
+
+% ============================================================
+\chapter{Agents and Swarm}
+\label{ch:swarm}
+
+This is the part of Converge that does not exist in any other tracker.
+The chapter is the coordination contract the agent runtime builds on,
+and is deliberately \textbf{topology-agnostic}: the protocol is small
+(one table, one endpoint) and topology is a policy layer over it.
+
+\section{Agent identity}
+\label{sec:agents-identity}
+\cs{agents:identity}
+
+An agent is a full workspace member with a machine identity:
+
+\begin{itemize}
+\item Its own account (\texttt{kind=agent}) with a deterministic reserved
+  \texttt{.local} email (never routed or delivered) --- the email's unique
+  constraint is a global de-duplicator.
+\item One or more hashed API tokens (plaintext shown once; rotation keeps
+  old tokens alive until individually revoked, so a rotation never drops
+  an agent mid-swarm).
+\item Team memberships; workspace role \texttt{agent} (machine marker in
+  every client surface).
+\item Suspension as kill switch: tokens revoked, account flagged; the
+  agent's next request 401s at the middleware.
+\item Past work keeps its attribution forever (history and handoffs
+  reference the account, which survives deletion as \texttt{.local}
+  tombstones).
+\end{itemize}
+
+Agents are governed by the same policy layer as humans
+(\S\ref{cs:domain:policy}), plus the swarm-specific constraints in this
+chapter. There is no special ``automation'' permission pool: an agent
+does exactly what its role allows, and no more.
+
+\section{The handoff protocol}
+\label{sec:handoff}
+\cs{swarm:handoff}
+
+All agent-to-agent communication is a server-mediated \textbf{handoff} on
+an issue. No direct channels, no chat, no DM: a noise generator with no
+board semantics. If two agents need shared context, the artifact is a
+sub-issue or a note attached to work.
+
+Three rules:
+
+\begin{enumerate}[label=Rule \arabic*.]
+\item \textbf{Mediated channel only.} Every handoff is a request from an
+  authenticated principal; the server stamps the actor from the session,
+  never from the body. Trust comes from mediation, attribution, and
+  auditability --- not from the agents.
+\item \textbf{An atomic work transition, not a message.} One operation,
+  one board-visible event: \emph{new assignee + state move + bounded
+  summary}. The summary is the context the next agent works from: what
+  was done, what was found, what remains, why that agent. Size-capped at
+  \textbf{4096 bytes} server-side --- the cap is also the consumer's
+  prompt-injection budget (Rule~3 of the runtime, \S\ref{sec:runtime}).
+\item \textbf{Quiet budget and loop guard.} Agent operations on an issue
+  are budgeted per 24h window; when handoffs cycle back to the same agent
+  past the threshold, the issue freezes into \texttt{needs-human}
+  (\S\ref{sec:guards}).
+\end{enumerate}
+
+\subsection{Wire format}
+
+\begin{verbatim}
+POST /api/v1/issues/{id}/handoff
+{
+  "toAccountId": "uuid of the target agent",
+  "stateId":     "uuid of the team workflow status, or "" to keep",
+  "summary":     "…bounded, <= 4096 bytes…"
+}
+\end{verbatim}
+
+Server behavior, in one transaction under the issue's team lock:
+
+\begin{enumerate}
+\item validate: summary required and $\le$ 4 KB; target is an \emph{active
+  agent member}, not the requester; state (if given) is a team status;
+  requester is the current assignee or a workspace admin; the issue is not
+  paused.
+\item quiet guards (Rule 3): if tripped $\to$ \textbf{pause the issue}
+  (committed) and reject the handoff with the guard's reason;
+\item otherwise apply: \texttt{issue\_handoffs} trace row +
+  \texttt{issue\_history} row (\texttt{action=handoff}, summary carried)
+  + assignee/state update + outbox + audit; commit; broadcast.
+\end{enumerate}
+
+A handoff is also a normal history row, so the trace exists in every
+existing surface: the timeline, the feed, the delta, search-adjacent
+history. One operation, one event, everywhere.
+
+\section{Quiet guards and escalation}
+\label{sec:guards}
+\cs{swarm:guards}
+
+Ping-pong is the signature of an uncoordinated swarm (a ``zerg''). Two
+independent circuit breakers, evaluated under the team lock in the same
+transaction as the handoff, over one shared \textbf{24-hour window}:
+
+\begin{center}
+\begin{tabular}{@{}lp{0.38\textwidth}p{0.38\textwidth}@{}}
+\toprule
+\textbf{Guard} & \textbf{Trips when} & \textbf{Effect}\\
+\midrule
+Loop & the same account is a handoff \emph{target}
+  $\ge 3$ times on the issue in 24h & the issue \emph{pauses}; the
+  offending handoff is rejected with the reason\\
+Operation budget & $\ge 50$ agent-authored history rows on the issue in
+  24h & same\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Escalation is pause + notify, not flag-and-continue}
+(owner-confirmed): a stuck swarm must \emph{stop spending}, not decorate
+the board.
+
+\cs{swarm:escalation} On pause the server: sets the issue's pause flag;
+writes a \texttt{paused} history row whose summary \emph{is} the guard's
+reason (the timeline shows \emph{why} the swarm stopped); writes an audit
+event; broadcasts. While paused, every agent mutation (handoff, update,
+move, delete, comment) is rejected with a 422 pointing at the human.
+\textbf{Any human mutation on the issue resumes it} --- the human's fix is
+the unblock. The client renders the pause as a ``needs human'' badge on
+the card and a timeline event, and lists paused issues at the top of the
+swarm panel (\S\ref{sec:panel}).
+
+\owner{guard constants (3 / 50 / 24h / 4KB) are currently code
+  constants; do they become operator-configurable product knobs in v1, or
+  fixed-and-documented until usage data says otherwise?}
+
+\section{Topologies}
+\label{sec:topology}
+\cs{swarm:topology}
+
+A handoff is always \emph{from $\to$ to $+$ summary}. A topology only
+changes \emph{policy} on that one primitive: who may dispatch, the allowed
+handoff graph, and where budgets and escalation sit.
+
+\begin{center}
+\begin{tabular}{@{}p{0.18\textwidth}p{0.50\textwidth}p{0.24\textwidth}@{}}
+\toprule
+\textbf{Topology} & \textbf{Policy} & \textbf{Status}\\
+\midrule
+Foreman (default) & One lead agent dispatches work, accepts returns, and
+  is the sole handoff target for workers. Structurally no zerg; loop
+  detection in one place. The dispatch point carries its own budget +
+  escalation (foreman-stalled $\to$ human). & \planned\ (D3 layers the
+  dispatch policy on the shipped endpoint)\\
+Flat & Any agent may hand to any agent ($N\times(N-1)$ edges); guards per
+  edge; combinatorial noise and token spread. & \gated\ --- ships only
+  after foreman has real usage time and the data favors it\\
+Selector & A user-facing choice (Settings $\to$ Agents), fleet-level,
+  consequences spelled out on the settings screen --- never a board or
+  issue control. & \gated\ (D4: after D3 yields usage data for both
+  modes)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+An env/seed-level mode on the agent runtime is acceptable as experiment
+infrastructure; it is not product UI.
+
+\section{Swarm panel}
+\label{sec:panel}
+\cs{swarm:panel}
+
+The board's \emph{Swarm} button opens the fleet view (shipped):
+
+\begin{itemize}
+\item \textbf{Needs human} (top): every paused issue with the guard's
+  reason; one click opens the issue.
+\item \textbf{Fleet roster} per agent: busy/idle/suspended dot; open +
+  paused issue counts; last handoff in either direction (counterpart,
+  issue, relative time, trimmed summary); 24h accounting (operations,
+  handoffs received, API calls). Busy first, then idle, then suspended.
+\end{itemize}
+
+The panel is topology-agnostic --- foreman and flat swarms produce the
+identical payload --- and costs the API five bounded indexed reads per
+poll; it scales with the roster, not the work.
+
+\section{Trace disclosure}
+\cs{swarm:trace}\owner{this is the section you flagged --- confirm the
+  disclosure matrix, especially what agents may read.}
+
+The trace is the product: a human must always be able to reconstruct
+what the swarm did, who did what, why, and at what cost.
+
+\begin{center}
+\begin{tabular}{@{}p{0.28\textwidth}p{0.18\textwidth}p{0.42\textwidth}@{}}
+\toprule
+\textbf{Trace surface} & \textbf{Humans} & \textbf{Agents}\\
+\midrule
+Issue timeline (all history: changes,
+  comments, handoffs, pauses) & full read & own issue's history; received
+  handoff summaries fenced as \emph{untrusted data} (\S\ref{sec:runtime})\\
+Swarm panel (roster, burn, paused) & full read & no read path (the panel
+  is a human instrument)\\
+Handoff summaries authored by others & full read & only as inbound
+  context for the issue they were handed; never as instructions\\
+Token burn / cost & full read & own totals only (no other-agent spend
+  visible)\\
+Audit events & admin read & none\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The asymmetry is deliberate: agents get the minimum context their work
+requires, in a form the server sanitizes and caps; humans get the full
+record. A swarm that could read everything about each other would
+coordinate through channels we cannot audit.
+
+\section{Metrics}
+\label{sec:metrics}
+\cs{swarm:metrics}
+
+\textbf{Shipped} (swarm panel, per agent, 24h window): API request count
+(the token-burn proxy), agent-authored operations, handoffs received; per
+issue: paused flag + guard reason.
+
+\textbf{Future} (D3 and beyond) \owner{ratify the list; these are the
+  candidates from the runtime work}:
+per-agent model-token spend (replaces the request proxy in the same slot)
+$\cdot$ cost per completed issue $\cdot$ handoff-graph volume and
+longest chain $\cdot$ pause rate and mean time-to-human-resume $\cdot$
+budget consumption curves per agent/team $\cdot$ agent share of completed
+work $\cdot$ loop-detection hit rate per topology.
+
+\section{Agent runtime}
+\label{sec:runtime}
+\cs{swarm:runtime}\planned\ \owner{D3 --- confirm scope: the
+  deterministic-fallback runtime (inbox $\to$ act $\to$ hand back) is
+  what this environment can build; the LLM wiring is the slot it plugs
+  into.}
+
+The runtime is what the protocol is for. Its contract:
+
+\begin{itemize}
+\item \textbf{Inbox} = issues assigned to the agent + incoming handoffs
+  (its work and its context arrive through one mediated channel).
+\item \textbf{Untrusted summaries.} A summary authored by agent A becomes
+  part of agent B's context: a prompt-injection vector. The runtime treats
+  received summaries as \emph{data, never instructions} --- the 4 KB cap
+  is the injection budget, and summaries are sanitized server-side.
+\item \textbf{Act $\to$ hand back.} The agent works its issue, then either
+  completes it (terminal state) or hands off with a summary per Rule 2.
+  It never pings another agent directly; it never posts to a channel.
+\item \textbf{Per-agent spend.} The runtime reports real model-token
+  usage into the panel's burn slot; budgets and escalation apply as for
+  any principal.
+\item \textbf{Deterministic fallback.} Without an LLM backend, the same
+  runtime drives the existing heuristic (advance one open issue per
+  cycle, comment the step) --- the swarm demonstrably works on the
+  protocol before any model is attached.
+\end{itemize}
+
+% ============================================================
+\chapter{Architecture}
+\label{ch:arch}
+
+\section{Shape}
+\cs{arch:shape}
+
+A modular monolith: one Go artifact serving web, API, and in-process
+workers; PostgreSQL as the only stateful dependency; a Next.js client
+(mobx-state-tree + bounded IndexedDB cache). Configuration is
+environment-only; a reverse proxy provides TLS. No Redis, no queue
+broker, no vector store --- in v1.
+
+\section{Seams}
+\cs{arch:seams}
+
+State that lives in memory today is deliberately isolated behind seams so
+a multi-instance deployment (track C, pre-scale) moves it to a shared
+broker without touching domain code:
+
+\begin{center}
+\begin{tabular}{@{}p{0.20\textwidth}p{0.38\textwidth}p{0.36\textwidth}@{}}
+\toprule
+\textbf{Seam} & \textbf{In-memory (v1)} & \textbf{Multi-instance (C)}\\
+\midrule
+Broadcast fan-out & in-process broadcaster, per-workspace subscribers
+  & shared broker (NATS/Redis)\\
+Rate limiting + usage accounting & per-account token buckets + 24h
+  counters & distributed limit / counter store\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Until C lands, the deployment is single-instance by contract; the delta
+endpoint's stale-gap recovery keeps a restarting instance \emph{correct}
+(the client re-bootstraps).
+
+\section{Security architecture}
+\cs{arch:security}
+
+\begin{itemize}
+\item Auth boundary: Supertokens-compatible (code sign-in, refresh
+  rotation, session revocation) with HMAC'd session tokens; agents
+  authenticate by hashed API tokens. One principal per request, derived
+  from session material only.
+\item Tenant scoping: every query carries the workspace scope resolved
+  from active membership; no load-by-id-then-hope.
+\item Content: rich text is a versioned, sanitized JSON document;
+  handoff summaries are length-capped at the server; logs and events are
+  redacted of cross-tenant content.
+\item Audit: security-relevant actions (suspend, token operations,
+  pauses, invites) write actor, tenant, object, and timestamp data.
+\end{itemize}
+
+% ============================================================
+\chapter{Roadmap}
+\label{ch:roadmap}
+
+Releases are gated by outcomes, not dates. \owner{confirm the release
+  grouping: the natural Converge line is v1 = core (done) + agent
+  runtime D3 + foreman D4, with NEXT features and multi-instance (C) as
+  v1.1 / pre-scale --- the greenfield docs put NEXT before the swarm;
+  the pivot inverts that.}
+
+\section{v1 --- the product as promised}
+
+\begin{center}
+\begin{longtable}{@{}p{0.18\textwidth}p{0.26\textwidth}p{0.36\textwidth}l@{}}
+\toprule
+\textbf{Track} & \textbf{Scope} & \textbf{Content} & \textbf{Status}\\
+\midrule
+\endhead
+M1--M6 & Core + agents & Auth, tenancy, the issue domain
+  (workflows, labels, comments, history, search, views, boards), sync
+  engine, agent principals (M6) & \shipped\\
+A1--A3 & Release hardening & crash-class audit, wire-contract tests
+  (both sides), transactional mail & \shipped\\
+D1 & Handoff protocol & endpoint, quiet guards, pause + needs-human,
+  client flow + trace & \shipped\\
+D2 & Swarm panel & fleet roster, paused issues, 24h accounting & \shipped\\
+\cs{roadmap:d3} D3 & Agent runtime & inbox, untrusted-summary fences,
+  act $\to$ hand back, real token spend & \planned\\
+\cs{roadmap:d4} D4 & Foreman topology + selector & dispatch policy on the
+  handoff endpoint; gated selector & \gated\\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\section{v1.1 and beyond}
+
+\begin{center}
+\begin{longtable}{@{}lp{0.42\textwidth}p{0.38\textwidth}@{}}
+\toprule
+\textbf{Release} & \textbf{Scope} & \textbf{Gate}\\
+\midrule
+v1.1 & NEXT features (projects, cycles, relations, attachments, Inbox,
+  bulk) + client-state rewrite (B: server-authoritative cache) & v1 exit
+  criteria green; product evidence per slice\\
+Pre-scale (C) & Multi-instance: shared broker + distributed limits behind
+  the seams & measured need (single instance has headroom; the delta
+  endpoint keeps it correct until then)\\
+LATER & Integrations, public API/SDK, webhooks, export & stable data and
+  event models; scope/revocation contracts\\
+\bottomrule
+\end{longtable}
+\end{center}
+
+% ============================================================
+\chapter{Moat}
+\label{ch:moat}
+
+\cs{moat:core}\owner{you flagged the moat question earlier --- here is
+  the argument as I would print it; sharpen or strike.}
+
+\section{What is defensible}
+
+\begin{enumerate}[label=\arabic*.]
+\item \textbf{Trust is structural, not assumed.} The moat is not
+  ``agents in your tracker'' --- that is a feature anyone can bolt on and
+  botch. It is the coordination \emph{contract}: mediation, attribution,
+  budgets, escalation, and a complete trace. A team that has run agents
+  on Converge and \emph{trusted the board} will not move that history
+  elsewhere. The competitors' answer (activity feeds, bot badges) cannot
+  follow, because they never designed for the failure modes (ping-pong,
+  floods, unattributable noise) that make naive automation unbearable.
+\item \textbf{The trace is the product.} Full per-issue reconstruction
+  --- who, why, when, with what summary, at what cost --- turns agent
+  work into an auditable asset. Regulators, managers, and the teams' own
+  retrospectives all consume the same artifact.
+\item \textbf{Economic governance.} Budgets, pause-on-exhaustion, and
+  per-agent cost visibility make swarms \emph{operable}. A swarm without
+  cost governance is a liability; Converge sells the thing that makes the
+  liability a line item a CFO will approve.
+\item \textbf{Topology as policy.} Foreman and flat are policies on one
+  protocol. Customers can evolve their swarm shape without re-platforming
+  --- lock-in through architecture, not through contracts.
+\item \textbf{Self-hosted, AGPL.} Work history and agent traces are the
+  crown jewels of a team that automates. They will not send them to a
+  SaaS; they will run Converge where their data lives.
+\end{enumerate}
+
+\section{What is not defensible (honest)}
+
+The issue-tracker UI itself (commodity), the Go implementation
+(reproducible), and the handoff endpoint (small). The defense is the
+\emph{system} around those parts --- the contract, the trace, the
+economics --- and the compounding organizational habit of running a
+governed swarm.
+
+% ============================================================
+\chapter{Open Decisions}
+\label{ch:decisions}
+
+\cs{decisions:log}
+
+\section{Resolved by the pivot}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Decision} & \textbf{Resolution}\\
+\midrule
+OD-01 License & AGPL-3.0-or-later (Tegon-compatible, network copyleft)\\
+OD-02 Name / identity & Converge; Tegon as documented research provenance\\
+OD-03 Stack & Go backend, Next.js client, PostgreSQL\\
+OD-04 Auth boundary & Supertokens-compatible, maintained; no custom crypto\\
+OD-09 Deployment & One artifact + PostgreSQL; proxy/TLS outside the app\\
+OD-11 Jobs & Transactional outbox, in-process worker\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Open --- pre-D3}
+
+\begin{center}
+\begin{tabular}{@{}p{0.5\textwidth}p{0.4\textwidth}@{}}
+\toprule
+\textbf{Decision} & \textbf{Default until resolved}\\
+\midrule
+Swarm guard constants (loop 3 / budget 50 / 24h / 4KB) --- fixed or
+  operator-configurable? & fixed, documented\\
+Trace disclosure matrix (\S\ref{cs:swarm:trace}) --- agent read rights
+  as drafted? & as drafted\\
+Future metrics list (\S\ref{sec:metrics}) & as drafted, ratified at D3\\
+D3 runtime scope (deterministic fallback vs.\ LLM wiring split) &
+  as drafted\\
+Release grouping: D3+D4 inside v1 vs.\ v1.1 & \owner{owner}\\
+NEXT ordering (swarm-first vs.\ greenfield order) & \owner{owner}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Carried from the pre-pivot corpus}
+
+OD-06 admin visibility, OD-07 team identifiers, OD-08 retention windows,
+OD-12 attachment storage, OD-13 project/cycle rules, OD-14 notification
+triggers, OD-15 performance budgets, OD-16 realtime transport, OD-17
+public API versioning, OD-18 integration workflows, OD-19 telemetry,
+OD-20 localization/timezone, OD-21 browser matrix, OD-22 accessibility
+process --- unchanged; each keeps its pre-pivot gate.
+
+Decision records use the pre-pivot template (decision id, date, owners,
+chosen option, rationale, security/operational/migration impact,
+alternatives rejected, documents updated).
+
+\end{document}
