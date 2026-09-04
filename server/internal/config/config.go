@@ -75,6 +75,27 @@ type Config struct {
 	// fast path missed (a restart, a manual DB edit) is picked up within
 	// one tick.
 	RuntimeTick time.Duration
+	// LLMEnabled turns on the LLM decision policy (the D3+ brain): the
+	// policy slot is populated by a self-hosted model fleet instead of
+	// the deterministic policy. Default OFF: the deterministic policy
+	// remains the shipped brain until a fleet is in place; even enabled,
+	// every LLM failure falls back to the deterministic policy per
+	// decision, so the swarm's cadence never depends on the fleet.
+	LLMEnabled bool
+	// LLMURLs are the OpenAI-compatible chat endpoints (comma-separated
+	// in CONVERGE_LLM_URLS), one per GPU; workspaces hash-shard across
+	// them (a workspace's work stays on one instance: warm weights and
+	// KV cache).
+	LLMURLs []string
+	// LLMModel is the model name the endpoints serve (the server's
+	// --alias).
+	LLMModel string
+	// LLMTimeout bounds one decision round-trip; on timeout the
+	// deterministic fallback acts.
+	LLMTimeout time.Duration
+	// LLMMaxTokens bounds the model's output (thinking + answer); the
+	// decision JSON must fit inside it.
+	LLMMaxTokens int
 	// SMTPHost is the SMTP server for transactional mail (workspace
 	// invitations). Empty selects the log driver: the full message
 	// (including its link) is written to the API log, so a deployment
@@ -115,6 +136,11 @@ type Config struct {
 //	CONVERGE_RUNTIME           agent runtime, on by default ("false" disables)
 //	CONVERGE_RUNTIME_TOPOLOGY   foreman|flat              (default "foreman")
 //	CONVERGE_RUNTIME_TICK       dispatcher backstop tick   (default "5s")
+//	CONVERGE_LLM               LLM decision policy, off by default ("true" enables)
+//	CONVERGE_LLM_URLS          OpenAI-compatible endpoints, comma-separated (one per GPU)
+//	CONVERGE_LLM_MODEL         model name the endpoints serve (default "qwen3.8-27b")
+//	CONVERGE_LLM_TIMEOUT       decision round-trip bound (default "60s")
+//	CONVERGE_LLM_MAX_TOKENS    model output bound, thinking included (default "2048")
 //	CONVERGE_SMTP_HOST         smtp host, "" = log driver (default "")
 //	CONVERGE_SMTP_PORT         smtp port               (default "587")
 //	CONVERGE_SMTP_USER         smtp auth username      (default "")
@@ -171,6 +197,38 @@ func Load() (Config, error) {
 			return cfg, fmt.Errorf("invalid CONVERGE_RUNTIME_TICK %q: expected a duration >= 1s", v)
 		}
 		cfg.RuntimeTick = d
+	}
+	switch strings.ToLower(os.Getenv("CONVERGE_LLM")) {
+	case "true", "1", "on":
+		cfg.LLMEnabled = true
+	case "false", "0", "off", "":
+		cfg.LLMEnabled = false
+	default:
+		return cfg, fmt.Errorf("invalid CONVERGE_LLM %q: expected true or false", os.Getenv("CONVERGE_LLM"))
+	}
+	cfg.LLMModel = env("CONVERGE_LLM_MODEL", "qwen3.8-27b")
+	if v := os.Getenv("CONVERGE_LLM_URLS"); v != "" {
+		for _, u := range strings.Split(v, ",") {
+			if u = strings.TrimSpace(u); u != "" {
+				cfg.LLMURLs = append(cfg.LLMURLs, u)
+			}
+		}
+	}
+	cfg.LLMTimeout = 60 * time.Second
+	if v := os.Getenv("CONVERGE_LLM_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Second {
+			return cfg, fmt.Errorf("invalid CONVERGE_LLM_TIMEOUT %q: expected a duration >= 1s", v)
+		}
+		cfg.LLMTimeout = d
+	}
+	cfg.LLMMaxTokens = 2048
+	if v := os.Getenv("CONVERGE_LLM_MAX_TOKENS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return cfg, fmt.Errorf("invalid CONVERGE_LLM_MAX_TOKENS %q: expected an integer >= 1", v)
+		}
+		cfg.LLMMaxTokens = n
 	}
 	cfg.SMTPHost = os.Getenv("CONVERGE_SMTP_HOST")
 	cfg.SMTPUser = os.Getenv("CONVERGE_SMTP_USER")

@@ -29,12 +29,18 @@
 //     queue drains. Concurrency is bounded by the fleet size, never by
 //     the issue count; a 100-agent workspace costs at most 100
 //     short-lived goroutines.
-//   - Every action takes the D1 transactional shape: the issue's team
-//     advisory lock, the quiet guards read under it, one history row,
-//     one outbox record per changed model, commit, broadcast. Agents
-//     write through the same path humans and the API do, so the trace
-//     (spec 12: "the trace is the product") is indistinguishable in
-//     origin — distinguishable only by the actor's kind.
+//   - Every action takes the D1 transactional shape in two phases: the
+//     snapshot transaction and the apply transaction, each holding the
+//     issue's team advisory lock — the quiet guards read under it, one
+//     history row, one outbox record per changed model, commit,
+//     broadcast. The decision sits between the phases, outside any
+//     transaction: the LLM policy's model call (tens of seconds) must
+//     not hold a connection, a transaction, or a lock, or model latency
+//     would serialize the team and freeze transaction-time timestamps
+//     (Postgres now() is transaction-scoped). Agents write through the
+//     same path humans and the API do, so the trace (spec 12: "the
+//     trace is the product") is indistinguishable in origin —
+//     distinguishable only by the actor's kind.
 //   - Spend is a new in-memory seam: per-agent model tokens over the
 //     shared 24h guard window, reported into the swarm panel's burn slot
 //     (tokens24h). Deterministic policies spend zero; an LLM policy
@@ -76,11 +82,24 @@ func newAgentRuntime(a *API) *AgentRuntime {
 	return &AgentRuntime{
 		a:       a,
 		log:     a.log,
-		policy:  DeterministicPolicy{},
+		policy:  selectPolicy(a),
 		workers: make(map[string]*agentWorker),
 		spend:   make(map[string]*spendWindow),
 		notify:  make(chan struct{}, 1),
 		done:    make(chan struct{}),
+	}
+}
+
+// policyName reports the active decision brain for the start line and
+// logs: which policy the runtime will drive.
+func (rt *AgentRuntime) policyName() string {
+	switch rt.policy.(type) {
+	case fallbackPolicy:
+		return "llm (deterministic fallback)"
+	case DeterministicPolicy:
+		return "deterministic"
+	default:
+		return "custom"
 	}
 }
 
@@ -99,7 +118,8 @@ func (rt *AgentRuntime) Start(ctx context.Context) {
 	}
 	go rt.dispatch(ctx)
 	rt.log.Info("agent runtime started",
-		"topology", rt.a.cfg.RuntimeTopology, "tick", rt.a.cfg.RuntimeTick.String())
+		"topology", rt.a.cfg.RuntimeTopology, "tick", rt.a.cfg.RuntimeTick.String(),
+		"policy", rt.policyName())
 }
 
 // Stop signals the dispatcher and every live worker to drain, then
@@ -410,11 +430,31 @@ func (rt *AgentRuntime) agentActive(ctx context.Context, workspaceID, agentID st
 }
 
 // workOne performs one action on the agent's next actionable issue and
-// reports whether it acted. The whole cycle is one transaction holding
-// the issue's team advisory lock: read fresh, guard, decide, apply,
-// outbox — then commit and broadcast (the D1 shape, spec 12 rule 1).
+// reports whether it acted. The cycle is three phases (spec 12, the D3+
+// shape): snapshot, decide, apply. The two transactional phases hold
+// the issue's team advisory lock (the D1 shape); the decision sits
+// between them, outside any transaction:
+//
+//  1. Snapshot — one short transaction under the team lock: the row is
+//     read under the lock, the cycle is gated on it still being
+//     actionable, the policy's ActionInput is assembled, and the row's
+//     version is captured. The lock and the connection die with the
+//     phase.
+//  2. Decide — the policy call, alone: a pure decision costs
+//     microseconds; the LLM decision is one model call bounded by its
+//     own timeout and by ctx. No database connection, transaction, or
+//     lock is held across it — model latency never serializes the team
+//     (other agents' work and human mutations proceed freely), and the
+//     apply phase's transaction-time timestamps stay fresh.
+//  3. Apply — one short transaction under the same team lock: the row
+//     is re-read under the lock and must still be the one the decision
+//     was made on (decideStillValid: same owner, still actionable,
+//     same version — every issue mutation bumps it). A human mutation
+//     during the model call changed the version: the stale decision is
+//     discarded — its tokens were still spent, so they are counted —
+//     and the worker re-picks. A valid decision applies through the
+//     guarded path, commits, and broadcasts.
 func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
-	a := w.rt.a
 	issueID, err := w.nextIssue(ctx)
 	if err != nil {
 		return false, err
@@ -422,45 +462,117 @@ func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
 	if issueID == "" {
 		return false, nil // queue drained
 	}
+
+	in, version, ok, err := w.snapshotTx(ctx, issueID)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil // stale pick: exit; the dispatcher re-derives
+	}
+
+	action, tokens, err := w.rt.policy.Act(ctx, in)
+	if err != nil {
+		return false, fmt.Errorf("policy: %w", err)
+	}
+
+	return w.applyTx(ctx, issueID, in, version, action, tokens)
+}
+
+// loadIssueRowTx reads one issue row with its version anchor; it is
+// pgx.ErrNoRows when the issue is gone.
+func (a *API) loadIssueRowTx(ctx context.Context, tx pgx.Tx, issueID string, row *issueRow) error {
+	return tx.QueryRow(ctx,
+		"select "+issueColumns+", i.version from issues i where i.id = $1", issueID).Scan(
+		&row.ID, &row.TeamID, &row.Number, &row.Priority, &row.SortOrder,
+		&row.Title, &row.DescRaw, &row.Status, &row.CreatedAt, &row.UpdatedAt,
+		&row.CreatedByID, &row.AssigneeID, &row.ParentID, &row.StatusID,
+		&row.AgentPaused, &row.LabelIDs, &row.Children, &row.Version)
+}
+
+// snapshotTx is the work cycle's first phase: one short transaction
+// under the team advisory lock that captures the decision's input. The
+// row is read before the lock only for its team id (the lock key); the
+// authoritative read happens under the lock, so a human mutation that
+// lands in between is already visible when the cycle is gated.
+func (w *agentWorker) snapshotTx(ctx context.Context, issueID string) (in ActionInput, version int, ok bool, err error) {
+	a := w.rt.a
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return ActionInput{}, 0, false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var row issueRow
+	if err := a.loadIssueRowTx(ctx, tx, issueID, &row); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Deleted between the pick and the lock: the queue moved on,
+			// not a failure. The worker exits; the dispatcher re-derives.
+			return ActionInput{}, 0, false, nil
+		}
+		return ActionInput{}, 0, false, err
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_issue_"+row.TeamID); err != nil {
+		return ActionInput{}, 0, false, err
+	}
+	// The locked read is the decision: stale wakeups (a human paused,
+	// reassigned, or completed the issue between the pick and the lock)
+	// commit nothing.
+	if err := a.loadIssueRowTx(ctx, tx, issueID, &row); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ActionInput{}, 0, false, nil
+		}
+		return ActionInput{}, 0, false, err
+	}
+	if row.Status != "active" || row.AgentPaused || strval(row.AssigneeID) != w.agentID {
+		_ = tx.Commit(ctx)
+		return ActionInput{}, 0, false, nil
+	}
+	in, err = a.runtimeInputTx(ctx, tx, w, row)
+	if err != nil {
+		return ActionInput{}, 0, false, err
+	}
+	return in, row.Version, true, tx.Commit(ctx)
+}
+
+// applyTx is the work cycle's third phase: one short transaction under
+// the same team lock that applies the decision. The row is re-read
+// under the lock and must still be the one the decision was made on;
+// a stale decision is discarded (its tokens are counted as spend — the
+// model call happened) and the worker re-picks.
+func (w *agentWorker) applyTx(ctx context.Context, issueID string, in ActionInput, version int, action Action, tokens int) (bool, error) {
+	a := w.rt.a
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The snapshot's team key: if a team move happened during the model
+	// call the issue is in another team, but the move bumped the
+	// version, so the anchor below discards the decision either way.
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_issue_"+in.TeamID); err != nil {
+		return false, err
+	}
 	var row issueRow
-	err = tx.QueryRow(ctx, "select "+issueColumns+" from issues i where i.id = $1", issueID).Scan(
-		&row.ID, &row.TeamID, &row.Number, &row.Priority, &row.SortOrder,
-		&row.Title, &row.DescRaw, &row.Status, &row.CreatedAt, &row.UpdatedAt,
-		&row.CreatedByID, &row.AssigneeID, &row.ParentID, &row.StatusID,
-		&row.AgentPaused, &row.LabelIDs, &row.Children)
-	if err != nil {
+	if err := a.loadIssueRowTx(ctx, tx, issueID, &row); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Deleted between the pick and the lock: the queue moved on,
-			// not a failure. The worker exits; the next snapshot decides.
-			return false, nil
+			// Deleted during the model call: nothing to apply. The work
+			// moved on; the worker re-picks (or drains).
+			_ = tx.Commit(ctx)
+			return true, nil
 		}
 		return false, err
 	}
-	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_issue_"+row.TeamID); err != nil {
-		return false, err
-	}
-	// Re-verify under the lock: the pre-lock read is a hint, the locked
-	// read is the decision. Stale wakeups (a human paused, reassigned,
-	// or completed the issue between the pick and the lock) commit
-	// nothing.
-	if row.Status != "active" || row.AgentPaused || strval(row.AssigneeID) != w.agentID {
+	if !decideStillValid(row, version, w.agentID) {
+		// The row changed while the decision was being made (a human
+		// mutation bumped the version): the decision is stale. Commit
+		// nothing; the worker re-picks and re-decides from fresh facts.
+		w.rt.RecordSpend(w.agentID, tokens)
+		w.rt.log.Debug("runtime: stale decision discarded", "issue", issueID,
+			"agent", w.name, "workspace", w.workspaceID, "tokens", tokens)
 		_ = tx.Commit(ctx)
-		return false, nil
-	}
-
-	in, err := a.runtimeInputTx(ctx, tx, w, row)
-	if err != nil {
-		return false, err
-	}
-	action, tokens, err := w.rt.policy.Act(ctx, in)
-	if err != nil {
-		return false, fmt.Errorf("policy: %w", err)
+		return true, nil
 	}
 	recs, tripped, err := a.applyActionTx(ctx, tx, w, row, in, action)
 	if err != nil {
@@ -475,6 +587,7 @@ func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
 		for i := range recs {
 			a.broadcastRecord(recs[i])
 		}
+		w.rt.RecordSpend(w.agentID, tokens)
 		w.rt.log.Warn("issue paused by runtime guard", "issue", row.ID,
 			"workspace", w.workspaceID, "agent", w.name, "reason", in.PauseReason)
 		return true, nil
@@ -489,6 +602,17 @@ func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
 	w.rt.log.Info("agent action", "agent", w.name, "issue", row.ID,
 		"workspace", w.workspaceID, "action", string(action.Kind))
 	return true, nil
+}
+
+// decideStillValid reports whether the row re-read under the lock in the
+// apply phase is the one the decision was made on: still actionable for
+// the agent and unchanged since the snapshot. Every issue mutation
+// (human or agent) bumps version, so version equality is a complete
+// anchor — a state move, a pause, a reassignment, or a team move all
+// invalidate the decision.
+func decideStillValid(row issueRow, version int, agentID string) bool {
+	return row.Status == "active" && !row.AgentPaused &&
+		strval(row.AssigneeID) == agentID && row.Version == version
 }
 
 // nextIssue picks the agent's oldest actionable issue: assigned to it,
@@ -529,8 +653,14 @@ func (a *API) runtimeInputTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row
 	}
 	in.TeamName = teamName
 	in.TeamID = row.TeamID
+	in.WorkspaceID = w.workspaceID
 	in.IssueNumber = row.Number
 	in.ActorName = w.name
+	// Untrusted, fenced: user-authored issue content (anyone with issue
+	// write access controls it). The deterministic policy ignores both;
+	// the LLM prompt carries them as marked data.
+	in.Title = fenceSummary(row.Title)
+	in.Description = fenceSummary(descToPlain(row.DescRaw))
 	if row.StatusID != nil && *row.StatusID != "" {
 		ref, err := a.stateRefTx(ctx, tx, *row.StatusID, row.TeamID)
 		if err != nil {
