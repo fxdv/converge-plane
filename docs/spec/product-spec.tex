@@ -338,8 +338,9 @@ Quiet guards\csr{swarm:guards} & Per-issue loop + budget circuit
   breakers; trip = pause, not flag (\S\ref{sec:guards}) & \shipped\\
 Swarm panel\csr{swarm:panel} & Fleet roster: busy/idle, last handoff,
   24h accounting; paused issues on top (\S\ref{sec:panel}) & \shipped\\
-Agent runtime\csr{swarm:runtime} & Inbox, act, hand back; untrusted
-  summaries; per-agent spend (\S\ref{sec:runtime}) & \planned\\
+Agent runtime\csr{swarm:runtime} & In-process dispatcher + per-agent
+  workers; fenced summaries; act, hand back, pause; spend slot
+  (\S\ref{sec:runtime}) & \shipped\\
 Topology policy\csr{swarm:topology} & Foreman (default) / flat;
   selector gated (\S\ref{sec:topology}) & \inprogress\\
 \bottomrule
@@ -744,30 +745,51 @@ work $\cdot$ loop-detection hit rate per topology.
 
 \section{Agent runtime}
 \label{sec:runtime}
-\cs{swarm:runtime}\planned\ \owner{D3 --- confirm scope: the
-  deterministic-fallback runtime (inbox $\to$ act $\to$ hand back) is
-  what this environment can build; the LLM wiring is the slot it plugs
-  into.}
+\cs{swarm:runtime}\shipped\
 
-The runtime is what the protocol is for. Its contract:
+The runtime is what the protocol is for: an in-process swarm engine
+(\S\ref{sec:shape} --- one artifact, in-process workers) that makes
+agents with work act. It is shipped (D3) with the deterministic policy;
+the LLM backend is the next build on the same surface, plugged into the
+policy slot rather than around it. Its contract, as built:
 
 \begin{itemize}
-\item \textbf{Inbox} = issues assigned to the agent + incoming handoffs
-  (its work and its context arrive through one mediated channel).
-\item \textbf{Untrusted summaries.} A summary authored by agent A becomes
-  part of agent B's context: a prompt-injection vector. The runtime treats
-  received summaries as \emph{data, never instructions} --- the 4 KB cap
-  is the injection budget, and summaries are sanitized server-side.
-\item \textbf{Act $\to$ hand back.} The agent works its issue, then either
-  completes it (terminal state) or hands off with a summary per Rule 2.
-  It never pings another agent directly; it never posts to a channel.
-\item \textbf{Per-agent spend.} The runtime reports real model-token
-  usage into the panel's burn slot; budgets and escalation apply as for
-  any principal.
-\item \textbf{Deterministic fallback.} Without an LLM backend, the same
-  runtime drives the existing heuristic (advance one open issue per
-  cycle, comment the step) --- the swarm demonstrably works on the
-  protocol before any model is attached.
+\item \textbf{Inbox} = issues assigned to the agent, open, not paused,
+  and not terminal, plus the incoming handoff summaries. The issue table
+  \emph{is} the queue: durable and the single source of truth. A
+  dispatcher reconciles the fleet on a tick (5s default);
+  mutation paths that create agent work (handoff applied, reassignment,
+  resume-from-pause) wake it non-blocking, so the board reacts in
+  milliseconds. A lost wakeup costs at most one tick --- the scan is
+  the truth, the wake is a hint.
+\item \textbf{Workers are per-agent and self-terminating.} At most one
+  worker per agent (one agent works one issue at a time --- the honest
+  ``busy'' the panel shows), serializing the agent against itself by
+  construction; a worker exits when its queue drains, its account is
+  retired, or it is cancelled. Concurrency is bounded by the fleet, never
+  by the issue count.
+\item \textbf{Untrusted summaries.} The latest incoming summary is fenced
+  on the way in: control characters stripped, the 4 KB cap re-asserted
+  (the prompt-injection budget). The shipped policy never reads the field
+  --- its decisions are a pure function of trusted, server-derived facts
+  (issue, workflow, fleet, budget state), and a test pins that injected
+  text cannot steer it. An LLM policy receives the fenced summary as
+  marked-untrusted data.
+\item \textbf{Act $\to$ hand back.} Every action takes the D1
+  transactional shape --- team lock, quiet guards read under it, one
+  history row, outbox, commit, broadcast --- so the trace is
+  indistinguishable in origin, distinguishable only by the actor's kind.
+  The deterministic policy advances one workflow step per action
+  (commenting the step), completes at the terminal state, escapes a
+  dead-end state through the handoff protocol (the loop guard is the
+  circuit breaker), and pauses for a human when a dead-end issue has no
+  available agent.
+\item \textbf{Per-agent spend.} Model tokens over the shared 24h guard
+  window, reported into the swarm panel's token slot (zero until an LLM
+  policy is attached; the deterministic policy spends none). No new
+  tables: the D1/D2 trace tables plus in-memory state that a
+  multi-instance deployment moves to the shared broker
+  (\S\ref{sec:seams}).
 \end{itemize}
 
 % ============================================================
@@ -799,6 +821,8 @@ Broadcast fan-out & in-process broadcaster, per-workspace subscribers
   & shared broker (NATS/Redis)\\
 Rate limiting + usage accounting & per-account token buckets + 24h
   counters & distributed limit / counter store\\
+Agent runtime inbox + spend & per-agent worker map + 24h token window,
+  coalesced wakeups & broker-fed workers + shared counter store\\
 \bottomrule
 \end{tabular}
 \end{center}

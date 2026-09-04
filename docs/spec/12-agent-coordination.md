@@ -135,5 +135,45 @@ budgets/escalation sit.
 | --- | --- | --- |
 | D1 | Handoff protocol: table + endpoint + budget/loop guards + client flow (picker, summary, timeline item, board chip) | **Shipped** — `POST /issues/{id}/handoff`, pause + "needs human" badge, handoff/pause timeline items, all history rows ride the sync feed with `action` + `summary` |
 | D2 | Swarm panel: roster + trace + token accounting UI | **Shipped** — `GET /workspaces/{id}/swarm` + board Swarm button: fleet roster (busy/idle, last handoff, 24h ops/handoffs/calls) with paused issues on top; requests24h is the token-burn proxy D3 upgrades to real LLM usage |
-| D3 | LLM agent runtime: inbox = assignments + incoming handoffs; summaries as untrusted data; act → hand back; per-agent spend | The moat; consumes D1/D2 |
+| D3 | Agent runtime: in-process dispatcher + per-agent workers; deterministic policy (advance / complete / hand-off / pause); fenced untrusted summaries; per-agent spend slot | **Shipped** — the moat. The LLM backend is the next build on the same policy slot |
 | D4 | Topology selector as a fleet setting | Only after D3 produces usage data for both modes (doc 11 table) |
+
+## D3 as-built (agent runtime)
+
+The runtime runs in-process inside the API artifact (one Go binary,
+in-process workers) and adds **no tables and no dependencies**: the D1/D2
+trace tables plus in-memory state (per-agent worker map, 24h spend
+window, one coalesced wakeup) — the same seam discipline as the rate
+limiter, so a multi-instance deployment moves it to the shared broker.
+
+- **Inbox.** The issue table is the queue: open, unpaused, non-terminal,
+  assigned to the agent. A dispatcher reconciles the fleet on a tick
+  (`CONVERGE_RUNTIME_TICK`, default 5s); the mutation paths that create
+  agent work (handoff applied, reassignment, resume-from-pause) wake it
+  after commit. A lost or dropped wake costs at most one tick — the scan
+  is the truth, the wake is a hint.
+- **Workers.** At most one per agent at a time, self-terminating when the
+  queue drains, the account is retired, or it is cancelled. An agent is
+  serialized against itself by construction; concurrency is bounded by
+  the fleet, never by the issue count. The work cycle's optional reads
+  (queue pick, issue reload, current status, incoming handoff summary)
+  map *no rows* to *empty*, never to failure: a drained queue or a
+  freshly assigned issue with no handoff is a quiet state, not an error
+  (the class of bug the live demo caught on first run).
+- **Policy slot.** `Act(DecisionInput) → (Action, tokens)`, with the
+  input split into trusted server facts and the fenced untrusted summary.
+  Shipped: the deterministic policy — advance one workflow step (comment
+  the step), complete at the terminal state, a dead-end state escapes
+  through the handoff protocol (the loop guard is the circuit breaker),
+  and a dead-end with no available agent pauses for a human. The LLM
+  backend plugs into this slot; its prompt builder must treat the fenced
+  summary as marked-untrusted data.
+- **Topology.** Environment switch
+  (`CONVERGE_RUNTIME_TOPOLOGY=foreman|flat`, default foreman; the foreman
+  is the fleet's oldest active agent — a tenure rule, the D4 selector
+  will make both fleet settings).
+- **Config.** `CONVERGE_RUNTIME` (default on), `CONVERGE_RUNTIME_TOPOLOGY`
+  (foreman), `CONVERGE_RUNTIME_TICK` (5s).
+- **Trace and spend.** Every runtime action writes the same history /
+  outbox / broadcast trail as the API; the panel's token slot reports
+  per-agent spend over the 24h window.

@@ -40,9 +40,13 @@ export interface SwarmAgent {
   // per-agent share).
   handoffs24h: number;
   ops24h: number;
-  // Token-burn proxy until the D3 LLM runtime reports real usage: the
-  // agent's authenticated API request count over 24h.
+  // The agent's authenticated API request count over 24h (still live
+  // for agents that act over HTTP, like the tools/swarm demo process).
   requests24h: number;
+  // D3 spend: model tokens the in-process runtime spent for the agent
+  // over 24h (zero for the deterministic policy; an LLM policy reports
+  // its real usage here).
+  tokens24h: number;
   createdAt: string;
 }
 
