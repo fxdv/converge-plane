@@ -13,6 +13,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"converge/internal/auth"
 )
 
 const demoEmail = "demo@converge.dev"
@@ -82,6 +84,35 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		}
 	}
 
+	// ---- agents (D3) ---------------------------------------------------
+	// Two machine members on the eng team: the in-process agent runtime
+	// (D3) drives them — atlas is created first, so the runtime's
+	// tenure rule designates it the foreman of the demo swarm. They
+	// also each carry an API token, the M6 credential, so an external
+	// runner (tools/swarm) can act as one of them if ever desired.
+	agentEmails := []string{"atlas", "vega"}
+	for _, name := range agentEmails {
+		email := auth.AgentEmail(mk("workspace"), name) // idempotent: mk reuses the workspace id
+		if err := exec("seed agent "+name, `
+			insert into accounts (id, email, name, kind)
+			values ($1, $2, $3, 'agent')
+			on conflict (email) do nothing`, mk("acc:agent:"+name), email, name); err != nil {
+			return "", err
+		}
+		plaintext, hash, err := auth.IssueAPIToken()
+		if err != nil {
+			return "", fmt.Errorf("agent token %s: %w", name, err)
+		}
+		_ = plaintext // shown once at creation via the API; the seed never prints tokens
+		if err := exec("seed agent token "+name, `
+			insert into api_tokens (account_id, name, token_hash, token_prefix, expires_at, created_by)
+			values ($1, 'default', $2, $3, $4, $5)`,
+			ids["acc:agent:"+name], hash, auth.APITokenPrefix,
+			now.Add(auth.APITokenTTL), ids["acc:"+demoEmail]); err != nil {
+			return "", err
+		}
+	}
+
 	// ---- workspace + memberships --------------------------------------
 	wsID := mk("workspace")
 	if err := exec("seed workspace", `
@@ -95,6 +126,21 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 			insert into workspace_members (id, workspace_id, account_id, role, status, joined_at)
 			values ($1, $2, $3, $4, 'active', $5)`,
 			mk("wm:"+u.email), wsID, ids["acc:"+u.email], u.role, ago(30)); err != nil {
+			return "", err
+		}
+	}
+	for _, name := range agentEmails {
+		if err := exec("seed agent membership "+name, `
+			insert into workspace_members (id, workspace_id, account_id, role, status, joined_at)
+			values ($1, $2, $3, 'agent', 'active', $4)`,
+			mk("wm:agent:"+name), wsID, ids["acc:agent:"+name], ago(20)); err != nil {
+			return "", err
+		}
+		// eng team membership: the demo swarm works the engineering board.
+		if err := exec("seed agent team "+name, `
+			insert into team_members (id, team_id, account_id, role)
+			values ($1, $2, 'member')`,
+			mk("team-eng:acc:agent:"+name), ids["team-eng"], ids["acc:agent:"+name]); err != nil {
 			return "", err
 		}
 	}
@@ -180,27 +226,36 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		assignee string // account label or ""
 		parent   string // issue id or ""
 		daysAgo  float64
+		// agentPaused seeds the D1 escalation flag (and its reason) so
+		// the swarm panel's "needs human" section has content from the
+		// first login; pauseSummary is the guard's words on the timeline.
+		agentPaused  bool
+		pauseSummary string
 	}
 	engIssues := []issueDef{
-		{"team-eng", "Migrate billing service to Go", "The billing service is on EOL Node 14. Plan the migration incrementally: payment gateway first, then invoicing.", 1, "In Progress", "acc:maya@converge.dev", "", 21},
-		{"team-eng", "Fix race condition in webhook retry loop", "Under load the retry loop can double-process webhooks. Add a per-payload lock and a regression test.", 1, "In Progress", "acc:demo@converge.dev", "", 18},
-		{"team-eng", "Upgrade Kubernetes cluster to 1.31", "CIS audit requires the new minor. Schedule a maintenance window and test the ingress controller upgrade.", 2, "To Do", "acc:leo@converge.dev", "", 15},
-		{"team-eng", "Reduce p95 API latency on issue lists", "The /issues endpoint serializes 2k rows in one pass. Batch the join and add a covering index.", 2, "In Progress", "", "", 12},
-		{"team-eng", "Document self-hosted deployment", "Write the operator guide: TLS, backups, upgrades, and the env reference.", 3, "To Do", "acc:maya@converge.dev", "", 10},
-		{"team-eng", "Add dark mode contrast pass", "Several muted-foreground colors fail AA in dark mode. Bump them per the design tokens.", 3, "Backlog", "acc:leo@converge.dev", "", 9},
-		{"team-eng", "Keyboard shortcut for creating issues", "Global C key opens the create dialog, matching the design spec.", 2, "Backlog", "", "", 8},
-		{"team-eng", "Tighten session revocation on suspension", "Suspended members keep their session cookie until expiry. Revoke on state change.", 1, "Done", "acc:demo@converge.dev", "", 7},
-		{"team-eng", "Instrument search latency", "Add structured logs and a histogram for the full-text search path.", 3, "Done", "acc:maya@converge.dev", "", 6},
-		{"team-eng", "Deduplicate label names on import", "Imported labels can collide case-insensitively. Normalize on write.", 3, "Done", "", "", 5},
-		{"team-eng", "Kanban: allow dropping into any column", "The current dnd handler restricts by category. Relax per the interaction spec.", 2, "Done", "acc:leo@converge.dev", "", 4},
-		{"team-eng", "Archive legacy integration definitions", "The deprecated action integrations clutter settings. Move them to an archive state.", 4, "Done", "acc:maya@converge.dev", "", 3},
-		{"team-eng", "Evaluate object storage for attachments", "Compare S3-compatible providers for the upcoming attachments feature.", 3, "Backlog", "", "", 2},
-		{"team-eng", "Investigate flaky e2e auth test", "The magic-link e2e test is flaky under CI load. Likely a timing assumption.", 2, "Canceled", "acc:demo@converge.dev", "", 1},
+		// D3 demo swarm: two issues each for the two seeded agents (the
+		// in-process runtime advances them through the workflow on its
+		// own), the p95 issue to the foreman, and ENG-1 paused for a
+		// human so the panel's escalation section is alive from login.
+		{"team-eng", "Migrate billing service to Go", "The billing service is on EOL Node 14. Plan the migration incrementally: payment gateway first, then invoicing.", 1, "In Progress", "acc:maya@converge.dev", "", 21, true, "quiet guard tripped during an earlier swarm cycle (seeded demo escalation)"},
+		{"team-eng", "Fix race condition in webhook retry loop", "Under load the retry loop can double-process webhooks. Add a per-payload lock and a regression test.", 1, "In Progress", "acc:demo@converge.dev", "", 18, false, ""},
+		{"team-eng", "Upgrade Kubernetes cluster to 1.31", "CIS audit requires the new minor. Schedule a maintenance window and test the ingress controller upgrade.", 2, "To Do", "acc:agent:vega", "", 15, false, ""},
+		{"team-eng", "Reduce p95 API latency on issue lists", "The /issues endpoint serializes 2k rows in one pass. Batch the join and add a covering index.", 2, "In Progress", "acc:agent:atlas", "", 12, false, ""},
+		{"team-eng", "Document self-hosted deployment", "Write the operator guide: TLS, backups, upgrades, and the env reference.", 3, "To Do", "acc:maya@converge.dev", "", 10, false, ""},
+		{"team-eng", "Add dark mode contrast pass", "Several muted-foreground colors fail AA in dark mode. Bump them per the design tokens.", 3, "Backlog", "acc:agent:vega", "", 9, false, ""},
+		{"team-eng", "Keyboard shortcut for creating issues", "Global C key opens the create dialog, matching the design spec.", 2, "Backlog", "", "", 8, false, ""},
+		{"team-eng", "Tighten session revocation on suspension", "Suspended members keep their session cookie until expiry. Revoke on state change.", 1, "Done", "acc:demo@converge.dev", "", 7, false, ""},
+		{"team-eng", "Instrument search latency", "Add structured logs and a histogram for the full-text search path.", 3, "Done", "acc:maya@converge.dev", "", 6, false, ""},
+		{"team-eng", "Deduplicate label names on import", "Imported labels can collide case-insensitively. Normalize on write.", 3, "Done", "", "", 5, false, ""},
+		{"team-eng", "Kanban: allow dropping into any column", "The current dnd handler restricts by category. Relax per the interaction spec.", 2, "Done", "acc:leo@converge.dev", "", 4, false, ""},
+		{"team-eng", "Archive legacy integration definitions", "The deprecated action integrations clutter settings. Move them to an archive state.", 4, "Done", "acc:maya@converge.dev", "", 3, false, ""},
+		{"team-eng", "Evaluate object storage for attachments", "Compare S3-compatible providers for the upcoming attachments feature.", 3, "Backlog", "", "", 2, false, ""},
+		{"team-eng", "Investigate flaky e2e auth test", "The magic-link e2e test is flaky under CI load. Likely a timing assumption.", 2, "Canceled", "acc:demo@converge.dev", "", 1, false, ""},
 	}
 	platIssues := []issueDef{
-		{"team-plat", "Provision staging Postgres with pgvector", "Needed for the (future) similarity experiments; provision and harden.", 2, "In Progress", "acc:leo@converge.dev", "", 11},
-		{"team-plat", "Upgrade CI to GitHub Actions runners v2", "Standard runners are being deprecated. Migrate the workflow files.", 2, "To Do", "acc:demo@converge.dev", "", 6},
-		{"team-plat", "Cost review of managed Kubernetes", "Usage jumped 18% last month. Identify the offenders and right-size.", 1, "Done", "", "", 4},
+		{"team-plat", "Provision staging Postgres with pgvector", "Needed for the (future) similarity experiments; provision and harden.", 2, "In Progress", "acc:leo@converge.dev", "", 11, false, ""},
+		{"team-plat", "Upgrade CI to GitHub Actions runners v2", "Standard runners are being deprecated. Migrate the workflow files.", 2, "To Do", "acc:demo@converge.dev", "", 6, false, ""},
+		{"team-plat", "Cost review of managed Kubernetes", "Usage jumped 18% last month. Identify the offenders and right-size.", 1, "Done", "", "", 4, false, ""},
 	}
 
 	for _, teamLabel := range []string{"team-eng", "team-plat"} {
@@ -219,24 +274,26 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 			return "", fmt.Errorf("status lookup for %q: %w", def.title, err)
 		}
 		descJSON, _ := json.Marshal(def.desc)
-		if def.assignee != "" {
-			err := exec("seed issue "+def.title, `
-				insert into issues (id, team_id, number, title, description, status_id,
-				                            priority, sort_order, assignee_id, updated_at)
-				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-				is, ids[def.team], number, def.title, string(descJSON), statusID,
-				def.priority, 0, ids[def.assignee], ago(def.daysAgo))
-			if err != nil {
-				return "", err
-			}
-			return is, nil
+		paused := "false"
+		if def.agentPaused {
+			paused = "true"
 		}
-		err := exec("seed issue "+def.title, `
-			insert into issues (id, team_id, number, title, description, status_id,
-			                            priority, sort_order, updated_at)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			is, ids[def.team], number, def.title, string(descJSON), statusID,
-			def.priority, 0, ago(def.daysAgo))
+		var err error
+		if def.assignee != "" {
+			err = exec("seed issue "+def.title, `
+				insert into issues (id, team_id, number, title, description, status_id,
+				                            priority, sort_order, updated_at, agent_paused, assignee_id)
+				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, `+paused+`, $10)`,
+				is, ids[def.team], number, def.title, string(descJSON), statusID,
+				def.priority, 0, ago(def.daysAgo), ids[def.assignee])
+		} else {
+			err = exec("seed issue "+def.title, `
+				insert into issues (id, team_id, number, title, description, status_id,
+				                            priority, sort_order, updated_at, agent_paused)
+				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, `+paused+`)`,
+				is, ids[def.team], number, def.title, string(descJSON), statusID,
+				def.priority, 0, ago(def.daysAgo))
+		}
 		if err != nil {
 			return "", err
 		}
@@ -282,6 +339,15 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 				wsID, ids[def.team], created, ids["acc:"+demoEmail], ids[def.team+":status:"+def.status]); err != nil {
 				return err
 			}
+			// The seeded escalation (D1 pause + its reason on the timeline).
+			if def.agentPaused {
+				if err := exec("seed issue pause "+def.title, `
+					insert into issue_history (workspace_id, team_id, issue_id, actor_id, action, field, from_value, to_value, summary)
+					values ($1, $2, $3, $4, 'paused', 'agent_paused', 'false', 'true', $5)`,
+					wsID, ids[def.team], created, ids["acc:"+demoEmail], def.pauseSummary); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	}
@@ -295,8 +361,8 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 	// Sub-issues under the billing migration.
 	parentID := ids["issue:team-eng:"+engIssues[0].title]
 	children := []issueDef{
-		{"team-eng", "Billing: cut over payment gateway", "Switch Stripe calls to the new Go client behind a flag.", 2, "In Progress", "acc:maya@converge.dev", parentID, 14},
-		{"team-eng", "Billing: deprecate Node invoicing", "After the gateway cutover, stop the Node invoicing workers.", 2, "Backlog", "", parentID, 12},
+		{"team-eng", "Billing: cut over payment gateway", "Switch Stripe calls to the new Go client behind a flag.", 2, "In Progress", "acc:maya@converge.dev", parentID, 14, false, ""},
+		{"team-eng", "Billing: deprecate Node invoicing", "After the gateway cutover, stop the Node invoicing workers.", 2, "Backlog", "", parentID, 12, false, ""},
 	}
 	for i, def := range children {
 		created, err := createIssue(def, len(engIssues)+1+i)
@@ -347,7 +413,9 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 	if err := tx.Commit(ctx); err != nil {
 		return "", fmt.Errorf("commit seed: %w", err)
 	}
-	log.Info("demo workspace seeded", "workspace", "Acme Engineering", "login_email", demoEmail)
+	log.Info("demo workspace seeded",
+		"workspace", "Acme Engineering", "login_email", demoEmail,
+		"agents", len(agentEmails), "runtime", "the in-process swarm drives them (D3)")
 	return demoEmail, nil
 }
 

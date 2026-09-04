@@ -83,7 +83,9 @@ export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
 
       <div className="mt-1 pl-4 text-xs text-grayAlpha-500 dark:text-grayAlpha-400">
         {agent.ops24h} ops · {agent.handoffs24h} handoffs ·{' '}
-        {agent.requests24h.toLocaleString()} calls (24h)
+        {agent.requests24h.toLocaleString()} calls
+        {agent.tokens24h > 0 && ` · ${agent.tokens24h.toLocaleString()} tokens`}
+        (24h)
       </div>
 
       {agent.pausedIssueCount > 0 && (
