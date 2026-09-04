@@ -124,10 +124,16 @@ Two deliberate reversals of the pre-pivot corpus:
   search) as explicit non-goals, and \emph{still} excludes them. What it
   did not foresee is this product's actual AI surface: \textbf{agents are
   not a built-in feature --- they are coworkers you bring}
-  (\S\ref{sec:agents-identity}). The server never runs a model, never
-  writes prompts, and never enriches content. It governs machine members:
-  identity, tokens, handoffs, budgets, escalation, and trace. The
-  non-goal stands for \emph{built-in} AI; the swarm is the product.
+  (\S\ref{sec:agents-identity}). The server never \emph{hosts} a model:
+  the agent's brain is a swappable policy slot. Shipped, it is the
+  deterministic, model-free policy; a deployment may attach a self-hosted
+  model fleet to the same slot, where the server makes one bounded
+  decision call, validates the model's proposal against trusted facts,
+  and falls back to the deterministic policy on any failure
+  (\S\ref{sec:runtime}). The model advises one atomic step; the server
+  governs machine members: identity, tokens, handoffs, budgets,
+  escalation, and trace. The non-goal stands for \emph{built-in} AI; the
+  swarm is the product.
 \end{itemize}
 
 \section{Positioning}
@@ -339,8 +345,9 @@ Quiet guards\csr{swarm:guards} & Per-issue loop + budget circuit
 Swarm panel\csr{swarm:panel} & Fleet roster: busy/idle, last handoff,
   24h accounting; paused issues on top (\S\ref{sec:panel}) & \shipped\\
 Agent runtime\csr{swarm:runtime} & In-process dispatcher + per-agent
-  workers; fenced summaries; act, hand back, pause; spend slot
-  (\S\ref{sec:runtime}) & \shipped\\
+  workers; fenced summaries; act, hand back, pause; spend slot; the LLM
+  brain (opt-in fleet, deterministic floor) (\S\ref{sec:runtime}) &
+  \shipped\\
 Topology policy\csr{swarm:topology} & Foreman (default) / flat;
   selector gated (\S\ref{sec:topology}) & \inprogress\\
 \bottomrule
@@ -749,9 +756,9 @@ work $\cdot$ loop-detection hit rate per topology.
 
 The runtime is what the protocol is for: an in-process swarm engine
 (\S\ref{sec:shape} --- one artifact, in-process workers) that makes
-agents with work act. It is shipped (D3) with the deterministic policy;
-the LLM backend is the next build on the same surface, plugged into the
-policy slot rather than around it. Its contract, as built:
+agents with work act. Shipped (D3) with the deterministic policy and
+extended (D3+) by the LLM decision brain plugged into the same policy
+slot, not around it. Its contract, as built:
 
 \begin{itemize}
 \item \textbf{Inbox} = issues assigned to the agent, open, not paused,
@@ -768,25 +775,55 @@ policy slot rather than around it. Its contract, as built:
   construction; a worker exits when its queue drains, its account is
   retired, or it is cancelled. Concurrency is bounded by the fleet, never
   by the issue count.
-\item \textbf{Untrusted summaries.} The latest incoming summary is fenced
-  on the way in: control characters stripped, the 4 KB cap re-asserted
-  (the prompt-injection budget). The shipped policy never reads the field
-  --- its decisions are a pure function of trusted, server-derived facts
-  (issue, workflow, fleet, budget state), and a test pins that injected
-  text cannot steer it. An LLM policy receives the fenced summary as
-  marked-untrusted data.
-\item \textbf{Act $\to$ hand back.} Every action takes the D1
-  transactional shape --- team lock, quiet guards read under it, one
-  history row, outbox, commit, broadcast --- so the trace is
-  indistinguishable in origin, distinguishable only by the actor's kind.
-  The deterministic policy advances one workflow step per action
-  (commenting the step), completes at the terminal state, escapes a
-  dead-end state through the handoff protocol (the loop guard is the
+\item \textbf{Untrusted content.} Anything a person or another agent
+  authored is fenced on the way in: the latest incoming handoff summary
+  and the issue's title and description (anyone with issue write access
+  controls them) --- control characters stripped, capped (4 KB for the
+  summary; the prompt-injection budget). The deterministic policy never
+  reads the fields --- its decisions are a pure function of trusted,
+  server-derived facts (issue number, workflow, fleet, budget state), and
+  a test pins that injected text cannot steer it. The LLM prompt carries
+  the fenced fields as marked data, never as instructions, and
+  re-asserts the fence at render time (defense in depth).
+\item \textbf{Act $\to$ hand back, in three phases.} Every action takes
+  the D1 transactional shape --- the issue's team lock, quiet guards
+  read under it, one history row, outbox, commit, broadcast --- so the
+  trace is indistinguishable in origin, distinguishable only by the
+  actor's kind. The work cycle is snapshot, decide, apply: two short
+  transactions under the team lock (snapshot the input; re-read the row
+  and apply) with the decision between them, \emph{outside any
+  transaction} --- the LLM call (tens of seconds) must not hold a
+  connection, a lock, or a transaction, or model latency would serialize
+  the team and freeze transaction-time timestamps. The apply phase is
+  anchored to the snapshot by the row's version: a mutation during the
+  model call bumps the version, the stale decision is discarded (its
+  tokens are still counted as spend), and the worker re-decides from
+  fresh facts. The deterministic policy advances one workflow step per
+  action (commenting the step), completes at the terminal state, escapes
+  a dead-end state through the handoff protocol (the loop guard is the
   circuit breaker), and pauses for a human when a dead-end issue has no
   available agent.
+\item \textbf{The LLM brain (D3+, opt-in).} A self-hosted fleet ---
+  Qwen3.8-27B (UD-Q4\_M GGUF) on four Tesla V100-SXM3 32GB via llama.cpp
+  OpenAI-compatible servers, one instance per GPU, bound to loopback
+  only (the model server has no auth; the box's firewall allows SSH
+  alone) --- replaces the deterministic policy when a deployment provides
+  its endpoints; fresh deployments ship without a fleet and the
+  deterministic policy is the default brain. One decision is one model
+  call: trusted facts plus the fenced content as marked data, a strict
+  JSON reply contract, a token cap, a per-request timeout. The model
+  \emph{proposes}; the runtime \emph{validates} --- state names must
+  exist in the team's workflow (forward-only, never canceled, never
+  self), handoff targets must satisfy the active topology, comments are
+  capped --- and applies the validated action through the same guarded
+  path. Any failure (endpoint down, timeout, malformed or invalid
+  proposal) falls back to the deterministic policy per decision, so the
+  swarm's cadence never depends on the fleet being up; a failed call
+  still reports the tokens it burned.
 \item \textbf{Per-agent spend.} Model tokens over the shared 24h guard
-  window, reported into the swarm panel's token slot (zero until an LLM
-  policy is attached; the deterministic policy spends none). No new
+  window, reported into the swarm panel's token slot (real usage with a
+  fleet attached --- thinking tokens included; zero under the
+  deterministic policy). No new
   tables: the D1/D2 trace tables plus in-memory state that a
   multi-instance deployment moves to the shared broker
   (\S\ref{sec:seams}).
@@ -797,6 +834,7 @@ policy slot rather than around it. Its contract, as built:
 \label{ch:arch}
 
 \section{Shape}
+\label{sec:shape}
 \cs{arch:shape}
 
 A modular monolith: one Go artifact serving web, API, and in-process
@@ -806,6 +844,7 @@ environment-only; a reverse proxy provides TLS. No Redis, no queue
 broker, no vector store --- in v1.
 
 \section{Seams}
+\label{sec:seams}
 \cs{arch:seams}
 
 State that lives in memory today is deliberately isolated behind seams so
@@ -874,8 +913,9 @@ A1--A3 & Release hardening & crash-class audit, wire-contract tests
 D1 & Handoff protocol & endpoint, quiet guards, pause + needs-human,
   client flow + trace & \shipped\\
 D2 & Swarm panel & fleet roster, paused issues, 24h accounting & \shipped\\
-\cs{roadmap:d3} D3 & Agent runtime & inbox, untrusted-summary fences,
-  act $\to$ hand back, real token spend & \planned\\
+\cs{roadmap:d3} D3 & Agent runtime & inbox, fences, act $\to$ hand
+  back, real token spend; LLM decision policy (opt-in) on the same slot &
+  \shipped\\
 \cs{roadmap:d4} D4 & Foreman topology + selector & dispatch policy on the
   handoff endpoint; gated selector & \gated\\
 \bottomrule
@@ -979,7 +1019,8 @@ Trace disclosure matrix (\S\ref{cs:swarm:trace}) --- agent read rights
   as drafted? & as drafted\\
 Future metrics list (\S\ref{sec:metrics}) & as drafted, ratified at D3\\
 D3 runtime scope (deterministic fallback vs.\ LLM wiring split) &
-  as drafted\\
+  resolved as drafted: the LLM plugs into the same policy slot (D3+),
+  deterministic ships as the floor\\
 Release grouping: D3+D4 inside v1 vs.\ v1.1 & \owner{owner}\\
 NEXT ordering (swarm-first vs.\ greenfield order) & \owner{owner}\\
 \bottomrule

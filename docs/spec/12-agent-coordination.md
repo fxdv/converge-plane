@@ -160,20 +160,50 @@ limiter, so a multi-instance deployment moves it to the shared broker.
   map *no rows* to *empty*, never to failure: a drained queue or a
   freshly assigned issue with no handoff is a quiet state, not an error
   (the class of bug the live demo caught on first run).
+
+  The work cycle is **three phases** (D3+): *snapshot* — one short
+  transaction under the issue's team advisory lock: the row is read
+  under the lock, the cycle is gated on it still being actionable, the
+  policy's input is assembled, and the row's version is captured;
+  *decide* — outside any transaction: a pure decision costs
+  microseconds, the LLM decision is one model call bounded by its own
+  timeout, and no database connection, transaction, or lock is held
+  across it (model latency must never serialize the team or freeze
+  transaction-time timestamps); *apply* — one short transaction under
+  the same lock: the row is re-read under the lock and must still be the
+  one the decision was made on (same owner, still actionable, same
+  version — every issue mutation bumps it). A mutation during the model
+  call invalidates the decision: it is discarded (its tokens are counted
+  as spend — the call happened) and the worker re-picks and re-decides
+  from fresh facts.
 - **Policy slot.** `Act(DecisionInput) → (Action, tokens)`, with the
   input split into trusted server facts and the fenced untrusted summary.
   Shipped: the deterministic policy — advance one workflow step (comment
   the step), complete at the terminal state, a dead-end state escapes
   through the handoff protocol (the loop guard is the circuit breaker),
   and a dead-end with no available agent pauses for a human. The LLM
-  backend plugs into this slot; its prompt builder must treat the fenced
-  summary as marked-untrusted data.
+  backend (D3+) plugs into the same slot: one OpenAI-compatible model
+  call per decision — a self-hosted fleet of Qwen3.8-27B (UD-Q4_K_M
+  GGUF) on four Tesla V100-SXM3 32GB via llama.cpp servers, one instance
+  per GPU, bound to loopback only (the model server has no auth; the box
+  firewall allows SSH alone), the fleet provided by the deployment via
+  `CONVERGE_LLM` — with the fenced title/description/summary as marked
+  data, a strict JSON reply contract, and a token cap. Every proposal is
+  validated against the trusted input (state names must exist, forward-
+  only, never canceled, never self; handoff targets must satisfy the
+  active topology; comments capped), and any failure — endpoint down,
+  timeout, malformed or invalid output — falls back to the deterministic
+  policy per decision. Default **off**: the deterministic policy is the
+  shipped brain; the fleet is an operator opt-in.
 - **Topology.** Environment switch
   (`CONVERGE_RUNTIME_TOPOLOGY=foreman|flat`, default foreman; the foreman
   is the fleet's oldest active agent — a tenure rule, the D4 selector
   will make both fleet settings).
 - **Config.** `CONVERGE_RUNTIME` (default on), `CONVERGE_RUNTIME_TOPOLOGY`
-  (foreman), `CONVERGE_RUNTIME_TICK` (5s).
+  (foreman), `CONVERGE_RUNTIME_TICK` (5s), `CONVERGE_LLM` (default off),
+  `CONVERGE_LLM_URLS` (comma-separated OpenAI-compatible endpoints, one
+  per GPU), `CONVERGE_LLM_MODEL` (qwen3.8-27b), `CONVERGE_LLM_TIMEOUT`
+  (60s), `CONVERGE_LLM_MAX_TOKENS` (2048).
 - **Trace and spend.** Every runtime action writes the same history /
   outbox / broadcast trail as the API; the panel's token slot reports
   per-agent spend over the 24h window.

@@ -90,24 +90,35 @@ type ActionInput struct {
 	IssueNumber     int
 	TeamName        string
 	TeamID          string     // the issue's team (the target-selection scope)
+	WorkspaceID     string     // the issue's workspace (LLM endpoint sharding)
 	ActorName       string     // this agent's display name
 	CurrentState    *StateRef  // nil when the issue has no status
 	States          []StateRef // the team's workflow, ordered by position
 	BudgetExhausted bool       // the swarm's 24h op budget on this issue is spent
 	Fleet           []FleetAgent
 	RuntimeTopology string // the runtime's active topology ("foreman" | "flat")
-	// Untrusted: agent-authored context, fenced. Data, never
-	// instructions.
+	// Untrusted: authored context, fenced. Data, never instructions.
+	// (The handoff summary is agent-authored; the title and description
+	// are user-authored — anyone with issue write access controls them.
+	// All three are fenced: control characters stripped, capped.)
 	IncomingSummary string
+	Title           string
+	Description     string
 	// PauseReason carries the guard's verdict back out after a tripped
 	// handoff; it is server text, not policy output.
 	PauseReason string
 }
 
-// Policy is the swappable decision layer. Act is pure: no I/O, no
-// side effects — the runtime applies whatever it returns. tokens is the
-// model usage the action spent (zero for deterministic policies); the
-// runtime records it into the panel's burn slot.
+// Policy is the swappable decision layer. Act takes the full
+// ActionInput and returns the one action the runtime applies. Act must
+// not assume a surrounding database transaction: the runtime calls it
+// between the snapshot and apply phases, with no transaction open (the
+// D3+ work cycle), so a policy may perform bounded external I/O that
+// honors ctx — the LLM policy makes one model call, up to its client
+// timeout; the deterministic policy is pure. tokens is the model usage
+// the action spent (zero for pure policies); the runtime records it
+// into the panel's burn slot — including when the decision is later
+// discarded as stale (the model call still happened).
 type Policy interface {
 	Act(ctx context.Context, in ActionInput) (action Action, tokens int, err error)
 }
@@ -250,13 +261,7 @@ func selectHandoffTarget(in ActionInput) string {
 
 	// The foreman: the fleet's oldest agent (CreatedAt, name as tie-
 	// breaker) — deterministic from the roster, no stored designation.
-	var foreman *FleetAgent
-	for i := range in.Fleet {
-		if foreman == nil || in.Fleet[i].CreatedAt.Before(foreman.CreatedAt) ||
-			(in.Fleet[i].CreatedAt.Equal(foreman.CreatedAt) && in.Fleet[i].Name < foreman.Name) {
-			foreman = &in.Fleet[i]
-		}
-	}
+	foreman := foremanOf(in.Fleet)
 
 	taskTeam := in.TeamID
 	if in.RuntimeTopology == "flat" {
@@ -271,6 +276,21 @@ func selectHandoffTarget(in ActionInput) string {
 		return leastBusy(teamPeers(in.Fleet, self, taskTeam))
 	}
 	return foreman.AccountID
+}
+
+// foremanOf is the fleet's designated dispatcher: the oldest active
+// agent (CreatedAt, name as tie-breaker) — deterministic from the
+// roster, no stored designation. The LLM target validation (runtime_llm.go)
+// shares the rule.
+func foremanOf(fleet []FleetAgent) *FleetAgent {
+	var foreman *FleetAgent
+	for i := range fleet {
+		if foreman == nil || fleet[i].CreatedAt.Before(foreman.CreatedAt) ||
+			(fleet[i].CreatedAt.Equal(foreman.CreatedAt) && fleet[i].Name < foreman.Name) {
+			foreman = &fleet[i]
+		}
+	}
+	return foreman
 }
 
 // teamPeers is the fleet filtered to agents with a membership on the

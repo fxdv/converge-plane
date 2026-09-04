@@ -396,6 +396,11 @@ type issueRow struct {
 	// AgentPaused is the D1 escalation flag: agents may not act on a
 	// paused issue, humans act freely and resume it.
 	AgentPaused bool
+	// Version is the row's optimistic-concurrency anchor. Only the
+	// runtime's work cycle scans it (the sync scans and the client
+	// shape do not); every issue mutation bumps it, so equality is a
+	// complete "nothing changed" test.
+	Version int
 }
 
 // issueData serializes an issue row in the exact shape of the client's
