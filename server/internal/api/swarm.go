@@ -16,9 +16,11 @@
 // costs a handful of bounded indexed reads per poll, so it scales with
 // the roster, not with the work.
 //
-// requests24h is the token-burn proxy until D3: every authenticated
-// request an agent makes is counted. When the LLM runtime lands, it
-// reports real model-token usage into the same slot.
+// requests24h counts authenticated API requests (the D2 burn proxy —
+// still live for agents that act over HTTP, like the tools/swarm demo
+// process). tokens24h is the D3 runtime's slot: real model tokens the
+// agent spent inside the in-process runtime (zero for the
+// deterministic policy; an LLM policy reports its usage here).
 package api
 
 import (
@@ -73,10 +75,14 @@ type swarmAgent struct {
 	// The quiet-guard signals, per agent, over the shared 24h window:
 	// handoffs received (the loop guard) and authored operations (the
 	// op budget's per-agent share), plus API calls (the burn proxy).
-	Handoffs24h int       `json:"handoffs24h"`
-	Ops24h      int       `json:"ops24h"`
-	Requests24h int64     `json:"requests24h"`
-	CreatedAt   time.Time `json:"createdAt"`
+	Handoffs24h int   `json:"handoffs24h"`
+	Ops24h      int   `json:"ops24h"`
+	Requests24h int64 `json:"requests24h"`
+	// Tokens24h is the D3 spend slot: model tokens the in-process
+	// runtime spent for this agent over the 24h window (zero until an
+	// LLM policy is attached; the deterministic policy spends none).
+	Tokens24h int64     `json:"tokens24h"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // swarmPausedIssue is a D1 escalation currently open: the issue is
@@ -330,6 +336,7 @@ func (a *API) swarmRoster(ctx context.Context, workspaceID string) ([]swarmAgent
 		}
 		ag.Handoffs24h = handoffs24[ag.ID]
 		ag.Requests24h = a.limiter.usageCount(ag.ID)
+		ag.Tokens24h = a.runtime.SpendCount(ag.ID)
 		ag.Busy = ag.Status == "ACTIVE" && ag.OpenIssueCount > ag.PausedIssueCount
 	}
 

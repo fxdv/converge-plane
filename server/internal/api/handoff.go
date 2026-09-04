@@ -171,20 +171,47 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The transition: one trace row, one history row, one issue update.
+	issueRec, histRec, fresh, err := a.applyHandoffTx(ctx, tx, workspaceID, row,
+		p.AccountID, req.ToAccountID, stateID, summary)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	a.broadcastRecord(issueRec)
+	a.broadcastRecord(histRec)
+	// D3 fast path: the handoff's target is (validated above) an active
+	// agent — wake its worker now; the tick backstop covers a dropped
+	// wake. The pause branch above deliberately does not wake: a paused
+	// issue waits for a human, whose mutation re-wakes.
+	a.runtime.Wake(workspaceID, req.ToAccountID)
+	writeJSON(w, http.StatusOK, a.issueData(fresh))
+}
+
+// applyHandoffTx applies the handoff transition inside the caller's
+// transaction: the team lock is held and the quiet guards have already
+// been read under it (checkHandoffGuardsTx). It writes the
+// issue_handoffs trace row, the assignee (+state) update — resuming the
+// issue when a human unblocked it — the history row carrying the
+// summary, and the refreshed issue outbox record, and returns the
+// refreshed row. Shared by the API endpoint and the runtime (D3): one
+// apply path, one trace shape, identical boards.
+func (a *API) applyHandoffTx(ctx context.Context, tx pgx.Tx, workspaceID string, row issueRow, actorID, toAccountID, stateID, summary string) (issueRec, histRec syncActionRecord, fresh issueRow, err error) {
 	var handoffStateID *string
 	if stateID != "" {
 		handoffStateID = &stateID
 	}
-	if _, err := tx.Exec(ctx, `
+	if _, err = tx.Exec(ctx, `
 		insert into issue_handoffs (workspace_id, issue_id, from_account_id, to_account_id, state_id, summary)
 		values ($1, $2, $3, $4, $5, $6)`,
-		workspaceID, row.ID, p.AccountID, req.ToAccountID, handoffStateID, summary); err != nil {
-		a.internalError(w, err)
-		return
+		workspaceID, row.ID, actorID, toAccountID, handoffStateID, summary); err != nil {
+		return syncActionRecord{}, syncActionRecord{}, issueRow{}, err
 	}
 	updateSQL := "update issues set assignee_id = $2, version = version + 1, updated_at = now()"
-	updateArgs := []any{row.ID, req.ToAccountID}
+	updateArgs := []any{row.ID, toAccountID}
 	if stateID != "" {
 		updateSQL += ", status_id = $3"
 		updateArgs = append(updateArgs, stateID)
@@ -195,37 +222,26 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		updateSQL += ", agent_paused = false"
 	}
 	updateSQL += " where id = $1"
-	if _, err := tx.Exec(ctx, updateSQL, updateArgs...); err != nil {
-		a.internalError(w, err)
-		return
+	if _, err = tx.Exec(ctx, updateSQL, updateArgs...); err != nil {
+		return syncActionRecord{}, syncActionRecord{}, issueRow{}, err
 	}
-	histRec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID,
-		p.AccountID, "handoff", "assignee", strval(row.AssigneeID), req.ToAccountID, summary)
+	histRec, err = a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID,
+		actorID, "handoff", "assignee", strval(row.AssigneeID), toAccountID, summary)
 	if err != nil {
-		a.internalError(w, err)
-		return
+		return syncActionRecord{}, syncActionRecord{}, issueRow{}, err
 	}
-	fresh, err := a.issueByIDTx(ctx, tx, row.ID)
+	fresh, err = a.issueByIDTx(ctx, tx, row.ID)
 	if err != nil {
-		a.internalError(w, err)
-		return
+		return syncActionRecord{}, syncActionRecord{}, issueRow{}, err
 	}
-	rec, err := a.emitChange(ctx, tx, workspaceID, "Issue", row.ID, "UPDATE", a.issueData(fresh))
+	issueRec, err = a.emitChange(ctx, tx, workspaceID, "Issue", row.ID, "UPDATE", a.issueData(fresh))
 	if err != nil {
-		a.internalError(w, err)
-		return
+		return syncActionRecord{}, syncActionRecord{}, issueRow{}, err
 	}
-	if err := a.refreshOutboxTx(ctx, tx, workspaceID, &rec, a.issueData(fresh)); err != nil {
-		a.internalError(w, err)
-		return
+	if err = a.refreshOutboxTx(ctx, tx, workspaceID, &issueRec, a.issueData(fresh)); err != nil {
+		return syncActionRecord{}, syncActionRecord{}, issueRow{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		a.internalError(w, err)
-		return
-	}
-	a.broadcastRecord(rec)
-	a.broadcastRecord(histRec)
-	writeJSON(w, http.StatusOK, a.issueData(fresh))
+	return issueRec, histRec, fresh, nil
 }
 
 // checkHandoffGuardsTx evaluates the quiet guards (spec 12 rule 3)

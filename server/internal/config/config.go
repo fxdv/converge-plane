@@ -60,6 +60,21 @@ type Config struct {
 	// RateLimitBurst bounds a short per-account burst above the sustained
 	// rate.
 	RateLimitBurst int64
+	// RuntimeEnabled turns the in-process agent runtime (D3) on or off.
+	// On, agents with work act on it: the dispatcher wakes a worker per
+	// busy agent, the policy acts, work returns through the handoff
+	// protocol. Off, agents exist (M6) but wait for their own runtime.
+	RuntimeEnabled bool
+	// RuntimeTopology selects the handoff policy the runtime drives:
+	// "foreman" (default; one lead agent, the fleet's oldest active
+	// agent, dispatches and receives returns) or "flat" (any agent may
+	// hand to the least-busy peer). Fleet-level experiment switch until
+	// the D4 selector lands.
+	RuntimeTopology string
+	// RuntimeTick bounds the dispatcher's backstop scan: work the wake
+	// fast path missed (a restart, a manual DB edit) is picked up within
+	// one tick.
+	RuntimeTick time.Duration
 	// SMTPHost is the SMTP server for transactional mail (workspace
 	// invitations). Empty selects the log driver: the full message
 	// (including its link) is written to the API log, so a deployment
@@ -97,6 +112,9 @@ type Config struct {
 //	CONVERGE_RATE_LIMIT_RPS    per-account rps, 0=off (default "10")
 //	CONVERGE_RATE_LIMIT_BURST  per-account burst      (default "50")
 //	CONVERGE_DEV_MODE          true = dev conveniences (magic link in API)
+//	CONVERGE_RUNTIME           agent runtime, on by default ("false" disables)
+//	CONVERGE_RUNTIME_TOPOLOGY   foreman|flat              (default "foreman")
+//	CONVERGE_RUNTIME_TICK       dispatcher backstop tick   (default "5s")
 //	CONVERGE_SMTP_HOST         smtp host, "" = log driver (default "")
 //	CONVERGE_SMTP_PORT         smtp port               (default "587")
 //	CONVERGE_SMTP_USER         smtp auth username      (default "")
@@ -113,6 +131,7 @@ func Load() (Config, error) {
 		HTTPTimeout:       30 * time.Second,
 		DBMinConns:        1,
 		DBMaxConns:        20,
+		RuntimeEnabled:    true,
 		SessionCookieName: "sAccessToken",
 		SecureCookies:     false,
 		SessionTTL:        30 * 24 * time.Hour,
@@ -130,6 +149,28 @@ func Load() (Config, error) {
 	}
 	if v := os.Getenv("CONVERGE_DEV_MODE"); v == "true" {
 		cfg.DevMode = true
+	}
+	switch strings.ToLower(os.Getenv("CONVERGE_RUNTIME")) {
+	case "false", "0", "off":
+		cfg.RuntimeEnabled = false
+	case "true", "1", "on", "":
+		cfg.RuntimeEnabled = true
+	default:
+		return cfg, fmt.Errorf("invalid CONVERGE_RUNTIME %q: expected true or false", os.Getenv("CONVERGE_RUNTIME"))
+	}
+	switch strings.ToLower(env("CONVERGE_RUNTIME_TOPOLOGY", "foreman")) {
+	case "foreman", "flat":
+		cfg.RuntimeTopology = strings.ToLower(env("CONVERGE_RUNTIME_TOPOLOGY", "foreman"))
+	default:
+		return cfg, fmt.Errorf("invalid CONVERGE_RUNTIME_TOPOLOGY %q: expected foreman or flat", os.Getenv("CONVERGE_RUNTIME_TOPOLOGY"))
+	}
+	cfg.RuntimeTick = 5 * time.Second
+	if v := os.Getenv("CONVERGE_RUNTIME_TICK"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Second {
+			return cfg, fmt.Errorf("invalid CONVERGE_RUNTIME_TICK %q: expected a duration >= 1s", v)
+		}
+		cfg.RuntimeTick = d
 	}
 	cfg.SMTPHost = os.Getenv("CONVERGE_SMTP_HOST")
 	cfg.SMTPUser = os.Getenv("CONVERGE_SMTP_USER")

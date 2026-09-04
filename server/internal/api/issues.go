@@ -195,6 +195,8 @@ func (a *API) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	a.broadcastRecord(rec)
 	a.broadcastRecord(histRec)
+	// D3 fast path: an issue created assigned to an agent is work.
+	a.wakeIssueOwner(ctx, workspaceID, id)
 	writeJSON(w, http.StatusCreated, a.issueData(row))
 }
 
@@ -385,6 +387,9 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	for i := range historyRecs {
 		a.broadcastRecord(historyRecs[i])
 	}
+	// D3 fast path: a reassignment to an agent, or a human mutation that
+	// resumed a paused issue, is new work for the assignee.
+	a.wakeIssueOwner(ctx, workspaceID, id)
 	writeJSON(w, http.StatusOK, a.issueData(fresh))
 }
 
@@ -652,6 +657,9 @@ func (a *API) applyMove(w http.ResponseWriter, r *http.Request, p *Principal, ro
 		return
 	}
 	a.broadcastRecord(rec)
+	// D3 fast path: a team move keeps the assignee; wake when it is an
+	// agent (its team context changed with the move).
+	a.wakeIssueOwner(ctx, workspaceID, row.ID)
 	writeJSON(w, http.StatusOK, a.issueData(fresh))
 }
 
