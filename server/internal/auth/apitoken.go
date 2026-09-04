@@ -14,6 +14,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -24,6 +26,34 @@ const (
 	AccountKindHuman = "human"
 	AccountKindAgent = "agent"
 )
+
+// AgentEmail derives the reserved mailbox of an agent: eight hex chars
+// of the workspace id + the slugified name, on the .local domain
+// (RFC 6762: reserved for mDNS, never routed or delivered). Determinism
+// makes the accounts.email unique constraint a global de-duplicator:
+// the same workspace + name always resolves to the same identity. The
+// magic-link flow rejects these emails: an agent identity must never
+// sign in as a human. Shared by the admin API and the seed, so both
+// materialize identical identities.
+func AgentEmail(workspaceID, name string) string {
+	local := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		default:
+			return '_'
+		}
+	}, strings.ToLower(name))
+	if local == "" {
+		local = "agent"
+	}
+	if len(local) > 48 {
+		local = local[:48]
+	}
+	return fmt.Sprintf("ag-%s-%s@converge.local", workspaceID[:8], local)
+}
 
 // APITokenPrefix classifies a bearer value as an API token. Everything
 // after the prefix is 256 bits of entropy.

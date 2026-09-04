@@ -8,6 +8,11 @@
 // in the web UI. It is a demonstration of the platform capability
 // (agents as first-class actors); a real agent would run its own logic
 // here.
+//
+// The D3 in-process runtime has superseded this as the default driver
+// of the demo swarm (the seeded agents now act without external
+// processes). This binary remains the reference for an external agent
+// runtime: custom logic, its own cadence, the same v1 API.
 package main
 
 import (

@@ -105,6 +105,13 @@ func run() (err error) {
 	}
 	apiSvc := api.New(database.Pool, cfg, logger, authSvc, notifySvc)
 
+	// D3: the in-process agent runtime. It needs the database, not the
+	// HTTP listener, so it starts before the server and drains on the
+	// way out; work created while the process is down is picked up on
+	// the first tick after boot (the database is the queue).
+	apiSvc.StartRuntime(ctx)
+	defer apiSvc.StopRuntime()
+
 	server := httpx.New(httpx.Dependencies{
 		Logger:      logger,
 		Version:     version,

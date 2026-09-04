@@ -33,10 +33,13 @@ type API struct {
 	bcast *broadcast.Broadcaster
 	// limiter bounds per-account request rates (swarm flood guard).
 	limiter *accountRateLimiter
+	// runtime is the in-process agent runtime (D3): it acts for agents
+	// that have work, through the same transactional paths as the API.
+	runtime *AgentRuntime
 }
 
 func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service, notifySvc *notify.Service) *API {
-	return &API{
+	a := &API{
 		pool:    pool,
 		cfg:     cfg,
 		log:     log,
@@ -44,6 +47,41 @@ func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.
 		notify:  notifySvc,
 		bcast:   broadcast.New(),
 		limiter: newAccountRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
+	}
+	a.runtime = newAgentRuntime(a)
+	return a
+}
+
+// StartRuntime launches the agent runtime on the process context (D3).
+// It is a no-op when CONVERGE_RUNTIME is off; main calls it before the
+// HTTP listener and StopRuntime on the way out.
+func (a *API) StartRuntime(ctx context.Context) {
+	a.runtime.Start(ctx)
+}
+
+// StopRuntime drains the runtime: the dispatcher stops and live workers
+// finish their current action. Best-effort — the process context does
+// the real forcing on shutdown.
+func (a *API) StopRuntime() {
+	a.runtime.Stop()
+}
+
+// wakeIssueOwner enqueues the issue's assignee for runtime work when the
+// assignee is an active agent. The mutation paths that CREATE agent work
+// (handoff applied, reassignment, resume-from-pause) call it after
+// commit. The wakeup is a fast path, not a correctness mechanism: the
+// dispatcher's tick re-derives the same work from the database (the
+// issue table is the queue), so a missed or dropped wake costs at most
+// one tick.
+func (a *API) wakeIssueOwner(ctx context.Context, workspaceID, issueID string) {
+	var assignee string
+	err := a.pool.QueryRow(ctx, `
+		select i.assignee_id::text
+		from issues i
+		join accounts a2 on a2.id = i.assignee_id and a2.kind = $2 and a2.status = 'active'
+		where i.id = $1`, issueID, auth.AccountKindAgent).Scan(&assignee)
+	if err == nil {
+		a.runtime.Wake(workspaceID, assignee)
 	}
 }
 

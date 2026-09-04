@@ -18,7 +18,6 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -41,31 +40,6 @@ var (
 // agentNamePattern admits printable names; the display name is rendered
 // verbatim by the client, so it is bounded the same way as team names.
 var agentNamePattern = regexp.MustCompile(`^[^\x00-\x1f]{1,64}$`)
-
-// agentEmail derives the reserved mailbox of an agent: eight hex chars
-// of the workspace id + the slugified name, on the .local domain
-// (RFC 6762: reserved for mDNS, never routed or delivered). Determinism
-// makes the accounts.email unique constraint a global de-duplicator:
-// the same workspace + name always resolves to the same identity.
-func agentEmail(workspaceID, name string) string {
-	local := strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z':
-			return r
-		case r >= '0' && r <= '9':
-			return r
-		default:
-			return '_'
-		}
-	}, strings.ToLower(name))
-	if local == "" {
-		local = "agent"
-	}
-	if len(local) > 48 {
-		local = local[:48]
-	}
-	return fmt.Sprintf("ag-%s-%s@converge.local", workspaceID[:8], local)
-}
 
 // agentResponse is the creation/rotation wire shape the client's
 // agent-creation dialog renders (the token plaintext is shown once).
@@ -134,7 +108,7 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	email := agentEmail(workspaceID, name)
+	email := auth.AgentEmail(workspaceID, name)
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		a.internalError(w, err)

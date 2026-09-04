@@ -103,7 +103,7 @@ func TestSwarmStatusWireContract(t *testing.T) {
 	equalStrings(t, swarmKeys(t, status.Agents[0]),
 		[]string{"busy", "createdAt", "email", "handoffs24h", "id", "lastActivityAt",
 			"lastHandoff", "name", "openIssueCount", "ops24h", "pausedIssueCount",
-			"requests24h", "status", "teamIds"})
+			"requests24h", "status", "teamIds", "tokens24h"})
 	equalStrings(t, swarmKeys(t, *status.Agents[0].LastHandoff),
 		[]string{"counterpartId", "counterpartName", "createdAt", "direction",
 			"issueId", "issueNumber", "issueTitle", "summary"})
