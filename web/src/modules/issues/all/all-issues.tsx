@@ -4,7 +4,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@converge/ui/components/resizable';
-import { AI, RightSidebarClosed, RightSidebarOpen } from '@converge/ui/icons';
+import { ActivityLine, AI, RightSidebarClosed, RightSidebarOpen } from '@converge/ui/icons';
 import { RoleEnum } from '@converge/types';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
@@ -26,6 +26,7 @@ import { Header } from './header';
 import { IssuesViewOptions } from './issues-view-options';
 import { ListView } from './list-view';
 import { NoTeamContainer } from './no-team-container';
+import { ActivityFeed } from '../activity-feed';
 import { FiltersView } from '../filters-view/filters-view';
 import { OverviewInsights } from '../overview-insights';
 import { SwarmPanel } from '../swarm-panel';
@@ -40,6 +41,10 @@ export const AllIssues = withApplicationStore(
     // D2: the swarm panel (fleet roster + paused issues), toggleable
     // from the header next to the insights panel.
     const [swarm, setSwarm] = useLocalState('swarmPanel', false);
+    // spec cs:swarm:activity — Surface B: the workspace activity feed
+    // (handoffs, moves, comments, live signals), derived entirely from
+    // the synced stores.
+    const [activity, setActivity] = useLocalState('activityPanel', false);
     const { closeIssueView } = React.useContext(IssueViewContext);
 
     // The button appears only when the workspace has machine members
@@ -63,6 +68,16 @@ export const AllIssues = withApplicationStore(
             team={team}
             actions={
               <>
+                <Button
+                  variant="ghost"
+                  onClick={() => setActivity(!activity)}
+                  isActive={activity}
+                  size="sm"
+                  className="gap-1.5"
+                >
+                  <ActivityLine size={16} />
+                  <span className="text-xs font-medium">Activity</span>
+                </Button>
                 {hasAgents && (
                   <Button
                     variant="ghost"
@@ -130,6 +145,21 @@ export const AllIssues = withApplicationStore(
                   id="swarm"
                 >
                   <SwarmPanel />
+                </ResizablePanel>
+              </>
+            )}
+            {activity && (
+              <>
+                <ResizableHandle />
+                <ResizablePanel
+                  collapsible={false}
+                  maxSize={25}
+                  minSize={25}
+                  defaultSize={25}
+                  order={4}
+                  id="activity"
+                >
+                  <ActivityFeed />
                 </ResizablePanel>
               </>
             )}
