@@ -1,4 +1,5 @@
 export * from './data-loader';
+export * from './swarm-activity';
 export * from './integration-account';
 export * from './integration-definition';
 export * from './issue-relation';

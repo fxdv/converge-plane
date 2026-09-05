@@ -7,16 +7,24 @@ import * as React from 'react';
 
 import { useContextStore } from 'store/global-context-provider';
 
-// One fleet row: who the agent is, what it owns, its last handoff, and
-// its 24h burn. The dot is the panel's main signal: green working,
-// gray idle, red suspended.
+// One fleet row: who the agent is, what it owns, what it is doing
+// right now (spec cs:swarm:activity — Surface C), its last handoff, and
+// its 24h burn. The dot is the panel's main signal: pulsing green while
+// a live signal is in flight, green working (poll), gray idle, red
+// suspended.
 export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
-  const { teamsStore } = useContextStore();
+  const { teamsStore, swarmActivityStore } = useContextStore();
 
   const teams = agent.teamIds
     .map((id) => teamsStore.getTeamWithId(id)?.identifier)
     .filter(Boolean)
     .join(' · ');
+
+  // The in-flight signal (SwarmActivity, keyed by agent id): the live
+  // row renders only while fresh, so a stale signal never claims the
+  // fleet view. The 24h counters below stay poll-driven.
+  const live = swarmActivityStore.activities.get(agent.id);
+  const liveFresh = !!live && swarmActivityStore.isFresh(live);
 
   const lastActivity = agent.lastActivityAt
     ? formatDistanceToNow(new Date(agent.lastActivityAt), {
@@ -27,16 +35,21 @@ export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
   return (
     <div className="px-4 py-2.5 border-b border-grayAlpha-100 dark:border-grayAlpha-300">
       <div className="flex items-center gap-2 min-w-0">
-        <span
-          className={cn(
-            'size-2 rounded-full shrink-0',
-            agent.status === 'SUSPENDED'
-              ? 'bg-red-500'
-              : agent.busy
-                ? 'bg-emerald-500'
-                : 'bg-gray-400 dark:bg-gray-500',
+        <span className="relative flex shrink-0">
+          {liveFresh && (
+            <span className="absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
           )}
-        />
+          <span
+            className={cn(
+              'relative size-2 rounded-full',
+              agent.status === 'SUSPENDED'
+                ? 'bg-red-500'
+                : liveFresh || agent.busy
+                  ? 'bg-emerald-500'
+                  : 'bg-gray-400 dark:bg-gray-500',
+            )}
+          />
+        </span>
         <span
           className={cn(
             'text-sm font-medium truncate',
@@ -61,6 +74,14 @@ export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
           )}
         </span>
       </div>
+
+      {liveFresh && live && (
+        <div className="mt-1 pl-4 text-xs text-emerald-600 dark:text-emerald-400 truncate">
+          {live.phase === 'deciding' ? 'deciding' : 'working'} on{' '}
+          {live.issuePrefix}-{live.issueNumber} ·{' '}
+          {formatDistanceToNow(new Date(live.since), { addSuffix: true })}
+        </div>
+      )}
 
       {agent.lastHandoff && (
         <div

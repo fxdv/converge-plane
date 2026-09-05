@@ -7,6 +7,7 @@ import { saveIssueHistoryData } from 'store/issue-history';
 import { saveIssuesData } from 'store/issues';
 import { saveLabelData } from 'store/labels';
 import { MODELS } from 'store/models';
+import { saveSwarmActivityData } from 'store/swarm-activity';
 import { saveTeamData } from 'store/teams';
 import { saveViewData } from 'store/views';
 import { saveWorkflowData } from 'store/workflows';
@@ -55,6 +56,7 @@ export async function saveSocketData(
       [MODELS.IssueHistory]: saveIssueHistoryData,
       [MODELS.IssueComment]: saveCommentsData,
       [MODELS.View]: saveViewData,
+      [MODELS.SwarmActivity]: saveSwarmActivityData,
     };
 
     // Process records using the handler map

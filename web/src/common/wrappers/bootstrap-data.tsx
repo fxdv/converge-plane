@@ -38,6 +38,7 @@ export function BootstrapWrapper({ children }: Props) {
     teamsStore,
     labelsStore,
     viewsStore,
+    swarmActivityStore,
   } = useContextStore();
 
   const MODEL_STORE_MAP = {
@@ -50,6 +51,7 @@ export function BootstrapWrapper({ children }: Props) {
     [MODELS.IssueHistory]: issuesHistoryStore,
     [MODELS.IssueComment]: commentsStore,
     [MODELS.View]: viewsStore,
+    [MODELS.SwarmActivity]: swarmActivityStore,
   };
 
   React.useEffect(() => {
@@ -59,6 +61,21 @@ export function BootstrapWrapper({ children }: Props) {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The swarm's in-flight signals are ephemeral: a worker that died
+  // without a delete record (crash, OOM) must not keep its chip
+  // pulsing forever. A slow hygiene tick expires signals that outlived
+  // their TTL; live signals refresh their own timestamps continuously.
+  React.useEffect(() => {
+    if (!workspace) {
+      return undefined;
+    }
+    const tick = setInterval(() => {
+      swarmActivityStore.expireStale();
+    }, 15000);
+    return () => clearInterval(tick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.id]);
 
   const { refetch: bootstrapRecords } = useBootstrapRecords({
     modelNames: Object.values(MODELS),

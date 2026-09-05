@@ -12,7 +12,9 @@ import {
   IssueStatusDropdownVariant,
 } from 'modules/issues/components';
 
-import { Warning } from '@converge/ui/icons';
+import { ArrowForwardLine, Warning } from '@converge/ui/icons';
+
+import type { IssueHistoryType } from 'common/types';
 
 import { IssueViewContext } from 'components/side-issue-view';
 import { useTeamWithId } from 'hooks/teams/use-current-team';
@@ -54,7 +56,8 @@ export const BoardIssueItem = observer(
     measure,
   }: BoardIssueItemProps) => {
     const { mutate: updateIssue } = useUpdateIssueMutation({});
-    const { issuesStore, applicationStore } = useContextStore();
+    const { issuesStore, applicationStore, issuesHistoryStore, swarmActivityStore } =
+      useContextStore();
     const {
       openIssue,
       issueId: currentViewIssueId,
@@ -62,6 +65,37 @@ export const BoardIssueItem = observer(
     } = React.useContext(IssueViewContext);
     const issue = issuesStore.getIssueById(issueId);
     const team = useTeamWithId(issue.teamId);
+
+    // spec cs:swarm:activity — Surface A: the in-flight signal. One
+    // worker per agent, one record per agent; only a fresh signal
+    // (within the client TTL) may render, so a stale row can never
+    // claim a card. The chip is the only live decoration the board
+    // carries — full disclosure lives in the activity feed.
+    const liveActivity = swarmActivityStore.forIssue(issue.id);
+    const showLiveChip =
+      !!liveActivity &&
+      liveActivity.issueId === issue.id &&
+      swarmActivityStore.isFresh(liveActivity);
+
+    // The latest handoff within 7 days: one muted line, so the card
+    // shows where the swarm left off without the feed's full weight.
+    let latestHandoff: IssueHistoryType | undefined;
+    for (const row of issuesHistoryStore.issueHistories.get(issue.id) ?? []) {
+      if (row.action !== 'handoff' || !row.summary) {
+        continue;
+      }
+      const age = Date.now() - new Date(row.createdAt).getTime();
+      if (age > 7 * 24 * 60 * 60 * 1000) {
+        continue;
+      }
+      if (
+        !latestHandoff ||
+        new Date(row.createdAt).getTime() >
+          new Date(latestHandoff.createdAt).getTime()
+      ) {
+        latestHandoff = row;
+      }
+    }
 
     const statusChange = (stateId: string) => {
       updateIssue({ id: issue.id, stateId, teamId: issue.teamId });
@@ -123,6 +157,16 @@ export const BoardIssueItem = observer(
                 needs human
               </span>
             )}
+            {showLiveChip && liveActivity && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                </span>
+                {liveActivity.agentName}
+                {liveActivity.phase === 'deciding' ? ' deciding' : ' working'}
+              </span>
+            )}
             <div className="text-muted-foreground font-mono">{`${team.identifier}-${issue.number}`}</div>
           </div>
         </div>
@@ -131,6 +175,17 @@ export const BoardIssueItem = observer(
         </div>
 
         <IssueLabels labelIds={issue.labelIds} />
+
+        {latestHandoff?.summary && (
+          <div className="flex items-start gap-1 text-[11px] text-muted-foreground line-clamp-1">
+            <ArrowForwardLine size={12} className="shrink-0 mt-0.5" />
+            <span className="truncate" title={latestHandoff.summary}>
+              {latestHandoff.summary.length > 200
+                ? `${latestHandoff.summary.slice(0, 197)}…`
+                : latestHandoff.summary}
+            </span>
+          </div>
+        )}
 
         <div className="flex gap-2 items-center justify-between">
           <div className="inline-flex gap-2 items-center">

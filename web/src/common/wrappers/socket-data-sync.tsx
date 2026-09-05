@@ -35,6 +35,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       teamsStore,
       labelsStore,
       viewsStore,
+      swarmActivityStore,
     } = useContextStore();
     const user = React.useContext(UserContext);
     const hashKey = `${workspace.id}__${user.id}`;
@@ -80,6 +81,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         [MODELS.IssueHistory]: issuesHistoryStore,
         [MODELS.IssueComment]: commentsStore,
         [MODELS.View]: viewsStore,
+        [MODELS.SwarmActivity]: swarmActivityStore,
       };
 
       socket.onmessage = async (event: MessageEvent) => {

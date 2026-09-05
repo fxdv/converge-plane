@@ -21,6 +21,9 @@ import { Issue } from 'store/issues/models';
 import { IssueHistory } from 'store/issue-history/models';
 import { Label } from 'store/labels/models';
 import { Team } from 'store/teams/models';
+import { saveSwarmActivityData } from 'store/swarm-activity/save-data';
+import { SwarmActivity } from 'store/swarm-activity/models';
+import { SwarmActivityStore, swarmActivityTTL } from 'store/swarm-activity/store';
 import { View } from 'store/views/models';
 import { Workflow } from 'store/workflows/models';
 import { UsersOnWorkspace, Workspace } from 'store/workspace/models';
@@ -399,5 +402,101 @@ describe('Workspace model', () => {
       preferences: null,
     } as never);
     assert.equal(node.slug, 'acme');
+  });
+});
+
+// --- SwarmActivity: the in-flight work signal (spec cs:swarm:activity)
+// Payloads mirror server/internal/api/swarm_activity_test.go exactly —
+// keep the two files in step.
+const signal = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id: 'a1',
+  agentId: 'a1',
+  agentName: 'scout',
+  issueId: 'i1',
+  issueNumber: 29,
+  issuePrefix: 'ENG',
+  phase: 'deciding',
+  since: stamp,
+  ...over,
+});
+
+describe('SwarmActivity model', () => {
+  it('accepts the exact 8-key wire shape the server emits', () => {
+    const node = SwarmActivity.create(signal() as never);
+    assert.equal(node.agentId, 'a1');
+    assert.equal(node.issueNumber, 29);
+    assert.equal(node.phase, 'deciding');
+  });
+  it('accepts a future, unknown phase (degrades, never crashes validation)', () => {
+    // The OWNER-role crash class: a value outside the client vocabulary
+    // must not throw during model creation. The client renders it as a
+    // plain-text phase instead.
+    const node = SwarmActivity.create(signal({ phase: 'dreaming' }) as never);
+    assert.equal(node.phase, 'dreaming');
+  });
+  it('rejects a degraded payload (missing required fields)', () => {
+    assert.throws(() => SwarmActivity.create({ id: 'a1' } as never));
+  });
+});
+
+describe('SwarmActivityStore (one entry per agent)', () => {
+  it('upserts by agent id and resolves the signal for an issue', () => {
+    const store = SwarmActivityStore.create({ activities: {} });
+    store.upsert(signal() as never);
+    assert.ok(store.activities.has('a1'));
+    const found = store.forIssue('i1');
+    assert.ok(found && found.agentName === 'scout');
+    assert.equal(store.forIssue('i2'), undefined);
+  });
+  it('isFresh tracks the TTL (fresh now, stale after it lapses)', () => {
+    const store = SwarmActivityStore.create({ activities: {} });
+    const fresh = signal({ since: new Date().toISOString() }) as never;
+    const stale = signal({
+      id: 'a2',
+      agentId: 'a2',
+      since: new Date(Date.now() - 2 * swarmActivityTTL).toISOString(),
+    }) as never;
+    store.upsert(fresh);
+    store.upsert(stale);
+    assert.ok(store.isFresh(store.activities.get('a1')!));
+    assert.ok(!store.isFresh(store.activities.get('a2')!));
+    store.expireStale();
+    assert.equal(store.activities.size, 1); // the stale one is dropped
+    assert.ok(store.activities.has('a1'));
+  });
+  it('removes by id (the DELETE record carries only the id)', () => {
+    const store = SwarmActivityStore.create({ activities: {} });
+    store.upsert(signal() as never);
+    store.remove('a1');
+    assert.equal(store.activities.size, 0);
+    store.remove('a1'); // idempotent: a double delete is a no-op
+  });
+});
+
+describe('saveSwarmActivityData (the sync handler)', () => {
+  it('routes U to upsert and the id-only D to remove', async () => {
+    const store = SwarmActivityStore.create({ activities: {} });
+    await saveSwarmActivityData(
+      [
+        {
+          data: signal() as never,
+          modelName: 'SwarmActivity',
+          modelId: 'a1',
+          action: 'U',
+          workspaceId: 'w1',
+          sequenceId: '1',
+        } as never,
+        {
+          data: { id: 'a1' } as never,
+          modelName: 'SwarmActivity',
+          modelId: 'a1',
+          action: 'D',
+          workspaceId: 'w1',
+          sequenceId: '2',
+        } as never,
+      ],
+      store,
+    );
+    assert.equal(store.activities.size, 0);
   });
 });
