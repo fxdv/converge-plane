@@ -368,15 +368,22 @@ type agentWorker struct {
 	name        string
 	ctx         context.Context
 	cancelFn    context.CancelFunc
+	// activityMu guards activity: written by the worker's own
+	// goroutine, read by the bootstrap collector (another goroutine).
+	activityMu sync.Mutex
+	activity   swarmActivityRef // zero value: nothing in flight
 }
 
 func (w *agentWorker) cancel() {
 	w.cancelFn()
 }
 
-// finish releases the worker's slot exactly once.
+// finish releases the worker's slot exactly once and stops the
+// in-flight signal (the board's live chip must clear when the worker
+// is gone, whatever the reason: drained queue, retirement, cancel).
 func (w *agentWorker) finish() {
 	w.cancelFn()
+	w.clearActivity()
 	key := w.workspaceID + "/" + w.agentID
 	w.rt.mu.Lock()
 	if cur := w.rt.workers[key]; cur == w {
@@ -471,12 +478,36 @@ func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
 		return false, nil // stale pick: exit; the dispatcher re-derives
 	}
 
+	// The in-flight signal (the trace has no record for work that has
+	// not yet happened): the board's live chip and the swarm panel
+	// render this, the client TTLs it.
+	now := time.Now()
+	ref := swarmActivityRef{
+		AgentID: w.agentID, IssueID: issueID,
+		IssueNumber: in.IssueNumber, IssuePrefix: in.TeamIdentifier,
+		Since: now,
+	}
+	w.setActivity(ref.WithPhase(swarmPhaseWorking))
+	if w.rt.hasLLMPolicy() {
+		ref.Since = time.Now()
+		w.setActivity(ref.WithPhase(swarmPhaseDeciding))
+	}
+
 	action, tokens, err := w.rt.policy.Act(ctx, in)
 	if err != nil {
 		return false, fmt.Errorf("policy: %w", err)
 	}
 
 	return w.applyTx(ctx, issueID, in, version, action, tokens)
+}
+
+// hasLLMPolicy reports whether the active policy makes model calls.
+// The "deciding" signal is only worth emitting when a phase takes
+// seconds; the deterministic policy decides in microseconds and its
+// working/deciding distinction would only flicker.
+func (rt *AgentRuntime) hasLLMPolicy() bool {
+	_, ok := rt.policy.(fallbackPolicy)
+	return ok
 }
 
 // loadIssueRowTx reads one issue row with its version anchor; it is
@@ -647,11 +678,12 @@ func (w *agentWorker) nextIssue(ctx context.Context) (string, error) {
 // fenced untrusted context (the latest incoming handoff summary).
 func (a *API) runtimeInputTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row issueRow) (ActionInput, error) {
 	in := ActionInput{}
-	var teamName string
-	if err := tx.QueryRow(ctx, "select name from teams where id = $1", row.TeamID).Scan(&teamName); err != nil {
+	var teamName, teamIdentifier string
+	if err := tx.QueryRow(ctx, "select name, identifier from teams where id = $1", row.TeamID).Scan(&teamName, &teamIdentifier); err != nil {
 		return ActionInput{}, err
 	}
 	in.TeamName = teamName
+	in.TeamIdentifier = teamIdentifier
 	in.TeamID = row.TeamID
 	in.WorkspaceID = w.workspaceID
 	in.IssueNumber = row.Number

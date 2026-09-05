@@ -89,6 +89,7 @@ type ActionInput struct {
 	// Trusted: server-derived facts.
 	IssueNumber     int
 	TeamName        string
+	TeamIdentifier  string     // the team's display prefix (the live-signal chip shows ENG-23, not a bare number)
 	TeamID          string     // the issue's team (the target-selection scope)
 	WorkspaceID     string     // the issue's workspace (LLM endpoint sharding)
 	ActorName       string     // this agent's display name
