@@ -311,7 +311,7 @@ Search\cs{feat:search} & PostgreSQL full-text + trigram,
 Saved views\cs{feat:views} & Filter + grouping + display, shared or
   personal & \shipped\\
 List / Kanban\cs{feat:boards} & Virtualized; group by status, assignee,
-  label, priority, team; drag = one mutation & \shipped\\
+  label, priority, team; drag = one mutation; the swarm's live signal as a pulsing chip plus the latest handoff line (\S\ref{sec:activity}) & \shipped\\
 Sync engine\cs{feat:realtime} & Bootstrap / delta / SSE stream;
   transactional outbox; sequence watermarks; stale-gap recovery &
   \shipped\\
@@ -344,6 +344,7 @@ Quiet guards\csr{swarm:guards} & Per-issue loop + budget circuit
   breakers; trip = pause, not flag (\S\ref{sec:guards}) & \shipped\\
 Swarm panel\csr{swarm:panel} & Fleet roster: busy/idle, last handoff,
   24h accounting; paused issues on top (\S\ref{sec:panel}) & \shipped\\
+Swarm activity\csr{swarm:activity} & In-flight work signal on the sync seam: one record per agent (what, phase, since); bootstrap replays the live runtime (\S\ref{sec:activity}) & \shipped\\
 Agent runtime\csr{swarm:runtime} & In-process dispatcher + per-agent
   workers; fenced summaries; act, hand back, pause; spend slot; the LLM
   brain (opt-in fleet, deterministic floor) (\S\ref{sec:runtime}) &
@@ -697,11 +698,57 @@ The board's \emph{Swarm} button opens the fleet view (shipped):
   paused issue counts; last handoff in either direction (counterpart,
   issue, relative time, trimmed summary); 24h accounting (operations,
   handoffs received, API calls). Busy first, then idle, then suspended.
+  While a fresh \csr{swarm:activity} signal is in flight the dot pulses
+  and a live row shows the in-flight issue and phase (\S\ref{sec:activity}).
 \end{itemize}
 
 The panel is topology-agnostic --- foreman and flat swarms produce the
 identical payload --- and costs the API five bounded indexed reads per
 poll; it scales with the roster, not the work.
+
+\section{Live swarm surfaces}
+\label{sec:activity}
+\cs{swarm:activity}
+
+The trace records what \emph{has been} done; it cannot say what a worker
+is doing \emph{right now} --- a worker inside its decision has written
+nothing to the trace yet. The \emph{SwarmActivity} signal fills that gap
+as a first-class sync model on the existing outbox/SSE seam (shipped):
+one record per agent (model id = agent id) carrying the issue, the
+phase (\texttt{working} --- the millisecond-scale transactional phases
+--- or \texttt{deciding} --- inside the LLM call, the only phase a human
+can perceive), and when the phase began. Ephemeral by design: no new
+table (the outbox row \emph{is} the record, trimmed with the rest of the
+window); the bootstrap collector replays the runtime's current in-memory
+state, so a reconnecting client converges on the truth; the worker
+deletes the record on exit, and the client expires entries older than
+two minutes, so a crashed process simply stops emitting. The client's
+phase is a plain string on purpose: a future server phase must degrade,
+never crash model validation.
+
+Three surfaces read the one signal; the board stays signal-only --- the
+anti-crowding rule keeps a swarm of any size from turning the board into
+its own news feed:
+
+\begin{itemize}
+\item \textbf{Board chip.} A pulsing dot with the agent's name and phase
+  appears on the card while the signal is fresh, beside the ``needs
+  human'' badge; the latest handoff within seven days renders as one
+  muted, clamped line (200 characters). The card shows where the swarm
+  left off, not what it said.
+\item \textbf{Activity feed.} A workspace-level stream (header button,
+  right panel) deriving every entry client-side from stores the client
+  already syncs in full: handoffs (with the summary), status moves
+  (destination named), pauses (with the guard's reason), assignments,
+  comments (body preview), plus the live signals on top. Bounded to the
+  fifty most recent entries, filterable to agents or humans. There is
+  deliberately no \texttt{/activity} endpoint: the outbox already
+  delivers the trace, and a server endpoint would be a second source of
+  truth for the same data.
+\item \textbf{Live row in the swarm panel.} The fleet row shows the
+  in-flight issue and phase, dot pulsing; the 24h counters remain
+  poll-driven, because they are history, not signal.
+\end{itemize}
 
 \section{Trace disclosure}
 \cs{swarm:trace}\owner{this is the section you flagged --- confirm the
@@ -720,6 +767,9 @@ Issue timeline (all history: changes,
   handoff summaries fenced as \emph{untrusted data} (\S\ref{sec:runtime})\\
 Swarm panel (roster, burn, paused) & full read & no read path (the panel
   is a human instrument)\\
+Swarm activity (live in-flight signal) & full read (board chip, feed,
+  panel) & none (the worker emits its own signal; it is not an input to
+  decisions)\\
 Handoff summaries authored by others & full read & only as inbound
   context for the issue they were handed; never as instructions\\
 Token burn / cost & full read & own totals only (no other-agent spend

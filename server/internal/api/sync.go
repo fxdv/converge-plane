@@ -191,6 +191,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]sy
 		return a.collectComments(ctx, workspaceID, emit)
 	case "IssueHistory":
 		return a.collectHistory(ctx, workspaceID, emit)
+	case ModelSwarmActivity:
+		return a.collectSwarmActivity(ctx, workspaceID, emit)
 	case "View":
 		return a.collectViews(ctx, workspaceID, emit)
 	default:
@@ -722,10 +724,12 @@ func (a *API) auditTx(ctx context.Context, tx pgx.Tx, workspaceID, actorID, acti
 	return err
 }
 
-// emitChange claims the next sync sequence for the workspace, writes the
-// outbox row inside the caller's transaction, and returns the wire record
-// to broadcast after commit.
-func (a *API) emitChange(ctx context.Context, tx pgx.Tx, workspaceID, model, modelID, action string, data map[string]any) (syncActionRecord, error) {
+// claimSequenceTx claims the next sync sequence for the workspace
+// inside the caller's transaction: one row per workspace, updated
+// atomically. Both outbox writers (emitChange for mutations,
+// emitOutboxDirect for swarm signals) claim through here so the
+// "one sequence per record" rule has a single home.
+func (a *API) claimSequenceTx(ctx context.Context, tx pgx.Tx, workspaceID string) (int64, error) {
 	var seq int64
 	err := tx.QueryRow(ctx, `
 		insert into sync_sequences (workspace_id, last_sequence)
@@ -733,6 +737,14 @@ func (a *API) emitChange(ctx context.Context, tx pgx.Tx, workspaceID, model, mod
 		on conflict (workspace_id)
 		do update set last_sequence = sync_sequences.last_sequence + 1
 		returning last_sequence`, workspaceID).Scan(&seq)
+	return seq, err
+}
+
+// emitChange claims the next sync sequence for the workspace, writes the
+// outbox row inside the caller's transaction, and returns the wire record
+// to broadcast after commit.
+func (a *API) emitChange(ctx context.Context, tx pgx.Tx, workspaceID, model, modelID, action string, data map[string]any) (syncActionRecord, error) {
+	seq, err := a.claimSequenceTx(ctx, tx, workspaceID)
 	if err != nil {
 		return syncActionRecord{}, err
 	}

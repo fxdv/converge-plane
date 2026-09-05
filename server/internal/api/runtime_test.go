@@ -614,7 +614,7 @@ func inputFixture(summaryErr error, summary string, statusErr error) *fakeTx {
 	now := time.Now()
 	return &fakeTx{
 		rules: []fakeRule{
-			{frag: "from teams where id", rowVals: []any{"Eng"}},
+			{frag: "from teams where id", rowVals: []any{"Eng", "ENG"}},
 			{frag: "from workflow_statuses where id", rowVals: []any{"st2", "To Do", 1, "UNSTARTED"}, rowErr: statusErr},
 			{frag: "from issue_history", rowVals: []any{0}},
 			{frag: "from issue_handoffs", rowVals: []any{summary}, rowErr: summaryErr},

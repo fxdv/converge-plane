@@ -207,3 +207,46 @@ limiter, so a multi-instance deployment moves it to the shared broker.
 - **Trace and spend.** Every runtime action writes the same history /
   outbox / broadcast trail as the API; the panel's token slot reports
   per-agent spend over the 24h window.
+- **Live signal.** Each worker publishes its in-flight state as a
+  `SwarmActivity` sync record (spec `cs:swarm:activity`): one record per
+  agent carrying `{agent, issue, phase, since}`. `working` covers the
+  transactional phases (milliseconds); `deciding` is emitted only when the
+  active policy is the LLM brain (a deterministic decision is
+  microseconds — the phase would only flicker). Emission is best-effort on
+  a fresh 5s context (a wedged database logs and drops the signal; it
+  never fails the work) and the record is deleted on every worker exit.
+  Ephemeral by contract: no new table (the outbox row is the record,
+  trimmed with the window), the bootstrap collector replays the runtime's
+  live in-memory state, and the client TTLs entries at 2 minutes — longer
+  than the LLM decision bound, shorter than human patience. A crashed
+  process simply stops emitting.
+
+## Live swarm surfaces (as-built, D3+)
+
+The trace says what *has been* done; the signal says what *is happening*
+now. One signal, three surfaces; the board stays signal-only (the
+anti-crowding rule — a swarm of any size must not turn the board into its
+own news feed):
+
+1. **Board chip** (the card): while a fresh signal is present, a pulsing
+   emerald dot + `{agentName} deciding|working` beside the "needs human"
+   badge, plus the latest handoff summary within 7 days as one muted,
+   clamped line (≤200 chars). The card shows where the swarm left off, not
+   what it said.
+2. **Activity feed** (workspace): a header button opens a right panel
+   deriving every entry client-side from stores the client already syncs in
+   full — handoffs (summary), status moves (destination named), pauses
+   (guard reason), assignments, comments (doc-JSON → text preview), and the
+   live signals on top. Bounded to the 50 most recent entries; an
+   All/Agents/Humans filter keeps the swarm's output from drowning out the
+   team's. **There is deliberately no `/activity` endpoint**: the outbox
+   already delivers the full workspace trace (history, comments) and the
+   signal rides the same seam; a server endpoint would be a parallel source
+   of truth.
+3. **Swarm panel** (fleet): the in-flight issue + phase as a live row,
+   status dot pulsing; the 24h counters remain poll-driven (history, not
+   signal).
+
+The client's `phase` is a plain string in the MST model on purpose: a new
+server phase must degrade, never crash model validation (the project has a
+history of exactly that crash class).
