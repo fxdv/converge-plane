@@ -11,6 +11,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -221,6 +222,76 @@ func TestDeterministicPolicyDeadEndPause(t *testing.T) {
 	}
 	if action.Comment == "" {
 		t.Fatal("pause carries the reason humans see")
+	}
+}
+
+// TestIsHumanReviewState pins the reserved column's identity test
+// (case-insensitive exact name; a user-renamed or suffixed state is
+// NOT the protocol's column — the reserved name is the contract).
+func TestIsHumanReviewState(t *testing.T) {
+	if isHumanReviewState(nil) {
+		t.Fatal("nil state must never be Human Review")
+	}
+	for _, name := range []string{"Human Review", "human review", "HUMAN REVIEW"} {
+		if !isHumanReviewState(&StateRef{Name: name}) {
+			t.Errorf("%q must match the reserved name case-insensitively", name)
+		}
+	}
+	for _, name := range []string{"In Progress", "Human Review Extra", "human review "} {
+		if isHumanReviewState(&StateRef{Name: name}) {
+			t.Errorf("%q must not match the reserved name", name)
+		}
+	}
+}
+
+// TestRenderRecentComments pins the prompt's discussion context:
+// fenced per line, chronological for reading, bounded in total (a
+// 4 KB-fenced line that exceeds the budget falls off — the budget is
+// the prompt's injection ceiling for authored discussion).
+func TestRenderRecentComments(t *testing.T) {
+	if got := renderRecentComments(nil); got != "" {
+		t.Fatalf("no comments render empty, got %q", got)
+	}
+
+	doc := func(text string) string {
+		b, _ := json.Marshal(map[string]any{
+			"type":    "doc",
+			"content": []map[string]any{{"type": "paragraph", "content": []map[string]any{{"type": "text", "text": text}}}},
+		})
+		return string(b)
+	}
+	// Newest first in the input (the loader's order); the render must
+	// come out chronological, fenced, with the author's name as a label.
+	got := renderRecentComments([]recentComment{
+		{body: doc("\x1b[31mred decision: ship it\x00"), author: "Alpha"},
+		{body: doc("I take this one."), author: "demo"},
+	})
+	// The ESC byte fences to a space, NUL vanishes into the trim; the
+	// leftover escape-sequence text is inert data (the fence blunts
+	// control characters, it does not parse ANSI).
+	want := "demo: I take this one.\nAlpha: [31mred decision: ship it"
+	if got != want {
+		t.Fatalf("render = %q, want %q", got, want)
+	}
+	// Empty comments carry no context.
+	got = renderRecentComments([]recentComment{{body: doc(""), author: "Alpha"}})
+	if got != "" {
+		t.Fatalf("an empty comment renders nothing, got %q", got)
+	}
+	// A body past the fence cap fences to 4 KB — over the 1.2 KB total
+	// budget, so the line falls off rather than bloating the prompt.
+	got = renderRecentComments([]recentComment{{body: doc(strings.Repeat("x", 5000)), author: "Alpha"}})
+	if got != "" {
+		t.Fatalf("an over-budget line falls off the discussion, got %d bytes", len(got))
+	}
+	// Several small comments fit and stay in order.
+	got = renderRecentComments([]recentComment{
+		{body: doc("c3"), author: "a"},
+		{body: doc("c2"), author: "b"},
+		{body: doc("c1"), author: "c"},
+	})
+	if got != "c: c1\nb: c2\na: c3" {
+		t.Fatalf("chronological order broken: %q", got)
 	}
 }
 
@@ -618,6 +689,11 @@ func inputFixture(summaryErr error, summary string, statusErr error) *fakeTx {
 			{frag: "from workflow_statuses where id", rowVals: []any{"st2", "To Do", 1, "UNSTARTED"}, rowErr: statusErr},
 			{frag: "from issue_history", rowVals: []any{0}},
 			{frag: "from issue_handoffs", rowVals: []any{summary}, rowErr: summaryErr},
+			// No discussion yet: the prompt omits the section.
+			{frag: "from comments c", rows: [][]any{}},
+			// A rule for the reserved-state probe (the advance->pause
+			// conversion) — the fixture's team has no such state.
+			{frag: "lower(name)", rowVals: []any{false}},
 			{frag: "from workflow_statuses where team_id", rows: [][]any{
 				{"st1", "Backlog", 0, "BACKLOG"},
 				{"st2", "To Do", 1, "UNSTARTED"},

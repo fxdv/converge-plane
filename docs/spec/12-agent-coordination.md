@@ -39,17 +39,52 @@ over it (see below).
 
 ## Escalation
 
-On budget exhaustion or loop detection the issue **pauses** (no agent may act
-on it) and a human is notified. Confirmed default (owner, 2026-09-02):
-pause + notify, not flag-and-continue — a stuck swarm must stop spending
-tokens, not decorate the board.
+On budget exhaustion, loop detection, or an agent's own judgment that it
+cannot proceed, the issue **pauses** (no agent may act on it) and a human
+is notified. Confirmed default (owner, 2026-09-02): pause + notify, not
+flag-and-continue — a stuck swarm must stop spending tokens, not decorate
+the board.
 
-As shipped (D1), the pause is `issues.agent_paused`: agents get a
-422 on every issue mutation (handoff, update, move, delete, comment);
-humans act freely, and any human mutation on the paused issue resumes
-it — the human's fix is the unblock. The notification surfaces as the
-board's "needs human" badge and a timeline event carrying the guard's
-reason.
+### The Human Review protocol (as shipped)
+
+The pause is `issues.agent_paused`, and every pause writes **three
+disclosures** in one transaction, through one choke point (`pauseIssueTx`):
+
+1. **A column.** When the team's workflow has a state named
+   `Human Review` (a reserved name — teams without it are unaffected,
+   the pause flags in place), the issue moves there. The board shows
+   *where* the card waits instead of leaving the signal scattered.
+2. **A comment.** The card receives a human-handoff comment authored by
+   the agent that parked it: *why* the swarm stopped (the guard's own
+   words, the model's reason) plus the exact path — reply with your
+   decision, move the card back into the workflow to resume, or take
+   the card over / close it. The signal (badge/panel) says where;
+   the comment says what to do.
+3. **The badge and timeline.** As before: the board's "needs human"
+   badge, a `paused` timeline event carrying the reason, an audit
+   event, the broadcast.
+
+**Queue exclusion.** No agent works a card sitting in `Human Review`:
+the dispatcher scan, the worker queue, and the fleet's workload counts
+all exclude that state by its reserved name, and agents get a 422 on
+every mutation of a card in it (update, comment, handoff, delete).
+Parked means parked, whatever the pause flag says — including a card a
+*human* moved there: a human-parked card stays parked until the human
+moves it back, reassigns it, or closes it.
+
+**Resume.** A human mutation on a paused issue resumes the swarm (D1)
+and wakes the assignee agent; the agent re-decides with the issue's
+recent discussion in its prompt context (the last few comments, fenced
+like every other authored field) — a human's answer in a comment
+*reaches* the swarm on the next decision. The swarm panel's needs-human
+list is the pause flag **or** the column: a card shows for as long as
+it waits on a human by either signal, with the reason (swarm's own
+words for a swarm pause; "parked" for a human-parked card).
+
+As shipped (D1), agents get a 422 on every issue mutation of a paused
+issue (handoff, update, move, delete, comment); humans act freely, and
+any human mutation on the paused issue resumes it — the human's fix is
+the unblock.
 
 ## Data and API
 

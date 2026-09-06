@@ -75,7 +75,7 @@ func (a *API) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 	if req.ParentID != "" && !a.commentInIssue(ctx, req.ParentID, row.ID) {
@@ -159,7 +159,7 @@ func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 	if req.ParentID != "" && !a.commentInIssue(ctx, req.ParentID, row.ID) {
@@ -219,7 +219,7 @@ func (a *API) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 

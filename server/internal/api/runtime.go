@@ -319,11 +319,13 @@ func (rt *AgentRuntime) applyPlanLocked(workspaceID string, fleet []fleetAgent) 
 // fleetSnapshot reads the workspace's active agents with their actionable
 // work counts. The budget filter (issueOpBudget over the guard window)
 // keeps exhausted issues out of the spawn set — the constant pair is
-// fmt'd in, the single source of truth staying handoff.go.
+// fmt'd in, the single source of truth staying handoff.go — and the
+// Human Review exclusion keeps parked cards out the same way: a card in
+// that column waits for a human, not for a worker.
 func (rt *AgentRuntime) fleetSnapshot(ctx context.Context, workspaceID string) ([]fleetAgent, error) {
 	rows, err := rt.a.pool.Query(ctx, `
 		select a.id, a.name,
-		       count(*) filter (where not i.agent_paused
+		       count(*) filter (where not i.agent_paused and `+notHumanReviewSQL+`
 			                          and (select count(*)
 				                             from issue_history h
 				                             join accounts ha on ha.id = h.actor_id
@@ -647,7 +649,9 @@ func decideStillValid(row issueRow, version int, agentID string) bool {
 }
 
 // nextIssue picks the agent's oldest actionable issue: assigned to it,
-// active, not paused, and not in a terminal workflow state.
+// active, not paused, not in a terminal workflow state, and not in
+// Human Review (a parked card waits for its human — the swarm's queue
+// excludes it by the reserved name, whatever the pause flag says).
 func (w *agentWorker) nextIssue(ctx context.Context) (string, error) {
 	var id *string
 	err := w.rt.a.pool.QueryRow(ctx, `
@@ -659,6 +663,7 @@ func (w *agentWorker) nextIssue(ctx context.Context) (string, error) {
 		  and i.status = 'active'
 		  and i.assignee_id = $2
 		  and not i.agent_paused
+		  and `+notHumanReviewSQL+`
 		  and coalesce(ws.category, 'UNSTARTED') not in ('COMPLETED', 'CANCELED')
 		order by i.created_at, i.number
 		limit 1`, w.workspaceID, w.agentID).Scan(&id)
@@ -738,12 +743,63 @@ func (a *API) runtimeInputTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row
 	// case for freshly assigned work, not a failure.
 	in.IncomingSummary = fenceSummary(strval(summary))
 
+	// Untrusted context: the issue's recent discussion (anyone who can
+	// comment authored it — human or agent). This is how a resumed swarm
+	// reads a human's answer to a parked card: on the next decision the
+	// prompt carries the last few exchanges, fenced and capped, marked
+	// data-only (the deterministic policy never reads the field).
+	in.RecentComments = a.recentCommentsTx(ctx, tx, row.ID)
+
 	fleet, err := a.fleetRosterTx(ctx, tx, w.workspaceID, row.TeamID)
 	if err != nil {
 		return ActionInput{}, err
 	}
 	in.Fleet = fleet
 	return in, nil
+}
+
+// recentCommentsTx loads the issue's recent comments (body + the
+// author's trusted name, newest first) and renders them fenced for the
+// prompt. Best-effort by design: discussion is context, not authority —
+// a failed read degrades to "no discussion", not a failed decision.
+func (a *API) recentCommentsTx(ctx context.Context, tx pgx.Tx, issueID string) string {
+	rows, err := tx.Query(ctx, `
+		select c.body, an.name
+		from comments c
+		join accounts an on an.id = c.author_id
+		where c.issue_id = $1
+		order by c.created_at desc
+		limit 5`, issueID)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	var entries []recentComment
+	for rows.Next() {
+		var e recentComment
+		if err := rows.Scan(&e.body, &e.author); err != nil {
+			return ""
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return ""
+	}
+	return renderRecentComments(entries)
+}
+
+// stateIsHumanReviewTx reports whether a status is the team's Human
+// Review state (the reserved name, case-insensitive) — the check behind
+// the advance-to-pause conversion in applyActionTx.
+func (a *API) stateIsHumanReviewTx(ctx context.Context, tx pgx.Tx, teamID, statusID string) bool {
+	if statusID == "" {
+		return false
+	}
+	var exists bool
+	err := tx.QueryRow(ctx,
+		"select exists(select 1 from workflow_statuses where team_id = $1 and id = $2 and lower(name) = $3)",
+		teamID, statusID, strings.ToLower(humanReviewStateName)).Scan(&exists)
+	return err == nil && exists
 }
 
 // stateRefTx loads one workflow status as the policy's state view.
@@ -788,14 +844,16 @@ func (a *API) teamStatesTx(ctx context.Context, tx pgx.Tx, teamID string) ([]Sta
 }
 
 // fleetRosterTx loads the workspace's active agents as the policy's fleet
-// view: identity, team memberships, and the open (unpaused, non-terminal)
-// work count within the issue's team — the "least busy" signal.
+// view: identity, team memberships, and the open (unpaused, non-terminal,
+// not in Human Review) work count within the issue's team — the
+// "least busy" signal. Parked cards count for no agent: they wait on a
+// human, so an agent whose whole load is parked is honestly idle.
 func (a *API) fleetRosterTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID string) ([]FleetAgent, error) {
 	rows, err := tx.Query(ctx, `
 		select a.id, a.name, a.created_at,
 		       coalesce((select array_agg(tm.team_id) from team_members tm
 		                where tm.account_id = a.id), '{}'),
-		       count(*) filter (where i.id is not null and not i.agent_paused)::int
+		       count(*) filter (where i.id is not null and not i.agent_paused and `+notHumanReviewSQL+`)::int
 		from accounts a
 		join workspace_members wm on wm.workspace_id = $1 and wm.account_id = a.id
 		left join issues i on i.assignee_id = a.id
@@ -827,30 +885,45 @@ func (a *API) fleetRosterTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID 
 
 // applyActionTx executes the policy's Action inside the caller's
 // transaction (the lock is held). It returns the broadcast records and
-// tripped=true when a quiet guard paused the issue as a side effect of
-// the handoff — the pause is part of the same transaction, so the
-// escalation and the failed handoff commit or roll back together.
+// tripped=true when the issue paused (the action IS the pause, or a
+// quiet guard tripped on the handoff) — the pause is part of the same
+// transaction, so the escalation commits or rolls back with the decision.
 func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row issueRow, in ActionInput, action Action) (recs []syncActionRecord, tripped bool, err error) {
+	// Human Review is reached by escalation or by a human — never by an
+	// agent advance: a team whose state after the current one is Human
+	// Review would otherwise receive unflagged cards (no pause flag, no
+	// path comment, no needs-human signal). Convert to the pause path:
+	// the same flag, move, and disclosure as any other escalation.
+	if action.Kind == ActionAdvance && action.StateID != "" && a.stateIsHumanReviewTx(ctx, tx, in.TeamID, action.StateID) {
+		ref, _ := a.stateRefTx(ctx, tx, action.StateID, in.TeamID)
+		name := humanReviewStateName
+		if ref != nil {
+			name = ref.Name
+		}
+		action = Action{Kind: ActionPause, Comment: fmt.Sprintf("%s reached %s — the card is parked for a human", in.ActorName, name)}
+	}
+
 	switch action.Kind {
 	case ActionNoop:
 		// Nothing to persist.
 		return recs, false, nil
 
 	case ActionPause:
-		// Escalation, same channel the quiet guards use: the flag, the
-		// history row carrying the reason, the audit row, the refreshed
-		// issue record. tripped=true: the worker moves on (a paused
-		// issue is no longer actionable).
+		// Escalation through the one choke point (the Human Review
+		// protocol): the flag, the column move, the history rows, the
+		// human-handoff comment, the audit row, the refreshed issue
+		// record. tripped=true: the worker moves on (a paused issue is
+		// no longer actionable).
 		if action.Comment == "" {
 			action.Comment = "agent runtime paused the issue for a human (no progress possible)"
 		}
 		in.PauseReason = action.Comment
-		issueRec, histRec, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row,
+		pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row,
 			&Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, action.Comment)
 		if err != nil {
 			return nil, false, err
 		}
-		return []syncActionRecord{issueRec, histRec}, true, nil
+		return pauseRecs, true, nil
 
 	case ActionAdvance:
 		if action.StateID == "" {
@@ -878,11 +951,11 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 			return nil, false, err
 		} else if tripped {
 			in.PauseReason = reason
-			issueRec, histRec, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason)
+			pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason)
 			if err != nil {
 				return nil, false, err
 			}
-			return []syncActionRecord{issueRec, histRec}, true, nil
+			return pauseRecs, true, nil
 		}
 		stateID := action.StateID
 		issueRec, histRec, _, err := a.applyHandoffTx(ctx, tx, w.workspaceID, row, w.agentID, action.ToAccountID, stateID, action.Summary)
@@ -919,16 +992,25 @@ func (a *API) applyStatusTx(ctx context.Context, tx pgx.Tx, workspaceID string, 
 	return issueRec, histRec, a.refreshOutboxTx(ctx, tx, workspaceID, &issueRec, a.issueData(fresh))
 }
 
-// applyCommentTx appends one single-paragraph comment inside the
-// caller's transaction and emits it on the sync feed. The body is the
-// rendered step text; the jsonb document shape is the client's
-// single-paragraph format (the same shape the rich text editor writes).
+// applyCommentTx appends a comment inside the caller's transaction and
+// emits it on the sync feed. The body is the rendered step text, one
+// line per paragraph (the agent's step text is a single line; the
+// human-handoff comment is several); the jsonb document shape is the
+// client's TipTap format (the same shape the rich text editor writes).
 func (a *API) applyCommentTx(ctx context.Context, tx pgx.Tx, workspaceID, issueID, authorID, body string) (syncActionRecord, error) {
+	content := make([]map[string]any, 0, 4)
+	for _, line := range strings.Split(body, "\n") {
+		if line == "" {
+			continue
+		}
+		content = append(content, map[string]any{
+			"type":    "paragraph",
+			"content": []map[string]any{{"type": "text", "text": line}},
+		})
+	}
 	bodyDoc, err := json.Marshal(map[string]any{
-		"type": "doc",
-		"content": []map[string]any{
-			{"type": "paragraph", "content": []map[string]any{{"type": "text", "text": body}}},
-		},
+		"type":    "doc",
+		"content": content,
 	})
 	if err != nil {
 		return syncActionRecord{}, err

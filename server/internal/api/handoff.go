@@ -18,6 +18,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -31,6 +32,27 @@ import (
 
 // The quiet guards (spec 12 rule 3).
 const (
+	// humanReviewStateName is the reserved parking column: where a paused
+	// card waits for its human. It is a product contract, not a label —
+	// the escalation, the swarm queue, the agent guard, and the panel all
+	// key off this one name (docs/spec/12 escalation):
+	//
+	//   - Escalation moves the card there: every pause (quiet guard, LLM
+	//     pause, deterministic dead-end) parks the issue in the team's
+	//     Human Review state when the team has one, so the board shows
+	//     where it waits instead of leaving the signal scattered.
+	//   - The swarm's queue excludes it: no worker picks a card out of
+	//     Human Review, and agents get a 422 on every mutation of a card
+	//     in it — parked means parked, whatever the pause flag says.
+	//   - A human leaves it only on purpose: a human mutation on a paused
+	//     card resumes the swarm and wakes the assignee; a card a human
+	//     parked there (flag already clear) waits until the human moves it
+	//     back, reassigns it, or closes it.
+	//   - The panel's needs-human set is the pause flag OR the column: a
+	//     card shows up for as long as it waits on a human, by either
+	//     signal.
+	humanReviewStateName = "Human Review"
+
 	// handoffSummaryMaxBytes caps a handoff summary (spec 12 rule 2:
 	// bounded context for the next agent; the same cap is the consumer's
 	// prompt-injection budget in the D3 runtime).
@@ -52,13 +74,37 @@ const (
 	issueOpBudget = 50
 )
 
-// agentPausedGuard rejects agent mutations on a paused issue. Human
-// mutations are allowed everywhere (they resume the issue where it
-// matters); agents are the swarm being constrained. Returns false when
-// the response was written and the handler must stop.
-func (a *API) agentPausedGuard(w http.ResponseWriter, p *Principal, row issueRow) bool {
-	if row.AgentPaused && p.Kind == auth.AccountKindAgent {
+var (
+	// humanReviewStateSQL is the reserved name lower-cased as a SQL
+	// literal. It is a server constant — never user input — so embedding
+	// it in queries is safe; the parameterized lookups below reuse it.
+	humanReviewStateSQL = "'" + strings.ToLower(humanReviewStateName) + "'"
+	// needsHumanSQL is the panel's needs-human predicate (issue alias i,
+	// status alias ws): the swarm paused the card, or it sits in the
+	// Human Review column.
+	needsHumanSQL = "(i.agent_paused or lower(coalesce(ws.name, '')) = " + humanReviewStateSQL + ")"
+	// notHumanReviewSQL is the swarm queue's exclusion clause (the same
+	// aliases): an agent never works a card in Human Review.
+	notHumanReviewSQL = "not (lower(coalesce(ws.name, '')) = " + humanReviewStateSQL + ")"
+)
+
+// agentPausedGuard rejects agent mutations on a paused issue and on an
+// issue parked in Human Review. Human mutations are allowed everywhere
+// (they resume the issue where it matters); agents are the swarm being
+// constrained. Returns false when the response was written and the
+// handler must stop.
+func (a *API) agentPausedGuard(ctx context.Context, w http.ResponseWriter, p *Principal, row issueRow) bool {
+	if p.Kind != auth.AccountKindAgent {
+		return true
+	}
+	if row.AgentPaused {
 		writeError(w, http.StatusUnprocessableEntity, "issue is paused for human review; agents cannot act on it")
+		return false
+	}
+	// The column is a signal independent of the flag: a card a human
+	// parked in Human Review (pause flag already clear) is still parked.
+	if row.StatusID != nil && *row.StatusID != "" && a.issueInHumanReview(ctx, row.ID, row.TeamID) {
+		writeError(w, http.StatusUnprocessableEntity, "issue is in Human Review; agents cannot act on it")
 		return false
 	}
 	return true
@@ -93,7 +139,7 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 
@@ -154,7 +200,7 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	} else if tripped {
-		issueRec, histRec, err := a.pauseIssueTx(ctx, tx, workspaceID, row, p, reason)
+		recs, err := a.pauseIssueTx(ctx, tx, workspaceID, row, p, reason)
 		if err != nil {
 			a.internalError(w, err)
 			return
@@ -163,8 +209,9 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 			a.internalError(w, err)
 			return
 		}
-		a.broadcastRecord(issueRec)
-		a.broadcastRecord(histRec)
+		for i := range recs {
+			a.broadcastRecord(recs[i])
+		}
 		a.log.Warn("issue paused by handoff guard", "issue", row.ID,
 			"workspace", workspaceID, "reason", reason, "by", p.Email)
 		writeError(w, http.StatusUnprocessableEntity, "quiet guard tripped; issue paused for human review: "+reason)
@@ -284,36 +331,145 @@ func guardVerdict(loopCount, opCount int) (reason string, tripped bool) {
 	return "", false
 }
 
-// pauseIssueTx escalates a tripped issue in place: the flag, a history
-// row (so the timeline shows why the swarm stopped), an audit event,
-// and the issue record with the flag set. Returns the two wire records
-// for the caller to broadcast after commit.
-func (a *API) pauseIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, row issueRow, p *Principal, reason string) (issueRec, histRec syncActionRecord, err error) {
-	if _, err = tx.Exec(ctx,
-		"update issues set agent_paused = true, version = version + 1, updated_at = now() where id = $1",
-		row.ID); err != nil {
-		return syncActionRecord{}, syncActionRecord{}, err
+// pauseIssueTx escalates an issue in place — the Human Review protocol
+// (docs/spec/12 escalation), in the caller's transaction under the team
+// lock. It writes, in order:
+//
+//  1. the pause flag; the issue moves to the team's Human Review state
+//     when the team has one — the board shows where the card waits;
+//  2. a status history row (when it moved) and the paused history row
+//     whose summary IS the reason — the timeline shows why the swarm
+//     stopped;
+//  3. the human-handoff comment: the reason plus the exact path — reply
+//     with your decision, then move the card out of Human Review to
+//     resume the swarm (or take it over / close it). On resume the
+//     swarm re-decides with the discussion in its prompt context;
+//  4. an audit event;
+//  5. the refreshed issue record and the comment on the sync feed.
+//
+// Returns the wire records for the caller to broadcast after commit.
+func (a *API) pauseIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, row issueRow, p *Principal, reason string) (recs []syncActionRecord, err error) {
+	// The reserved parking column; "" when the team has none (the pause
+	// then flags in place and the comment omits the column claim).
+	hrID, err := a.humanReviewStatusIDTx(ctx, tx, row.TeamID)
+	if err != nil {
+		return nil, err
 	}
-	histRec, err = a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID,
+	statusMove := hrID != "" && hrID != strval(row.StatusID)
+
+	updateSQL := "update issues set agent_paused = true, version = version + 1, updated_at = now()"
+	args := []any{row.ID}
+	if statusMove {
+		updateSQL += ", status_id = $2"
+		args = append(args, hrID)
+	}
+	updateSQL += " where id = $1"
+	if _, err = tx.Exec(ctx, updateSQL, args...); err != nil {
+		return nil, err
+	}
+
+	recs = make([]syncActionRecord, 0, 4)
+	if statusMove {
+		rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID,
+			"updated", "status", strval(row.StatusID), hrID, "")
+		if err != nil {
+			return nil, err
+		}
+		recs = append(recs, rec)
+	}
+	histRec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID,
 		p.AccountID, "paused", "agent_paused", "false", "true", reason)
 	if err != nil {
-		return syncActionRecord{}, syncActionRecord{}, err
+		return nil, err
 	}
+	recs = append(recs, histRec)
 	if err = a.auditTx(ctx, tx, workspaceID, p.AccountID, "issue.paused", "Issue", row.ID); err != nil {
-		return syncActionRecord{}, syncActionRecord{}, err
+		return nil, err
 	}
 	fresh, err := a.issueByIDTx(ctx, tx, row.ID)
 	if err != nil {
-		return syncActionRecord{}, syncActionRecord{}, err
+		return nil, err
 	}
-	issueRec, err = a.emitChange(ctx, tx, workspaceID, "Issue", row.ID, "UPDATE", a.issueData(fresh))
+	issueRec, err := a.emitChange(ctx, tx, workspaceID, "Issue", row.ID, "UPDATE", a.issueData(fresh))
 	if err != nil {
-		return syncActionRecord{}, syncActionRecord{}, err
+		return nil, err
 	}
+	recs = append(recs, issueRec)
 	if err = a.refreshOutboxTx(ctx, tx, workspaceID, &issueRec, a.issueData(fresh)); err != nil {
-		return syncActionRecord{}, syncActionRecord{}, err
+		return nil, err
 	}
-	return issueRec, histRec, nil
+	// Server-composed text: the reason is fenced at its source (the
+	// guard's strings, the model's capped comment, the deterministic
+	// template) and the path is fixed. Every pause surface — the handoff
+	// guard, the runtime guard, the LLM pause, the dead-end pause — goes
+	// through this one choke point, so every escalation the swarm can
+	// produce carries the same disclosure.
+	commentRec, err := a.applyCommentTx(ctx, tx, workspaceID, row.ID, p.AccountID,
+		humanHandoffComment(reason, hrID != ""))
+	if err != nil {
+		return nil, err
+	}
+	recs = append(recs, commentRec)
+	return recs, nil
+}
+
+// humanReviewStatusIDTx resolves the team's Human Review state (the
+// reserved name, case-insensitive); "" when the team has none.
+func (a *API) humanReviewStatusIDTx(ctx context.Context, q queryer, teamID string) (string, error) {
+	var id string
+	err := q.QueryRow(ctx,
+		"select id from workflow_statuses where team_id = $1 and lower(name) = $2",
+		teamID, strings.ToLower(humanReviewStateName)).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return id, nil
+}
+
+// issueInHumanReview reports whether the issue sits in the team's Human
+// Review state (the reserved name, case-insensitive).
+func (a *API) issueInHumanReview(ctx context.Context, issueID, teamID string) bool {
+	var exists bool
+	err := a.pool.QueryRow(ctx, `
+		select exists(
+			select 1 from issues i
+			join workflow_statuses ws on ws.id = i.status_id
+			where i.id = $1 and i.team_id = $2 and lower(ws.name) = $3)`,
+		issueID, teamID, strings.ToLower(humanReviewStateName)).Scan(&exists)
+	return err == nil && exists
+}
+
+// humanHandoffComment renders the human path an escalation leaves on the
+// card: why the swarm stopped, and exactly what a human does next. The
+// comment is the breadcrumb the human was missing — the signal (badge /
+// panel) says WHERE; this says WHAT TO DO. inReview is false for teams
+// without a Human Review state (the pause flags in place; the column
+// claim is omitted, not wrong).
+func humanHandoffComment(reason string, inReview bool) string {
+	var b strings.Builder
+	if inReview {
+		b.WriteString("🧑 Human handoff — the swarm parked this card in Human Review for you.\n\n")
+	} else {
+		b.WriteString("⚠️ Human handoff — the swarm paused this card for you.\n\n")
+	}
+	b.WriteString("Why: " + reason + "\n\n")
+	b.WriteString("To resume the swarm:\n")
+	b.WriteString("- Reply here with your decision \u2014 the swarm reads your comments when it resumes.\n")
+	if inReview {
+		b.WriteString("- Then move the card back into the workflow (e.g. In Progress). That move is the resume.\n")
+	} else {
+		b.WriteString("- Then make any change to the card (move it, or reassign it). That change is the resume.\n")
+	}
+	b.WriteString("- Or assign the card to yourself to take it over \u2014 or move it to Done / Canceled to close it.\n\n")
+	if inReview {
+		b.WriteString("While the card sits in Human Review, no agent can act on it.")
+	} else {
+		b.WriteString("While the card is paused, no agent can act on it.")
+	}
+	return b.String()
 }
 
 // agentMember reports whether the account is an active member of the

@@ -294,7 +294,7 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 	// Cross-team updates apply the same move path (the client's patch and
@@ -545,7 +545,7 @@ func (a *API) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 
@@ -600,7 +600,7 @@ func (a *API) handleMoveIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if !a.agentPausedGuard(w, p, row) {
+	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
 	// The destination must be in the same workspace.

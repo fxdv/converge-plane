@@ -187,9 +187,10 @@ func (a *API) swarmRoster(ctx context.Context, workspaceID string) ([]swarmAgent
 	workloads := map[string][2]int{}
 	wrows, err := a.pool.Query(ctx, `
 		select i.assignee_id,
-		       count(*) filter (where coalesce(ws.category, 'UNSTARTED') not in ('COMPLETED', 'CANCELED'))::int,
 		       count(*) filter (where coalesce(ws.category, 'UNSTARTED') not in ('COMPLETED', 'CANCELED')
-		                          and i.agent_paused)::int
+		                          and not i.agent_paused and `+notHumanReviewSQL+`)::int,
+		       count(*) filter (where coalesce(ws.category, 'UNSTARTED') not in ('COMPLETED', 'CANCELED')
+		                          and `+needsHumanSQL+`)::int
 		from issues i
 		join teams t on t.id = i.team_id
 		left join workflow_statuses ws on ws.id = i.status_id
@@ -357,10 +358,13 @@ func (a *API) swarmRoster(ctx context.Context, workspaceID string) ([]swarmAgent
 	return agents, nil
 }
 
-// swarmPausedIssues lists the D1 escalations currently open in the
-// workspace, newest first. Reason is the guard's own words (the pause
-// history row's summary) so a human sees why the swarm stopped before
-// opening the issue.
+// swarmPausedIssues lists the issues currently waiting on a human in
+// the workspace, newest first: the pause flag OR the Human Review
+// column (the needs-human predicate, the same one the roster's counts
+// use). Reason is the swarm's own words (the newest pause history
+// row's summary) so a human sees why the swarm stopped before opening
+// the issue; a card a human parked in the column (no pause row) gets
+// the plain "parked" reason.
 func (a *API) swarmPausedIssues(ctx context.Context, workspaceID string) ([]swarmPausedIssue, error) {
 	rows, err := a.pool.Query(ctx, `
 		select i.id, i.number, i.title, i.team_id, i.status_id, i.assignee_id,
@@ -372,7 +376,8 @@ func (a *API) swarmPausedIssues(ctx context.Context, workspaceID string) ([]swar
 		       coalesce((select an.name from accounts an where an.id = i.assignee_id), '')
 		from issues i
 		join teams t on t.id = i.team_id
-		where t.workspace_id = $1 and i.status = 'active' and i.agent_paused
+		left join workflow_statuses ws on ws.id = i.status_id
+		where t.workspace_id = $1 and i.status = 'active' and `+needsHumanSQL+`
 		order by i.updated_at desc`, workspaceID)
 	if err != nil {
 		return nil, err
@@ -386,6 +391,9 @@ func (a *API) swarmPausedIssues(ctx context.Context, workspaceID string) ([]swar
 		if err := rows.Scan(&pi.ID, &pi.Number, &pi.Title, &pi.TeamID, &pi.StateID,
 			&assigneeID, &pi.PausedAt, &pi.Reason, &assigneeName); err != nil {
 			return nil, err
+		}
+		if pi.Reason == "" {
+			pi.Reason = "parked for a human in Human Review"
 		}
 		if assigneeID != "" {
 			id := assigneeID

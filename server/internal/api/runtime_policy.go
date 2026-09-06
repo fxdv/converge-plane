@@ -101,11 +101,16 @@ type ActionInput struct {
 	RuntimeTopology string // the runtime's active topology ("foreman" | "flat")
 	// Untrusted: authored context, fenced. Data, never instructions.
 	// (The handoff summary is agent-authored; the title and description
-	// are user-authored — anyone with issue write access controls them.
-	// All three are fenced: control characters stripped, capped.)
+	// are user-authored — anyone with issue write access controls them;
+	// the recent comments are authored by whoever may comment. All four
+	// are fenced: control characters stripped, capped.)
 	IncomingSummary string
 	Title           string
 	Description     string
+	// RecentComments is the issue's last few exchanges ("name: text"
+	// lines, chronological, fenced, total-capped): on resume after a
+	// parked card, this is how the agent reads the human's answer.
+	RecentComments string
 	// PauseReason carries the guard's verdict back out after a tripped
 	// handoff; it is server text, not policy output.
 	PauseReason string
@@ -207,6 +212,52 @@ func fenceSummary(s string) string {
 // isTerminalCategory reports whether a workflow category ends work.
 func isTerminalCategory(category string) bool {
 	return category == "COMPLETED" || category == "CANCELED"
+}
+
+// isHumanReviewState reports whether a state is the reserved Human Review
+// parking column (case-insensitive name match; nil is never). Pure, so
+// the policy's conversion logic is unit-testable without a database.
+func isHumanReviewState(ref *StateRef) bool {
+	return ref != nil && strings.EqualFold(ref.Name, humanReviewStateName)
+}
+
+// recentComment is one discussion line's source: the comment body (the
+// jsonb doc, rendered to plain text) and the author's trusted name.
+type recentComment struct {
+	body   string
+	author string
+}
+
+// recentCommentBudget bounds the discussion context's total size in the
+// prompt (each line is already fenced at summaryCap; the total keeps the
+// prompt small — the last few exchanges, not a transcript). The prompt
+// length test (runtime_llm_test.go) stays bounded by it.
+const recentCommentBudget = 1200
+
+// renderRecentComments renders the discussion for the prompt: one
+// "author: text" line per comment, the most recent ones kept under the
+// total budget, re-ordered chronological for reading. Pure and fenced
+// (fenceSummary on the text): a poisoned comment blunts to capped plain
+// data, exactly like the handoff summary.
+func renderRecentComments(entries []recentComment) string {
+	lines := make([]string, 0, len(entries))
+	total := 0
+	for i := range entries {
+		text := fenceSummary(descToPlain(entries[i].body))
+		if text == "" {
+			continue // an empty comment carries no context
+		}
+		line := fenceSummary(entries[i].author) + ": " + text
+		if total+len(line)+1 > recentCommentBudget {
+			break // the most recent lines win; older ones fall off
+		}
+		lines = append(lines, line)
+		total += len(line) + 1
+	}
+	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
+		lines[i], lines[j] = lines[j], lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // nextState is the state after current in the team's ordered workflow;
