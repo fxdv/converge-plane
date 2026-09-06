@@ -341,9 +341,11 @@ Handoff protocol\csr{swarm:handoff} & The only agent-to-agent channel:
   atomic assignee + state move + bounded summary (\S\ref{sec:handoff}) &
   \shipped\\
 Quiet guards\csr{swarm:guards} & Per-issue loop + budget circuit
-  breakers; trip = pause, not flag (\S\ref{sec:guards}) & \shipped\\
+  breakers; trip = pause + Human Review parking + path comment, not
+  flag-and-continue (\S\ref{sec:guards}) & \shipped\\
 Swarm panel\csr{swarm:panel} & Fleet roster: busy/idle, last handoff,
-  24h accounting; paused issues on top (\S\ref{sec:panel}) & \shipped\\
+  24h accounting; needs-human issues (paused or in Human Review) on
+  top (\S\ref{sec:panel}) & \shipped\\
 Swarm activity\csr{swarm:activity} & In-flight work signal on the sync seam: one record per agent (what, phase, since); bootstrap replays the live runtime (\S\ref{sec:activity}) & \shipped\\
 Agent runtime\csr{swarm:runtime} & In-process dispatcher + per-agent
   workers; fenced summaries; act, hand back, pause; spend slot; the LLM
@@ -432,9 +434,10 @@ mutations. Representative rules:
   membership); workspace admin everywhere in the workspace.
 \item Handoff: current assignee \emph{or} workspace admin; target must be
   an active agent member.
-\item Agent mutations on a paused issue: rejected (the issue is waiting
-  on a human). Human mutations: always allowed; a human mutation resumes
-  a paused issue.
+\item Agent mutations on a paused issue, or on a card in \emph{Human
+  Review} (a reserved parking column): rejected (the card is waiting on
+  a human). Human mutations: always allowed; a human mutation resumes a
+  paused issue.
 \item Agent administration (create, token rotation/revocation,
   suspend): workspace admin only.
 \item Swarm status: any active workspace member --- the payload contains
@@ -639,15 +642,25 @@ Operation budget & $\ge 50$ agent-authored history rows on the issue in
 (owner-confirmed): a stuck swarm must \emph{stop spending}, not decorate
 the board.
 
-\cs{swarm:escalation} On pause the server: sets the issue's pause flag;
-writes a \texttt{paused} history row whose summary \emph{is} the guard's
-reason (the timeline shows \emph{why} the swarm stopped); writes an audit
-event; broadcasts. While paused, every agent mutation (handoff, update,
-move, delete, comment) is rejected with a 422 pointing at the human.
-\textbf{Any human mutation on the issue resumes it} --- the human's fix is
-the unblock. The client renders the pause as a ``needs human'' badge on
-the card and a timeline event, and lists paused issues at the top of the
-swarm panel (\S\ref{sec:panel}).
+\cs{swarm:escalation} On pause the server, in one transaction through
+one choke point: sets the issue's pause flag; \emph{moves the card to the
+team's \texttt{Human Review} state} when the team has one (a reserved
+name --- the board shows where the card waits); writes a \texttt{paused}
+history row whose summary \emph{is} the reason (the timeline shows
+\emph{why} the swarm stopped); posts a \emph{human-handoff comment} on
+the card (the reason plus the exact path: reply with your decision, then
+move the card back into the workflow to resume --- or take it over /
+close it); writes an audit event; broadcasts. While paused, every agent
+mutation is rejected with a 422 pointing at the human; the same 422
+holds on any card a human parked in \emph{Human Review} --- a reserved
+column no agent works, whatever the pause flag says.
+\textbf{Any human mutation on the issue resumes it} --- the human's fix
+is the unblock --- and the swarm's next decision reads the issue's
+recent discussion (fenced like every authored field), so a human's
+answer reaches the swarm. The client renders the pause as a ``needs
+human'' badge on the card and a timeline event, and the swarm panel
+lists every card waiting on a human --- the pause flag
+\emph{or} the column --- at the top (\S\ref{sec:panel}).
 
 \owner{guard constants (3 / 50 / 24h / 4KB) are currently code
   constants; do they become operator-configurable product knobs in v1, or
@@ -692,8 +705,9 @@ infrastructure; it is not product UI.
 The board's \emph{Swarm} button opens the fleet view (shipped):
 
 \begin{itemize}
-\item \textbf{Needs human} (top): every paused issue with the guard's
-  reason; one click opens the issue.
+\item \textbf{Needs human} (top): every card waiting on a human ---
+  paused by the swarm or parked in the \emph{Human Review} column ---
+  with the reason it stopped; one click opens the issue.
 \item \textbf{Fleet roster} per agent: busy/idle/suspended dot; open +
   paused issue counts; last handoff in either direction (counterpart,
   issue, relative time, trimmed summary); 24h accounting (operations,
@@ -812,7 +826,8 @@ slot, not around it. Its contract, as built:
 
 \begin{itemize}
 \item \textbf{Inbox} = issues assigned to the agent, open, not paused,
-  and not terminal, plus the incoming handoff summaries. The issue table
+  not terminal, and not in \emph{Human Review} (a reserved parking
+  column no agent works), plus the incoming handoff summaries. The issue table
   \emph{is} the queue: durable and the single source of truth. A
   dispatcher reconciles the fleet on a tick (5s default);
   mutation paths that create agent work (handoff applied, reassignment,
@@ -826,10 +841,13 @@ slot, not around it. Its contract, as built:
   retired, or it is cancelled. Concurrency is bounded by the fleet, never
   by the issue count.
 \item \textbf{Untrusted content.} Anything a person or another agent
-  authored is fenced on the way in: the latest incoming handoff summary
-  and the issue's title and description (anyone with issue write access
-  controls them) --- control characters stripped, capped (4 KB for the
-  summary; the prompt-injection budget). The deterministic policy never
+  authored is fenced on the way in: the latest incoming handoff summary,
+  the issue's title and description (anyone with issue write access
+  controls them), and the issue's recent comments (anyone who may
+  comment authored them; the last few exchanges, 1.2 KB total --- on
+  resume after a parked card this is how the swarm reads the human's
+  answer) --- control characters stripped, capped (4 KB per field; the
+  prompt-injection budget). The deterministic policy never
   reads the fields --- its decisions are a pure function of trusted,
   server-derived facts (issue number, workflow, fleet, budget state), and
   a test pins that injected text cannot steer it. The LLM prompt carries

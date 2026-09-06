@@ -53,3 +53,44 @@ func TestGuardConstants(t *testing.T) {
 		t.Errorf("op budget = %d, want 50", issueOpBudget)
 	}
 }
+
+// TestHumanReviewProtocol pins the escalation's reserved parking column
+// (spec 12 escalation): the name, the SQL fragments derived from it
+// (one source of truth), and the human-handoff comment a pause leaves
+// on the card (the path a human was missing).
+func TestHumanReviewProtocol(t *testing.T) {
+	if humanReviewStateName != "Human Review" {
+		t.Fatalf("reserved state name = %q, want %q", humanReviewStateName, "Human Review")
+	}
+	wantLower := strings.ToLower(humanReviewStateName)
+	if !strings.Contains(needsHumanSQL, wantLower) || !strings.Contains(needsHumanSQL, "i.agent_paused") {
+		t.Fatalf("needsHumanSQL must be (flag OR column): %q", needsHumanSQL)
+	}
+	if !strings.Contains(notHumanReviewSQL, wantLower) || strings.Contains(notHumanReviewSQL, "agent_paused") {
+		t.Fatalf("notHumanReviewSQL must be the column exclusion alone: %q", notHumanReviewSQL)
+	}
+	if !strings.HasPrefix(needsHumanSQL, "(") || !strings.HasSuffix(needsHumanSQL, ")") {
+		t.Fatalf("needsHumanSQL must parenthesize for use inside larger predicates: %q", needsHumanSQL)
+	}
+
+	// The parked variant: the column claim and the column-specific resume
+	// gesture are both present.
+	parked := humanHandoffComment("handoff loop detected (3x in 24h)", true)
+	for _, want := range []string{"Human Review", "handoff loop detected (3x in 24h)",
+		"Reply here with your decision", "move the card back into the workflow", "no agent can act"} {
+		if !strings.Contains(parked, want) {
+			t.Errorf("parked comment missing %q:\n%s", want, parked)
+		}
+	}
+	// The in-place variant (a team without the column): the reason and
+	// the generic resume gesture, no column claim.
+	inPlace := humanHandoffComment("budget exhausted", false)
+	for _, want := range []string{"budget exhausted", "make any change to the card", "no agent can act"} {
+		if !strings.Contains(inPlace, want) {
+			t.Errorf("in-place comment missing %q:\n%s", want, inPlace)
+		}
+	}
+	if strings.Contains(inPlace, "Human Review") {
+		t.Errorf("in-place comment must not claim a column the team lacks:\n%s", inPlace)
+	}
+}

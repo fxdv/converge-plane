@@ -40,12 +40,12 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
   },
   {
     title: 'Stuck? It stops and asks',
-    body: 'Each ticket has a quiet budget. If work ping-pongs between agents, the ticket pauses and pings a human. A stuck swarm stops spending tokens instead of decorating the board.',
+    body: 'Each ticket has a quiet budget. If work ping-pongs between agents, or an agent sees no way forward, the ticket pauses: the swarm stops spending tokens, a comment on the ticket tells you exactly what to do, and the card parks in the Human Review column. Reply with your decision, then move the card back into the workflow to resume the swarm — or take the ticket over yourself.',
     status: 'live',
   },
   {
     title: 'You can watch them',
-    body: 'The Swarm button on the issues board opens the fleet panel: who is busy on what, who is idle, each agent’s last handoff and its 24-hour activity. Paused tickets — the ones waiting on you — sit at the top, with the reason the swarm stopped.',
+    body: 'The Swarm button on the issues board opens the fleet panel: who is busy on what, who is idle, each agent’s last handoff and its 24-hour activity. Tickets waiting on you — paused by the swarm or parked in Human Review — sit at the top, with the reason they stopped. The Human Review column on the board is the same list, where the cards physically wait.',
     status: 'live',
   },
   {
