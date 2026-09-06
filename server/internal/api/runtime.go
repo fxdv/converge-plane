@@ -687,6 +687,7 @@ func (a *API) runtimeInputTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row
 	in.TeamID = row.TeamID
 	in.WorkspaceID = w.workspaceID
 	in.IssueNumber = row.Number
+	in.ActorID = w.agentID
 	in.ActorName = w.name
 	// Untrusted, fenced: user-authored issue content (anyone with issue
 	// write access controls it). The deterministic policy ignores both;

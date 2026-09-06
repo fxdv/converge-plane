@@ -91,7 +91,8 @@ type ActionInput struct {
 	TeamName        string
 	TeamIdentifier  string     // the team's display prefix (the live-signal chip shows ENG-23, not a bare number)
 	TeamID          string     // the issue's team (the target-selection scope)
-	WorkspaceID     string     // the issue's workspace (LLM endpoint sharding)
+	WorkspaceID     string     // the issue's workspace (the endpoint's fallback sharding key)
+	ActorID         string     // this agent's account (the endpoint's stable sharding key: one agent's context stays on one instance)
 	ActorName       string     // this agent's display name
 	CurrentState    *StateRef  // nil when the issue has no status
 	States          []StateRef // the team's workflow, ordered by position

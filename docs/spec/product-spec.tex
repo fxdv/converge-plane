@@ -859,7 +859,11 @@ slot, not around it. Its contract, as built:
   only (the model server has no auth; the box's firewall allows SSH
   alone) --- replaces the deterministic policy when a deployment provides
   its endpoints; fresh deployments ship without a fleet and the
-  deterministic policy is the default brain. One decision is one model
+  deterministic policy is the default brain. The fleet is addressed by a
+  stable per-agent hash: one agent's context stays on one instance
+  (warm weights, warm KV cache) while the swarm's decisions spread across
+  instances, so an N-agent swarm draws on up to N GPUs --- real
+  parallelism, not a shared queue. One decision is one model
   call: trusted facts plus the fenced content as marked data, a strict
   JSON reply contract, a token cap, a per-request timeout. The model
   \emph{proposes}; the runtime \emph{validates} --- state names must
