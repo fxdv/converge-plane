@@ -83,15 +83,24 @@ func newLLMClient(urls []string, model string, timeout time.Duration, maxTok int
 	}
 }
 
-// endpointFor picks the fleet member for a workspace: a stable hash,
-// so a workspace's work stays on one instance (warm weights, warm KV
-// cache) while workloads spread across the fleet.
-func (c *llmClient) endpointFor(workspaceID string) string {
+// endpointFor picks the fleet member for one decision: a stable hash
+// of the acting agent, so one agent's context stays on one instance
+// (warm weights, warm KV cache across that agent's repeated decisions)
+// while the swarm's work spreads across the fleet. An N-agent swarm on
+// one workspace therefore uses up to N instances — with one llama.cpp
+// instance per GPU, four agents get four real GPUs, each instance's
+// n_slots=4 covering its share. The workspace is the fallback key for
+// inputs without an actor (the pre-sharding behavior).
+func (c *llmClient) endpointFor(agentID, workspaceID string) string {
 	if len(c.urls) == 0 {
 		return ""
 	}
+	key := agentID
+	if key == "" {
+		key = "ws:" + workspaceID
+	}
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(workspaceID))
+	_, _ = h.Write([]byte(key))
 	return c.urls[h.Sum32()%uint32(len(c.urls))]
 }
 
@@ -110,14 +119,14 @@ type llmResponse struct {
 	} `json:"usage"`
 }
 
-// decide makes one model call for the workspace's endpoint and returns
+// decide makes one model call for the acting agent's endpoint and returns
 // the completion content plus the token usage (the spend slot counts
 // both thinking and answer tokens). Any failure — down endpoint,
 // timeout, non-200 (the "Loading model" 503 included), malformed
 // response — is an error the fallbackPolicy absorbs; tokens reported
 // alongside a success are real spend.
 func (c *llmClient) decide(ctx context.Context, in ActionInput) (string, int, error) {
-	url := c.endpointFor(in.WorkspaceID)
+	url := c.endpointFor(in.ActorID, in.WorkspaceID)
 	if url == "" {
 		return "", 0, errLLMNotConfigured
 	}

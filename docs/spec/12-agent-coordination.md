@@ -194,7 +194,13 @@ limiter, so a multi-instance deployment moves it to the shared broker.
   active topology; comments capped), and any failure — endpoint down,
   timeout, malformed or invalid output — falls back to the deterministic
   policy per decision. Default **off**: the deterministic policy is the
-  shipped brain; the fleet is an operator opt-in.
+  shipped brain; the fleet is an operator opt-in. The fleet is addressed
+  by a stable per-agent hash: an agent's context stays on one instance
+  (warm weights, warm KV cache across that agent's repeated decisions)
+  while the swarm's work spreads across the fleet — with one llama.cpp
+  instance per GPU, an N-agent swarm draws on up to N GPUs (each
+  instance runs n_slots=4), so the parallelism a five-agent swarm sees
+  is real, not a shared queue.
 - **Topology.** Environment switch
   (`CONVERGE_RUNTIME_TOPOLOGY=foreman|flat`, default foreman; the foreman
   is the fleet's oldest active agent — a tenure rule, the D4 selector

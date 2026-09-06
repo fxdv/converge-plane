@@ -323,24 +323,35 @@ func TestLLMClientParsesResponse(t *testing.T) {
 	}
 }
 
-// TestLLMClientSharding pins the fleet routing: stable per workspace,
+// TestLLMClientSharding pins the fleet routing: stable per agent (the
+// decision's acting agent is the sharding key, so one agent's context
+// stays on one instance), workspace fallback when the actor is unknown,
 // and spread across the endpoints.
 func TestLLMClientSharding(t *testing.T) {
 	urls := []string{"http://g0", "http://g1", "http://g2", "http://g3"}
 	c := newLLMClient(urls, "m", time.Second, 1, discardLogger())
 
-	if got := c.endpointFor("ws-abc"); got != c.endpointFor("ws-abc") {
-		t.Fatal("sharding is not stable for the same workspace")
+	if got := c.endpointFor("agent-abc", "ws-1"); got != c.endpointFor("agent-abc", "ws-1") {
+		t.Fatal("sharding is not stable for the same agent")
+	}
+	// The agent key wins over the workspace: the same agent resolves to
+	// the same endpoint regardless of workspace, and the workspace is
+	// used only when the actor is unknown.
+	if c.endpointFor("agent-abc", "ws-1") != c.endpointFor("agent-abc", "ws-2") {
+		t.Fatal("sharding must key on the agent, not the workspace")
+	}
+	if c.endpointFor("", "ws-1") != c.endpointFor("", "ws-1") {
+		t.Fatal("workspace fallback must be stable (deterministic, no randomness)")
 	}
 	if len(c.urls) == 0 {
 		t.Fatal("urls empty")
 	}
 	seen := map[string]bool{}
 	for i := 0; i < 200; i++ {
-		seen[c.endpointFor(fmt.Sprintf("ws-%d", i))] = true
+		seen[c.endpointFor(fmt.Sprintf("agent-%d", i), "ws-1")] = true
 	}
 	if len(seen) < 2 || len(seen) > len(urls) {
-		t.Fatalf("200 workspaces hit %d endpoints, want between 2 and %d", len(seen), len(urls))
+		t.Fatalf("200 agents hit %d endpoints, want between 2 and %d", len(seen), len(urls))
 	}
 	// A client with no endpoints reports the not-configured error.
 	empty := newLLMClient(nil, "m", time.Second, 1, discardLogger())
