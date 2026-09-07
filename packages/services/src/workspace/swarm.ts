@@ -65,15 +65,48 @@ export interface SwarmPausedIssue {
   pausedAt: string;
 }
 
+// The swarm plane's fleet settings (D4): the coordination pattern the
+// swarm runs, and the foreman in effect. foremanAccountId is the
+// human's designation (null = auto: the fleet's oldest active agent);
+// foremanName is the effective foreman — the designation while that
+// agent is active, else the auto rule.
+export interface SwarmSettings {
+  topology: string; // "foreman" | "flat"
+  foremanAccountId: string | null;
+  foremanName: string | null;
+}
+
+// The reserved Human Review parking column (D1 escalation): the
+// server's needs-human predicate is the pause flag OR this state name,
+// so the client mirrors it with the same OR rule.
+export const HUMAN_REVIEW_STATE_NAME = 'Human Review';
+
 export interface SwarmStatus {
   // Fleet roster, busy agents first.
   agents: SwarmAgent[];
   pausedIssues: SwarmPausedIssue[];
+  // The swarm plane's fleet settings (D4): the Swarm page's save target.
+  settings: SwarmSettings;
 }
 
 export async function getSwarmStatus(workspaceId: string) {
   const response = await axios.get<SwarmStatus>(
     `/api/v1/workspaces/${workspaceId}/swarm`,
+  );
+
+  return response.data;
+}
+
+// D4: save the swarm plane's fleet settings. Owner/admin only (agents
+// 422, non-admins 404); the decision takes effect on the swarm's next
+// decision, no restart.
+export async function updateSwarmSettings(
+  workspaceId: string,
+  settings: { topology: string; foremanAccountId: string | null },
+) {
+  const response = await axios.post<SwarmSettings>(
+    `/api/v1/workspaces/${workspaceId}/swarm/settings`,
+    settings,
   );
 
   return response.data;

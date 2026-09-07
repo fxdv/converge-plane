@@ -50,7 +50,7 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
   },
   {
     title: 'One foreman',
-    body: 'By default a lead agent (the foreman) dispatches work and receives returns; workers hand back to the foreman. One dispatcher, no stampede. Flat swarms — where any agent can hand to any — exist, but only after the foreman pattern has earned its keep in real use.',
-    status: 'coming',
+    body: 'By default a lead agent (the foreman) dispatches work and receives returns; workers hand back to the foreman. One dispatcher, no stampede. You steer this from the Swarm page: pick the topology (foreman or flat) and designate the foreman — changes take effect on the next decision, no restart.',
+    status: 'live',
   },
 ];
