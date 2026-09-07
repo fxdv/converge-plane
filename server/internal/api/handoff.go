@@ -200,7 +200,7 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	} else if tripped {
-		recs, err := a.pauseIssueTx(ctx, tx, workspaceID, row, p, reason)
+		recs, err := a.pauseIssueTx(ctx, tx, workspaceID, row, p, reason, guardPauseNote(reason))
 		if err != nil {
 			a.internalError(w, err)
 			return
@@ -345,10 +345,12 @@ func guardVerdict(loopCount, opCount int) (reason string, tripped bool) {
 //     resume the swarm (or take it over / close it). On resume the
 //     swarm re-decides with the discussion in its prompt context;
 //  4. an audit event;
-//  5. the refreshed issue record and the comment on the sync feed.
+//  5. the refreshed issue record and the comment on the sync feed; the
+//     comment carries the reason plus, when the pausing side supplied
+//     one, the task-level "where things stand" note (D4).
 //
 // Returns the wire records for the caller to broadcast after commit.
-func (a *API) pauseIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, row issueRow, p *Principal, reason string) (recs []syncActionRecord, err error) {
+func (a *API) pauseIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, row issueRow, p *Principal, reason, note string) (recs []syncActionRecord, err error) {
 	// The reserved parking column; "" when the team has none (the pause
 	// then flags in place and the comment omits the column claim).
 	hrID, err := a.humanReviewStatusIDTx(ctx, tx, row.TeamID)
@@ -405,7 +407,7 @@ func (a *API) pauseIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, r
 	// through this one choke point, so every escalation the swarm can
 	// produce carries the same disclosure.
 	commentRec, err := a.applyCommentTx(ctx, tx, workspaceID, row.ID, p.AccountID,
-		humanHandoffComment(reason, hrID != ""))
+		humanHandoffComment(reason, hrID != "", note))
 	if err != nil {
 		return nil, err
 	}
@@ -442,13 +444,14 @@ func (a *API) issueInHumanReview(ctx context.Context, issueID, teamID string) bo
 	return err == nil && exists
 }
 
-// humanHandoffComment renders the human path an escalation leaves on the
-// card: why the swarm stopped, and exactly what a human does next. The
-// comment is the breadcrumb the human was missing — the signal (badge /
-// panel) says WHERE; this says WHAT TO DO. inReview is false for teams
-// without a Human Review state (the pause flags in place; the column
-// claim is omitted, not wrong).
-func humanHandoffComment(reason string, inReview bool) string {
+// humanHandoffComment renders the human path an escalation leaves on
+// the card: why the swarm stopped (the reason), where things stand
+// (the task-level note, when the pausing side supplied one), and
+// exactly what a human does next. The comment is the breadcrumb the
+// human was missing — the signal (badge / panel) says WHERE; this says
+// WHAT TO DO. inReview is false for teams without a Human Review state
+// (the pause flags in place; the column claim is omitted, not wrong).
+func humanHandoffComment(reason string, inReview bool, note string) string {
 	var b strings.Builder
 	if inReview {
 		b.WriteString("🧑 Human handoff — the swarm parked this card in Human Review for you.\n\n")
@@ -456,6 +459,9 @@ func humanHandoffComment(reason string, inReview bool) string {
 		b.WriteString("⚠️ Human handoff — the swarm paused this card for you.\n\n")
 	}
 	b.WriteString("Why: " + reason + "\n\n")
+	if note != "" {
+		b.WriteString("Where things stand: " + note + "\n\n")
+	}
 	b.WriteString("To resume the swarm:\n")
 	b.WriteString("- Reply here with your decision \u2014 the swarm reads your comments when it resumes.\n")
 	if inReview {
@@ -484,4 +490,13 @@ func (a *API) agentMember(ctx context.Context, workspaceID, accountID string) bo
 			where wm.workspace_id = $1 and wm.account_id = $2 and wm.status = 'active' and a.kind = $3)`,
 		workspaceID, accountID, auth.AccountKindAgent).Scan(&exists)
 	return err == nil && exists
+}
+
+// guardPauseNote renders the "where things stand" block for a
+// quiet-guard pause (D4): the guard is a policy limit, not a failure
+// of the work — the note tells a human with zero context what stopped
+// the swarm and what the decision is, including the rolling-window
+// trap.
+func guardPauseNote(reason string) string {
+	return "A quiet guard stopped the swarm on this card — a safety limit, not a failure of the work. " + reason + ". The card is exactly where the swarm left it, only paused; nothing was lost. Note the guard counts a rolling 24-hour window: resuming while the pattern is still in the window will pause the card again, so change what keeps tripping it (re-route the handoffs, or let the window clear) before you resume."
 }

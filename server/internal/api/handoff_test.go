@@ -75,7 +75,7 @@ func TestHumanReviewProtocol(t *testing.T) {
 
 	// The parked variant: the column claim and the column-specific resume
 	// gesture are both present.
-	parked := humanHandoffComment("handoff loop detected (3x in 24h)", true)
+	parked := humanHandoffComment("handoff loop detected (3x in 24h)", true, "")
 	for _, want := range []string{"Human Review", "handoff loop detected (3x in 24h)",
 		"Reply here with your decision", "move the card back into the workflow", "no agent can act"} {
 		if !strings.Contains(parked, want) {
@@ -84,7 +84,7 @@ func TestHumanReviewProtocol(t *testing.T) {
 	}
 	// The in-place variant (a team without the column): the reason and
 	// the generic resume gesture, no column claim.
-	inPlace := humanHandoffComment("budget exhausted", false)
+	inPlace := humanHandoffComment("budget exhausted", false, "")
 	for _, want := range []string{"budget exhausted", "make any change to the card", "no agent can act"} {
 		if !strings.Contains(inPlace, want) {
 			t.Errorf("in-place comment missing %q:\n%s", want, inPlace)
@@ -92,5 +92,19 @@ func TestHumanReviewProtocol(t *testing.T) {
 	}
 	if strings.Contains(inPlace, "Human Review") {
 		t.Errorf("in-place comment must not claim a column the team lacks:\n%s", inPlace)
+	}
+
+	// The task-level note (D4): it renders between the reason and the
+	// resume path, and it must not drag the column claim into the
+	// in-place variant.
+	rich := humanHandoffComment("budget exhausted", true, "Did the repro; blocked on the deploy credentials; a human must provide them.")
+	for _, want := range []string{"Where things stand:", "Did the repro", "a human must provide them"} {
+		if !strings.Contains(rich, want) {
+			t.Errorf("rich comment missing %q:\n%s", want, rich)
+		}
+	}
+	inPlaceNote := humanHandoffComment("budget exhausted", false, "some note")
+	if strings.Contains(inPlaceNote, "Human Review") {
+		t.Errorf("in-place comment must not claim a column the team lacks:\n%s", inPlaceNote)
 	}
 }

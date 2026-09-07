@@ -732,6 +732,17 @@ func (a *API) runtimeInputTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row
 	// handoff was written (D1), sanitization happens here, and the
 	// policy is contractually barred from reading it as instructions.
 	in.RuntimeTopology = a.cfg.RuntimeTopology
+	// D4: the workspace's saved swarm settings (the Swarm page) override
+	// the deploy-time env for this decision: the effective topology and
+	// the human's foreman designation ("" = the auto tenure rule).
+	topology, designated, err := a.swarmSettingsTx(ctx, tx, w.workspaceID)
+	if err != nil {
+		return ActionInput{}, err
+	}
+	if topology != "" {
+		in.RuntimeTopology = topology
+	}
+	in.ForemanAccountID = designated
 	var summary *string
 	err = tx.QueryRow(ctx, `
 		select summary from issue_handoffs
@@ -904,7 +915,8 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 		if ref != nil {
 			name = ref.Name
 		}
-		action = Action{Kind: ActionPause, Comment: fmt.Sprintf("%s reached %s — the card is parked for a human", in.ActorName, name)}
+		action = Action{Kind: ActionPause, Comment: fmt.Sprintf("%s reached %s — the card is parked for a human", in.ActorName, name),
+			Note: fmt.Sprintf("%s reported the work in %q finished and left the card for a human to verify. Nothing is blocked: check the result, then move the card to Done to close it, or back into the workflow if more is needed.", in.ActorName, name)}
 	}
 
 	switch action.Kind {
@@ -923,7 +935,7 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 		}
 		in.PauseReason = action.Comment
 		pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row,
-			&Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, action.Comment)
+			&Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, action.Comment, action.Note)
 		if err != nil {
 			return nil, false, "", err
 		}
@@ -955,7 +967,7 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 			return nil, false, "", err
 		} else if tripped {
 			in.PauseReason = reason
-			pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason)
+			pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason, guardPauseNote(reason))
 			if err != nil {
 				return nil, false, "", err
 			}
