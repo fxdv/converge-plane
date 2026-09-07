@@ -394,11 +394,52 @@ func (a *API) handleDeleteTeam(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	// Archive the team's active issues with it: the sync feed stops
+	// serving them (status='archived') and clients drop them on the D
+	// records, so a dropped team leaves no dangling issue rows in the
+	// client stores (the issue components resolve their team lookup by
+	// id and would lose it, D4 incident).
+	rows, err := tx.Query(ctx, `select id from issues where team_id = $1 and status = 'active'`, id)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	var issueIDs []string
+	for rows.Next() {
+		var issueID string
+		if err := rows.Scan(&issueID); err != nil {
+			rows.Close()
+			a.internalError(w, err)
+			return
+		}
+		issueIDs = append(issueIDs, issueID)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	issueRecs := make([]syncActionRecord, 0, len(issueIDs))
+	for _, issueID := range issueIDs {
+		if _, err := tx.Exec(ctx, `update issues set status = 'archived', updated_at = now() where id = $1`, issueID); err != nil {
+			a.internalError(w, err)
+			return
+		}
+		irect, err := a.emitChange(ctx, tx, row.WorkspaceID, "Issue", issueID, "DELETE", map[string]any{"id": issueID})
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+		issueRecs = append(issueRecs, irect)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		a.internalError(w, err)
 		return
 	}
 	a.broadcastRecord(rec)
+	for _, irect := range issueRecs {
+		a.broadcastRecord(irect)
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id})
 }
 

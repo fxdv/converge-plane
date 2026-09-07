@@ -104,7 +104,9 @@ func TestSwarmStatusWireContract(t *testing.T) {
 	}
 
 	equalStrings(t, swarmKeys(t, status),
-		[]string{"agents", "pausedIssues", "settings"})
+		[]string{"agents", "brain", "pausedIssues", "settings"})
+	equalStrings(t, swarmKeys(t, status.Brain),
+		[]string{"mode"}) // note/model/endpoints/lastDecisionAt are omitempty
 	equalStrings(t, swarmKeys(t, status.Agents[0]),
 		[]string{"busy", "createdAt", "email", "handoffs24h", "id", "lastActivityAt",
 			"lastHandoff", "name", "openIssueCount", "ops24h", "pausedIssueCount",

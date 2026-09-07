@@ -75,19 +75,57 @@ type AgentRuntime struct {
 	spend   map[string]*spendWindow // agentID -> rolling 24h model tokens
 	notify  chan struct{}           // coalesced fast-path trigger (buffer 1)
 	done    chan struct{}
+
+	// brain is the swarm plane's decision-brain indicator (D4): the
+	// last decision's source — "llm" (the model) or "floor" (the
+	// deterministic policy — fallback or LLM disabled) — and when. The
+	// policies report through recordDecision; the swarm status endpoint
+	// serves it, so a human sees when the fleet is thinking vs. marching.
+	brainMu   sync.Mutex
+	brainMode string
+	brainNote string
+	brainAt   time.Time
 }
 
 // newAgentRuntime builds the runtime; it is inert until Start.
 func newAgentRuntime(a *API) *AgentRuntime {
-	return &AgentRuntime{
+	rt := &AgentRuntime{
 		a:       a,
 		log:     a.log,
-		policy:  selectPolicy(a),
 		workers: make(map[string]*agentWorker),
 		spend:   make(map[string]*spendWindow),
 		notify:  make(chan struct{}, 1),
 		done:    make(chan struct{}),
 	}
+	rt.policy = selectPolicy(a, rt.recordDecision)
+	switch rt.policy.(type) {
+	case fallbackPolicy:
+		rt.brainMode = "llm"
+	default:
+		rt.brainMode = "floor"
+		rt.brainNote = "llm disabled"
+	}
+	return rt
+}
+
+// recordDecision stores the last decision's brain (the policies call
+// it per decision; concurrent workers are serialized on brainMu).
+func (rt *AgentRuntime) recordDecision(mode, note string) {
+	rt.brainMu.Lock()
+	rt.brainMode, rt.brainNote, rt.brainAt = mode, note, time.Now()
+	rt.brainMu.Unlock()
+}
+
+// brainView is the swarm status endpoint's brain datum (the model name
+// and endpoint count are attached there from the deploy config).
+func (rt *AgentRuntime) brainView() swarmBrain {
+	rt.brainMu.Lock()
+	defer rt.brainMu.Unlock()
+	b := swarmBrain{Mode: rt.brainMode, Note: rt.brainNote}
+	if !rt.brainAt.IsZero() {
+		b.LastDecisionAt = &rt.brainAt
+	}
+	return b
 }
 
 // policyName reports the active decision brain for the start line and
