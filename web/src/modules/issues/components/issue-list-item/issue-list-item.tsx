@@ -119,7 +119,7 @@ export const IssueListItem = observer(
                   value={issue.stateId}
                   onChange={statusChange}
                   variant={IssueStatusDropdownVariant.NO_BACKGROUND}
-                  teamIdentifier={team.identifier}
+                  teamIdentifier={team?.identifier ?? ''}
                 />
               </div>
 
@@ -145,12 +145,12 @@ export const IssueListItem = observer(
                         className="text-xs"
                       />
                     </div>
-                    <div className="min-w-[70px] text-muted-foreground text-xs font-mono">{`${team.identifier}-${issue.number}`}</div>
+                    <div className="min-w-[70px] text-muted-foreground text-xs font-mono">{`${team?.identifier ?? ''}-${issue.number}`}</div>
                     <Suspense>
                       <LazyIssueAssigneeDropdown
                         value={issue.assigneeId}
                         onChange={assigneeChange}
-                        teamId={team.id}
+                        teamId={team?.id ?? ''}
                         variant={IssueAssigneeDropdownVariant.NO_BACKGROUND}
                       />
                     </Suspense>

@@ -161,7 +161,7 @@ export const BoardIssueItem = observer(
               value={issue.stateId}
               onChange={statusChange}
               variant={IssueStatusDropdownVariant.NO_BACKGROUND}
-              teamIdentifier={team.identifier}
+              teamIdentifier={team?.identifier ?? ''}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -183,7 +183,7 @@ export const BoardIssueItem = observer(
                 {liveActivity.phase === 'deciding' ? ' deciding' : ' working'}
               </span>
             )}
-            <div className="text-muted-foreground font-mono">{`${team.identifier}-${issue.number}`}</div>
+            <div className="text-muted-foreground font-mono">{`${team?.identifier ?? ''}-${issue.number}`}</div>
           </div>
         </div>
         <div className="flex">
@@ -216,7 +216,7 @@ export const BoardIssueItem = observer(
           <IssueAssigneeDropdown
             value={issue.assigneeId}
             onChange={assigneeChange}
-            teamId={team.id}
+            teamId={team?.id ?? ''}
             variant={IssueAssigneeDropdownVariant.NO_BACKGROUND}
           />
         </div>

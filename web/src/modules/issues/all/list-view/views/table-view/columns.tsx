@@ -54,11 +54,11 @@ export const getColumns = (
 
         return (
           <Link
-            href={`/${workspaceSlug}/issue/${team.identifier}-${row.original.number}`}
+            href={`/${workspaceSlug}/issue/${team?.identifier ?? ''}-${row.original.number}`}
             className="flex flex-wrap shrink w-full gap-2 justify-between pr-4"
           >
             <span className="flex items-center justify-start shrink min-w-[0px]">
-              <div className="min-w-[70px] text-muted-foreground text-xs font-mono">{`${team.identifier}-${row.original.number}`}</div>
+              <div className="min-w-[70px] text-muted-foreground text-xs font-mono">{`${team?.identifier ?? ''}-${row.original.number}`}</div>
 
               <span className="text-left"> {row.original.title}</span>
             </span>
@@ -97,7 +97,7 @@ export const getColumns = (
                 statusChange(row.original, stateId);
               }}
               variant={IssueStatusDropdownVariant.LINK}
-              teamIdentifier={team.identifier}
+              teamIdentifier={team?.identifier ?? ''}
             />
           </div>
         );
