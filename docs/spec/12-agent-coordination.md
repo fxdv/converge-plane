@@ -56,10 +56,13 @@ disclosures** in one transaction, through one choke point (`pauseIssueTx`):
    *where* the card waits instead of leaving the signal scattered.
 2. **A comment.** The card receives a human-handoff comment authored by
    the agent that parked it: *why* the swarm stopped (the guard's own
-   words, the model's reason) plus the exact path — reply with your
-   decision, move the card back into the workflow to resume, or take
-   the card over / close it. The signal (badge/panel) says where;
-   the comment says what to do.
+   words, the model's reason); the *where things stand* note (D4 — when
+   the pausing side supplied one: what was done, what was found, what
+   is blocked, what the human must decide or do, written for a reader
+   with zero context); plus the exact path — reply with your decision,
+   move the card back into the workflow to resume, or take the card
+   over / close it. The signal (badge/panel) says where; the comment
+   says what to do.
 3. **The badge and timeline.** As before: the board's "needs human"
    badge, a `paused` timeline event carrying the reason, an audit
    event, the broadcast.
@@ -130,13 +133,16 @@ budgets/escalation sit.
   is the sole handoff target for workers. Structurally no zerg; loop-detection
   in one place. The dispatch point is a single point of failure and carries its
   own budget + escalation (foreman-stalled → human).
-- **Flat.** Any agent may hand to any agent (N×(N−1) edges); guards per edge;
-  combinatorial noise and token spread. Shipped only after usage data favors
-  it — never before foreman has real production time.
-- **Selector.** A user-facing topology selector is **deferred** until both
-  modes have usage data. When it arrives it is a fleet-level setting
-  (Settings → Agents) with the consequences spelled out on the settings
-  screen — never a board or issue control.
+- **Flat (D4, selectable).** Any agent may hand to any agent (N×(N−1)
+  edges); guards per edge; combinatorial noise and token spread.
+  Selectable on the Swarm page; the foreman default stands until usage
+  data favors flat.
+- **Selector (D4, shipped).** The Swarm page's fleet settings: the human
+  picks the topology (foreman / flat) and designates the foreman, per
+  workspace; the decision takes effect on the swarm's next decision —
+  fleet-level, consequences spelled out on the page, never a board or
+  issue control. A suspended or removed foreman designation degrades to
+  the tenure rule; the setting never blocks the swarm.
 - **Demo/experimentation.** An env/seed-level mode on the swarm runner
   (`topology=foreman|flat`) is acceptable; it is experiment infrastructure,
   not product UI.
@@ -171,7 +177,7 @@ budgets/escalation sit.
 | D1 | Handoff protocol: table + endpoint + budget/loop guards + client flow (picker, summary, timeline item, board chip) | **Shipped** — `POST /issues/{id}/handoff`, pause + "needs human" badge, handoff/pause timeline items, all history rows ride the sync feed with `action` + `summary` |
 | D2 | Swarm panel: roster + trace + token accounting UI | **Shipped** — `GET /workspaces/{id}/swarm` + board Swarm button: fleet roster (busy/idle, last handoff, 24h ops/handoffs/calls) with paused issues on top; requests24h is the token-burn proxy D3 upgrades to real LLM usage |
 | D3 | Agent runtime: in-process dispatcher + per-agent workers; deterministic policy (advance / complete / hand-off / pause); fenced untrusted summaries; per-agent spend slot | **Shipped** — the moat. The LLM backend is the next build on the same policy slot |
-| D4 | Topology selector as a fleet setting | Only after D3 produces usage data for both modes (doc 11 table) |
+| D4 | Swarm plane: the dedicated Swarm page (fleet settings: topology + foreman), rich handoff notes, aligned needs-human chips | **Shipped** — per-workspace topology/foreman settings (the deploy-time env stays the default for workspaces without a row; effective on the swarm's next decision, no restart; owner/admin only, agents 422); the pause's human-handoff comment carries a task-level "where things stand" note (LLM pause: model note, fenced, 1600-char cap; guards and dead-ends: server templates); the client chip mirrors the server's needs-human predicate (flag OR column) |
 
 ## D3 as-built (agent runtime)
 
@@ -236,10 +242,13 @@ limiter, so a multi-instance deployment moves it to the shared broker.
   instance per GPU, an N-agent swarm draws on up to N GPUs (each
   instance runs n_slots=4), so the parallelism a five-agent swarm sees
   is real, not a shared queue.
-- **Topology.** Environment switch
-  (`CONVERGE_RUNTIME_TOPOLOGY=foreman|flat`, default foreman; the foreman
-  is the fleet's oldest active agent — a tenure rule, the D4 selector
-  will make both fleet settings).
+- **Topology.** The workspace's saved swarm settings (D4, the Swarm
+  page) — topology and foreman designation — override the environment
+  switch (`CONVERGE_RUNTIME_TOPOLOGY=foreman|flat`, the default for
+  workspaces without a saved row); the foreman is the human's
+  designation while that agent is active, else the fleet's oldest active
+  agent (the tenure rule). Effective on the swarm's next decision; no
+  restart.
 - **Config.** `CONVERGE_RUNTIME` (default on), `CONVERGE_RUNTIME_TOPOLOGY`
   (foreman), `CONVERGE_RUNTIME_TICK` (5s), `CONVERGE_LLM` (default off),
   `CONVERGE_LLM_URLS` (comma-separated OpenAI-compatible endpoints, one

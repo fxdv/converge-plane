@@ -351,8 +351,12 @@ Agent runtime\csr{swarm:runtime} & In-process dispatcher + per-agent
   workers; fenced summaries; act, hand back, pause; spend slot; the LLM
   brain (opt-in fleet, deterministic floor) (\S\ref{sec:runtime}) &
   \shipped\\
-Topology policy\csr{swarm:topology} & Foreman (default) / flat;
-  selector gated (\S\ref{sec:topology}) & \inprogress\\
+Topology policy\csr{swarm:topology} & Foreman (default) / flat; the Swarm
+  page's selector steers the fleet per workspace (\S\ref{sec:topology}) &
+  \shipped\\
+Swarm plane\csr{swarm:panel} & The dedicated Swarm page: fleet settings
+  (topology + foreman), the agent stats roster, the needs-human queue ---
+  where the fleet is steered (\S\ref{sec:panel}) & \shipped\\
 \bottomrule
 \end{longtable}
 \end{center}
@@ -648,9 +652,12 @@ team's \texttt{Human Review} state} when the team has one (a reserved
 name --- the board shows where the card waits); writes a \texttt{paused}
 history row whose summary \emph{is} the reason (the timeline shows
 \emph{why} the swarm stopped); posts a \emph{human-handoff comment} on
-the card (the reason plus the exact path: reply with your decision, then
-move the card back into the workflow to resume --- or take it over /
-close it); writes an audit event; broadcasts. While paused, every agent
+the card (the reason; the task-level \emph{where things stand} note when
+the pausing side supplied one --- written for a reader with zero context:
+what was done, what was found, what is blocked, what the human must
+decide or do; and the exact path: reply with your decision, then move
+the card back into the workflow to resume --- or take it over / close
+it); writes an audit event; broadcasts. While paused, every agent
 mutation is rejected with a 422 pointing at the human; the same 422
 holds on any card a human parked in \emph{Human Review} --- a reserved
 column no agent works, whatever the pause flag says.
@@ -685,18 +692,21 @@ Foreman (default) & One lead agent dispatches work, accepts returns, and
   escalation (foreman-stalled $\to$ human). & \planned\ (D3 layers the
   dispatch policy on the shipped endpoint)\\
 Flat & Any agent may hand to any agent ($N\times(N-1)$ edges); guards per
-  edge; combinatorial noise and token spread. & \gated\ --- ships only
-  after foreman has real usage time and the data favors it\\
-Selector & A user-facing choice (Settings $\to$ Agents), fleet-level,
-  consequences spelled out on the settings screen --- never a board or
-  issue control. & \gated\ (D4: after D3 yields usage data for both
-  modes)\\
+  edge; combinatorial noise and token spread. & \shipped\ --- selectable
+  on the Swarm page; the foreman default stands until usage data favors
+  flat\\
+Selector & The Swarm page's fleet settings: topology (foreman / flat) and
+  the foreman designation, per workspace; the decision takes effect on
+  the swarm's next decision --- fleet-level, never a board or issue
+  control. & \shipped\\
 \bottomrule
 \end{tabular}
 \end{center}
 
-An env/seed-level mode on the agent runtime is acceptable as experiment
-infrastructure; it is not product UI.
+The Swarm page's selector is the product UI (shipped, D4); the
+deploy-time env remains the default for workspaces without a saved
+settings row, and a suspended or removed foreman designation degrades
+to the tenure rule --- the setting never blocks the swarm.
 
 \section{Swarm panel}
 \label{sec:panel}
@@ -718,7 +728,10 @@ The board's \emph{Swarm} button opens the fleet view (shipped):
 
 The panel is topology-agnostic --- foreman and flat swarms produce the
 identical payload --- and costs the API five bounded indexed reads per
-poll; it scales with the roster, not the work.
+poll; it scales with the roster, not the work. The same fleet is hosted
+on a dedicated \emph{Swarm page} (shipped, D4): the fleet settings
+(topology + foreman) above the roster and the needs-human queue --- the
+page where the fleet is steered (\S\ref{sec:topology}).
 
 \section{Live swarm surfaces}
 \label{sec:activity}
@@ -822,7 +835,11 @@ The runtime is what the protocol is for: an in-process swarm engine
 (\S\ref{sec:shape} --- one artifact, in-process workers) that makes
 agents with work act. Shipped (D3) with the deterministic policy and
 extended (D3+) by the LLM decision brain plugged into the same policy
-slot, not around it. Its contract, as built:
+slot, not around it. Its contract, as built: the workspace's saved swarm
+settings (D4, the Swarm page) override the deploy-time topology env for
+each decision and carry the human's foreman designation (empty = the
+tenure rule); a pause carries the task-level note the human-handoff
+comment renders (\S\ref{sec:topology}).
 
 \begin{itemize}
 \item \textbf{Inbox} = issues assigned to the agent, open, not paused,
