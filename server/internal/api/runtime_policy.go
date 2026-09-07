@@ -139,10 +139,18 @@ type Policy interface {
 // state, and escape a dead-end through the handoff protocol (the
 // loop guard is the circuit breaker when the workflow cannot absorb
 // the issue). It spends no model tokens.
-type DeterministicPolicy struct{}
+type DeterministicPolicy struct {
+	// report is the swarm plane's brain-indicator sink (D4): set when
+	// this policy drives the runtime, nil when embedded as the
+	// fallbackPolicy's floor or in tests.
+	report func(mode, note string)
+}
 
 // Act implements Policy.
-func (DeterministicPolicy) Act(ctx context.Context, in ActionInput) (Action, int, error) {
+func (p DeterministicPolicy) Act(ctx context.Context, in ActionInput) (Action, int, error) {
+	if p.report != nil {
+		p.report("floor", "llm disabled")
+	}
 	// The untrusted field is deliberately unread: the decision is a
 	// pure function of the trusted facts (fenceSummary marks the data;
 	// this discards it).

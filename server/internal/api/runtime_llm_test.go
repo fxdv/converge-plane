@@ -553,7 +553,7 @@ func TestSelectPolicy(t *testing.T) {
 		return selectPolicy(&API{
 			log: discardLogger(),
 			cfg: testLLMConfig(enabled, urls),
-		})
+		}, nil)
 	}
 	if _, ok := mk(true, nil).(DeterministicPolicy); !ok {
 		t.Fatal("enabled without endpoints must select the deterministic policy")

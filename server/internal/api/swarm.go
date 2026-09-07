@@ -116,13 +116,31 @@ type swarmSettings struct {
 	ForemanName      *string `json:"foremanName"`
 }
 
+// swarmBrain is the swarm plane's decision-brain indicator: which brain
+// made the last decision — "llm" (the model) or "floor" (the
+// deterministic policy) — and when, with the model name and endpoint
+// count from the deploy config. A swarm on the floor still moves cards,
+// but without judgment; the indicator makes that state visible to a
+// human instead of a silent degradation (D4: the 22:48 incident, where
+// a dead LLM tunnel let the floor re-park a granted card).
+type swarmBrain struct {
+	Mode      string `json:"mode"`
+	Note      string `json:"note,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Endpoints int    `json:"endpoints,omitempty"`
+	// Pointer so omitempty drops it before the first decision (a zero
+	// time.Time is not "empty" for encoding/json).
+	LastDecisionAt *time.Time `json:"lastDecisionAt,omitempty"`
+}
+
 // swarmStatus is the GET /api/v1/workspaces/{id}/swarm response: the
-// fleet roster (busy first), the issues that need a human, and the
-// fleet settings (the Swarm page's save target).
+// fleet roster (busy first), the issues that need a human, the fleet
+// settings (the Swarm page's save target), and the brain indicator.
 type swarmStatus struct {
 	Agents       []swarmAgent       `json:"agents"`
 	PausedIssues []swarmPausedIssue `json:"pausedIssues"`
 	Settings     swarmSettings      `json:"settings"`
+	Brain        swarmBrain         `json:"brain"`
 }
 
 // handleSwarmStatus implements GET /api/v1/workspaces/{id}/swarm.
@@ -163,7 +181,13 @@ func (a *API) handleSwarmStatus(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, swarmStatus{Agents: agents, PausedIssues: paused, Settings: settings})
+	status := swarmStatus{Agents: agents, PausedIssues: paused, Settings: settings}
+	if a.runtime != nil {
+		status.Brain = a.runtime.brainView()
+		status.Brain.Model = a.cfg.LLMModel
+		status.Brain.Endpoints = len(a.cfg.LLMURLs)
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 // swarmRoster builds the per-agent entries. The membership base is one

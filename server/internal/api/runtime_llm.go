@@ -231,16 +231,25 @@ type fallbackPolicy struct {
 	primary  Policy
 	fallback Policy
 	log      *slog.Logger
+	// report is the swarm plane's brain-indicator sink (D4): it learns
+	// per decision whether the model or the floor decided.
+	report func(mode, note string)
 }
 
 // Act implements Policy.
 func (p fallbackPolicy) Act(ctx context.Context, in ActionInput) (Action, int, error) {
 	action, tokens, err := p.primary.Act(ctx, in)
 	if err == nil {
+		if p.report != nil {
+			p.report("llm", "")
+		}
 		return action, tokens, nil
 	}
 	fa, ftok, ferr := p.fallback.Act(ctx, in)
 	if ferr != nil {
+		if p.report != nil {
+			p.report("floor", fmt.Sprintf("llm failed (%v) and the fallback failed too (%v)", err, ferr))
+		}
 		return Action{}, 0, fmt.Errorf("llm policy failed (%v) and the deterministic fallback failed too: %w", err, ferr)
 	}
 	// The failed LLM call still burned tokens; the spend slot counts
@@ -249,13 +258,17 @@ func (p fallbackPolicy) Act(ctx context.Context, in ActionInput) (Action, int, e
 		tokens = ftok
 	}
 	p.log.Warn("llm policy fell back to the deterministic policy", "error", err, "tokens", tokens)
+	if p.report != nil {
+		p.report("floor", err.Error())
+	}
 	return fa, tokens, nil
 }
 
 // selectPolicy composes the runtime's active brain: the LLM with its
 // deterministic floor when enabled, the deterministic policy alone
-// otherwise.
-func selectPolicy(a *API) Policy {
+// otherwise. report receives each decision's brain for the swarm
+// plane's indicator; pass nil in tests.
+func selectPolicy(a *API, report func(string, string)) Policy {
 	if a.cfg.LLMEnabled {
 		c := newLLMClient(a.cfg.LLMURLs, a.cfg.LLMModel, a.cfg.LLMTimeout, a.cfg.LLMMaxTokens, a.log)
 		if len(c.urls) > 0 {
@@ -264,11 +277,12 @@ func selectPolicy(a *API) Policy {
 				primary:  LLMPolicy{client: c, log: a.log},
 				fallback: DeterministicPolicy{},
 				log:      a.log,
+				report:   report,
 			}
 		}
 		a.log.Warn("CONVERGE_LLM is set but no endpoints were given; using the deterministic policy")
 	}
-	return DeterministicPolicy{}
+	return DeterministicPolicy{report: report}
 }
 
 // llmDecisionPrompt renders the prompt. Layout: trusted facts first,
