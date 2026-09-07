@@ -607,13 +607,14 @@ func (w *agentWorker) applyTx(ctx context.Context, issueID string, in ActionInpu
 		_ = tx.Commit(ctx)
 		return true, nil
 	}
-	recs, tripped, err := a.applyActionTx(ctx, tx, w, row, in, action)
+	recs, tripped, reason, err := a.applyActionTx(ctx, tx, w, row, in, action)
 	if err != nil {
 		return false, err
 	}
 	if tripped {
-		// A quiet guard paused the issue (escalation): committed, the
-		// worker moves on — the paused issue is no longer actionable.
+		// The issue paused (a quiet guard, or the decision IS the pause —
+		// the Human Review protocol committed it): the worker moves on;
+		// the paused issue is no longer actionable.
 		if err := tx.Commit(ctx); err != nil {
 			return false, err
 		}
@@ -621,8 +622,8 @@ func (w *agentWorker) applyTx(ctx context.Context, issueID string, in ActionInpu
 			a.broadcastRecord(recs[i])
 		}
 		w.rt.RecordSpend(w.agentID, tokens)
-		w.rt.log.Warn("issue paused by runtime guard", "issue", row.ID,
-			"workspace", w.workspaceID, "agent", w.name, "reason", in.PauseReason)
+		w.rt.log.Warn("issue paused for human review (escalation)", "issue", row.ID,
+			"workspace", w.workspaceID, "agent", w.name, "reason", reason)
 		return true, nil
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -887,8 +888,11 @@ func (a *API) fleetRosterTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID 
 // transaction (the lock is held). It returns the broadcast records and
 // tripped=true when the issue paused (the action IS the pause, or a
 // quiet guard tripped on the handoff) — the pause is part of the same
-// transaction, so the escalation commits or rolls back with the decision.
-func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row issueRow, in ActionInput, action Action) (recs []syncActionRecord, tripped bool, err error) {
+// transaction, so the escalation commits or rolls back with the
+// decision. reason carries the human-visible pause text back out for
+// the caller's log line (ActionInput is a value; a reason set inside
+// would not propagate).
+func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row issueRow, in ActionInput, action Action) (recs []syncActionRecord, tripped bool, reason string, err error) {
 	// Human Review is reached by escalation or by a human — never by an
 	// agent advance: a team whose state after the current one is Human
 	// Review would otherwise receive unflagged cards (no pause flag, no
@@ -906,7 +910,7 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 	switch action.Kind {
 	case ActionNoop:
 		// Nothing to persist.
-		return recs, false, nil
+		return recs, false, "", nil
 
 	case ActionPause:
 		// Escalation through the one choke point (the Human Review
@@ -921,50 +925,50 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 		pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row,
 			&Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, action.Comment)
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", err
 		}
-		return pauseRecs, true, nil
+		return pauseRecs, true, action.Comment, nil
 
 	case ActionAdvance:
 		if action.StateID == "" {
-			return nil, false, fmt.Errorf("advance without a target state")
+			return nil, false, "", fmt.Errorf("advance without a target state")
 		}
 		issueRec, histRec, err := a.applyStatusTx(ctx, tx, w.workspaceID, row, w.agentID, action.StateID)
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", err
 		}
 		recs = append(recs, issueRec, histRec)
 		if action.Comment != "" {
 			crec, err := a.applyCommentTx(ctx, tx, w.workspaceID, row.ID, w.agentID, action.Comment)
 			if err != nil {
-				return nil, false, err
+				return nil, false, "", err
 			}
 			recs = append(recs, crec)
 		}
-		return recs, false, nil
+		return recs, false, "", nil
 
 	case ActionHandoff:
 		if action.ToAccountID == "" {
-			return nil, false, fmt.Errorf("handoff without a target")
+			return nil, false, "", fmt.Errorf("handoff without a target")
 		}
 		if reason, tripped, err := a.checkHandoffGuardsTx(ctx, tx, row.ID, action.ToAccountID); err != nil {
-			return nil, false, err
+			return nil, false, "", err
 		} else if tripped {
 			in.PauseReason = reason
 			pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason)
 			if err != nil {
-				return nil, false, err
+				return nil, false, "", err
 			}
-			return pauseRecs, true, nil
+			return pauseRecs, true, reason, nil
 		}
 		stateID := action.StateID
 		issueRec, histRec, _, err := a.applyHandoffTx(ctx, tx, w.workspaceID, row, w.agentID, action.ToAccountID, stateID, action.Summary)
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", err
 		}
-		return []syncActionRecord{issueRec, histRec}, false, nil
+		return []syncActionRecord{issueRec, histRec}, false, "", nil
 	}
-	return nil, false, fmt.Errorf("unknown action kind %q", string(action.Kind))
+	return nil, false, "", fmt.Errorf("unknown action kind %q", string(action.Kind))
 }
 
 // applyStatusTx moves the issue to a workflow status inside the caller's
