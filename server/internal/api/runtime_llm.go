@@ -51,6 +51,24 @@ import (
 // text is one sentence).
 const commentCap = 500
 
+// noteCap bounds the task-level handoff note the model may write on a
+// pause: the "where things stand" block a human reads with zero
+// context (what was done, what was found, what is blocked, what the
+// human must decide or do). It is the pause's disclosure budget —
+// longer is a document, and documents belong in the issue, not the
+// escalation comment.
+const noteCap = 1600
+
+// capNote bounds a model-authored note: fenced at the summary cap
+// (the injection floor) and rune-capped at noteCap.
+func capNote(s string) string {
+	s = fenceSummary(s)
+	if r := []rune(s); len(r) > noteCap {
+		return string(r[:noteCap]) + "…"
+	}
+	return s
+}
+
 var errLLMNotConfigured = fmt.Errorf("llm policy: no endpoints configured")
 
 // llmClient is the transport to the model fleet: OpenAI-compatible
@@ -336,8 +354,8 @@ func llmDecisionPrompt(in ActionInput) string {
 	b.WriteString("\n- advance: move the issue forward; use a terminal state only when the work is genuinely finished\n")
 	b.WriteString(`{"kind":"handoff","to":"<agent name>","state":<state name or null>,"comment":"...","summary":"<=300 chars: what is done, what is blocked, what remains"}`)
 	b.WriteString("\n- handoff: another agent must continue; use only when nothing here can progress\n")
-	b.WriteString(`{"kind":"pause","comment":"<why no agent can proceed>"}`)
-	b.WriteString("\n- pause: no agent can make progress; a human must act. Park for a human only when a human decision, approval, or input is genuinely required; the card then waits in Human Review until a human resumes it\n")
+	b.WriteString(`{"kind":"pause","comment":"<one short sentence: why no agent can proceed>","note":"where things stand, written for a human with zero context: what was done, what was found, what is blocked, what the human must decide or do"}`)
+	b.WriteString("\n- pause: no agent can make progress; a human must act. Park for a human only when a human decision, approval, or input is genuinely required; the card then waits in Human Review until a human resumes it. The note is the human's briefing: they have read nothing else about this issue, so cover the task scope, your findings, and the exact decision or input you need\n")
 	b.WriteString("Rules: copy state and agent names exactly from the lists above; invent nothing. One step only.\n")
 	b.WriteString("/no_think\n")
 	return b.String()
@@ -350,6 +368,7 @@ type llmDecision struct {
 	To      *string `json:"to"`
 	Comment *string `json:"comment"`
 	Summary *string `json:"summary"`
+	Note    *string `json:"note"`
 }
 
 // extractDecision pulls one JSON object out of the model's content.
@@ -430,6 +449,7 @@ func parseLLMAction(in ActionInput, content string) (Action, bool) {
 		return Action{
 			Kind:    ActionPause,
 			Comment: capComment(dec.Comment, in.ActorName+" paused the issue for a human"),
+			Note:    capNote(strval(dec.Note)),
 		}, true
 	default:
 		return Action{}, false
@@ -491,7 +511,7 @@ func resolveTarget(in ActionInput, name *string) (self, target *FleetAgent, ok b
 	if self == nil || target == nil || target.AccountID == self.AccountID {
 		return self, target, false
 	}
-	foreman := foremanOf(in.Fleet)
+	foreman := foremanOf(in.Fleet, in.ForemanAccountID)
 	if in.RuntimeTopology == "flat" {
 		if in.TeamID != "" && !sharesTeam(*target, []string{in.TeamID}) {
 			return self, target, false

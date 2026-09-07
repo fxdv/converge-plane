@@ -1,6 +1,7 @@
 // swarm.go — D2: the swarm panel (docs/spec/12).
 // spec cs:swarm:panel
 // spec cs:swarm:metrics
+// spec cs:swarm:topology
 //
 // GET /api/v1/workspaces/{id}/swarm serves the issues board's swarm
 // panel: a live fleet roster (who owns what, busy/idle, last handoff,
@@ -25,11 +26,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"converge/internal/auth"
 )
@@ -100,11 +104,25 @@ type swarmPausedIssue struct {
 	PausedAt     time.Time `json:"pausedAt"`
 }
 
+// swarmSettings is the swarm plane's fleet settings (D4): the
+// coordination pattern the swarm runs, and the foreman in effect.
+// Topology is the workspace's saved choice (workspaces without a saved
+// row run the deploy-time env default); ForemanName is the effective
+// foreman — the human's designation while that agent is active, else
+// the auto rule (the roster's oldest active agent).
+type swarmSettings struct {
+	Topology         string  `json:"topology"`
+	ForemanAccountID *string `json:"foremanAccountId"`
+	ForemanName      *string `json:"foremanName"`
+}
+
 // swarmStatus is the GET /api/v1/workspaces/{id}/swarm response: the
-// fleet roster (busy first) plus the issues that need a human.
+// fleet roster (busy first), the issues that need a human, and the
+// fleet settings (the Swarm page's save target).
 type swarmStatus struct {
 	Agents       []swarmAgent       `json:"agents"`
 	PausedIssues []swarmPausedIssue `json:"pausedIssues"`
+	Settings     swarmSettings      `json:"settings"`
 }
 
 // handleSwarmStatus implements GET /api/v1/workspaces/{id}/swarm.
@@ -140,7 +158,12 @@ func (a *API) handleSwarmStatus(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, swarmStatus{Agents: agents, PausedIssues: paused})
+	settings, err := a.swarmSettingsView(ctx, workspaceID, agents)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, swarmStatus{Agents: agents, PausedIssues: paused, Settings: settings})
 }
 
 // swarmRoster builds the per-agent entries. The membership base is one
@@ -406,4 +429,173 @@ func (a *API) swarmPausedIssues(ctx context.Context, workspaceID string) ([]swar
 		out = append(out, pi)
 	}
 	return out, rows.Err()
+}
+
+// swarmSettingsView assembles the response's settings block: the saved
+// row (or the deploy-time defaults when the workspace has none) plus
+// the effective foreman — the human's designation while that agent is
+// active in the roster, else the auto rule.
+func (a *API) swarmSettingsView(ctx context.Context, workspaceID string, agents []swarmAgent) (swarmSettings, error) {
+	topology, designated, err := a.swarmSettingsTx(ctx, a.pool, workspaceID)
+	if err != nil {
+		return swarmSettings{}, err
+	}
+	if topology == "" {
+		topology = a.cfg.RuntimeTopology
+	}
+	view := swarmSettings{Topology: topology}
+	if designated != "" {
+		id := designated
+		view.ForemanAccountID = &id
+	}
+	foreman := effectiveForeman(agents, designated)
+	if foreman != "" {
+		name := foremanName(agents, foreman)
+		view.ForemanName = &name
+	}
+	return view, nil
+}
+
+// effectiveForeman applies the D4 rule to the roster: the human's
+// designation wins while that agent is active; a null or retired
+// designation degrades to the auto rule — the roster's oldest active
+// agent (the roster is tenure-ordered). A missing designation never
+// blocks the swarm.
+func effectiveForeman(agents []swarmAgent, designatedID string) string {
+	if designatedID != "" {
+		for i := range agents {
+			if agents[i].ID == designatedID {
+				if agents[i].Status == "ACTIVE" {
+					return agents[i].ID
+				}
+				break // suspended designation: degrade to the auto rule
+			}
+		}
+	}
+	for i := range agents {
+		if agents[i].Status == "ACTIVE" {
+			return agents[i].ID
+		}
+	}
+	return ""
+}
+
+// foremanName resolves a roster id to its display name ("" for an id
+// absent from the roster).
+func foremanName(agents []swarmAgent, id string) string {
+	for i := range agents {
+		if agents[i].ID == id {
+			return agents[i].Name
+		}
+	}
+	return ""
+}
+
+// swarmSettingsTx reads the workspace's swarm plane settings from the
+// given queryer (a tx on the runtime path, the pool on the panel path).
+// An absent row is not an error: topology "" means the deploy-time
+// env default applies, foreman "" means the auto (tenure) rule.
+func (a *API) swarmSettingsTx(ctx context.Context, q queryer, workspaceID string) (topology, foremanID string, err error) {
+	err = q.QueryRow(ctx, `
+		select topology, coalesce(foreman_account_id::text, '')
+		from swarm_settings where workspace_id = $1`, workspaceID).Scan(&topology, &foremanID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", "", nil
+		}
+		return "", "", err
+	}
+	return topology, foremanID, nil
+}
+
+// swarmSettingsRequest is the Swarm page's save payload: the topology
+// and the foreman designation (null = auto).
+type swarmSettingsRequest struct {
+	Topology         string  `json:"topology"`
+	ForemanAccountID *string `json:"foremanAccountId"`
+}
+
+// handleUpdateSwarmSettings implements POST /api/v1/workspaces/{id}/swarm/settings.
+//
+// D4: the fleet is a human's to steer. A workspace owner/admin sets the
+// topology and designates the foreman; the decision takes effect on the
+// swarm's next decision (no restart). Agents may never steer the fleet
+// — that is the humans' control over them (spec 12: the selector is a
+// fleet-level setting, never a board control).
+func (a *API) handleUpdateSwarmSettings(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	workspaceID := r.PathValue("id")
+	if !isUUID(workspaceID) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if p.Kind == auth.AccountKindAgent {
+		writeError(w, http.StatusUnprocessableEntity, "agents cannot change fleet settings")
+		return
+	}
+	role, ok := a.workspaceRole(ctx, p, workspaceID)
+	if !ok || !adminRole(role) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	var req swarmSettingsRequest
+	if err := jsonDecode(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	topology := strings.ToLower(strings.TrimSpace(req.Topology))
+	if topology != "foreman" && topology != "flat" {
+		writeError(w, http.StatusUnprocessableEntity, "topology must be foreman or flat")
+		return
+	}
+	foremanID := ""
+	if req.ForemanAccountID != nil && strings.TrimSpace(*req.ForemanAccountID) != "" {
+		foremanID = strings.TrimSpace(*req.ForemanAccountID)
+		if !isUUID(foremanID) || !a.agentMember(ctx, workspaceID, foremanID) {
+			writeError(w, http.StatusUnprocessableEntity, "foremanAccountId must be an active agent of this workspace")
+			return
+		}
+	}
+
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `
+		insert into swarm_settings (workspace_id, topology, foreman_account_id, updated_at)
+		values ($1, $2, $3, now())
+		on conflict (workspace_id) do update
+		set topology = excluded.topology,
+		    foreman_account_id = excluded.foreman_account_id,
+		    updated_at = now()`,
+		workspaceID, topology, nullForEmpty(&foremanID)); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := a.auditTx(ctx, tx, workspaceID, p.AccountID, "swarm.settings.updated", "Workspace", workspaceID); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	// The page refetches on save; no outbox record is written (the
+	// settings are poll-served with the panel, not synced like the
+	// trace) — the next decision picks the setting up regardless.
+	a.log.Info("swarm settings updated", "workspace", workspaceID,
+		"topology", topology, "foreman", foremanID, "by", p.Email)
+	view, err := a.swarmSettingsView(ctx, workspaceID, nil)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }

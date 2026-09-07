@@ -96,10 +96,15 @@ func TestSwarmStatusWireContract(t *testing.T) {
 			AssigneeID:   strvalptr("a1"),
 			AssigneeName: strvalptr("scout"),
 		}},
+		Settings: swarmSettings{
+			Topology:         "foreman",
+			ForemanAccountID: strvalptr("a1"),
+			ForemanName:      strvalptr("scout"),
+		},
 	}
 
 	equalStrings(t, swarmKeys(t, status),
-		[]string{"agents", "pausedIssues"})
+		[]string{"agents", "pausedIssues", "settings"})
 	equalStrings(t, swarmKeys(t, status.Agents[0]),
 		[]string{"busy", "createdAt", "email", "handoffs24h", "id", "lastActivityAt",
 			"lastHandoff", "name", "openIssueCount", "ops24h", "pausedIssueCount",
@@ -110,6 +115,8 @@ func TestSwarmStatusWireContract(t *testing.T) {
 	equalStrings(t, swarmKeys(t, status.PausedIssues[0]),
 		[]string{"assigneeId", "assigneeName", "id", "number", "pausedAt",
 			"reason", "stateId", "teamId", "title"})
+	equalStrings(t, swarmKeys(t, status.Settings),
+		[]string{"foremanAccountId", "foremanName", "topology"})
 
 	// The empty row must serialize its optionals as JSON null, and its
 	// arrays as [] — the client union admits null but not a missing key.
@@ -168,4 +175,28 @@ func TestAccountUsageWindow(t *testing.T) {
 
 func strvalptr(s string) *string {
 	return &s
+}
+
+// TestEffectiveForeman pins the D4 rule on the panel's roster: the
+// designation wins while that agent is active; a suspended or missing
+// designation degrades to the auto rule (the roster's oldest active
+// agent).
+func TestEffectiveForeman(t *testing.T) {
+	roster := []swarmAgent{
+		{ID: "alpha", Name: "alpha", Status: "ACTIVE"},
+		{ID: "bravo", Name: "bravo", Status: "ACTIVE"},
+		{ID: "charlie", Name: "charlie", Status: "SUSPENDED"},
+	}
+	if got := effectiveForeman(roster, ""); got != "alpha" {
+		t.Fatalf("auto = %q, want the oldest active", got)
+	}
+	if got := effectiveForeman(roster, "bravo"); got != "bravo" {
+		t.Fatalf("active designation = %q, want the designation", got)
+	}
+	if got := effectiveForeman(roster, "charlie"); got != "alpha" {
+		t.Fatalf("suspended designation = %q, want the auto fallback", got)
+	}
+	if got := effectiveForeman(roster, "ghost"); got != "alpha" {
+		t.Fatalf("missing designation = %q, want the auto fallback", got)
+	}
 }

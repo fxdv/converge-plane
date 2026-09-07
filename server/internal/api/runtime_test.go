@@ -689,6 +689,9 @@ func inputFixture(summaryErr error, summary string, statusErr error) *fakeTx {
 			{frag: "from workflow_statuses where id", rowVals: []any{"st2", "To Do", 1, "UNSTARTED"}, rowErr: statusErr},
 			{frag: "from issue_history", rowVals: []any{0}},
 			{frag: "from issue_handoffs", rowVals: []any{summary}, rowErr: summaryErr},
+			// No saved swarm settings (D4): the deploy-time env default and
+			// the auto (tenure) foreman apply.
+			{frag: "from swarm_settings", rowVals: []any{"", ""}},
 			// No discussion yet: the prompt omits the section.
 			{frag: "from comments c", rows: [][]any{}},
 			// A rule for the reserved-state probe (the advance->pause
@@ -766,5 +769,27 @@ func TestRuntimeInputFencesSummary(t *testing.T) {
 		if r < 0x20 || r == 0x7f {
 			t.Fatalf("control character %q survived the fence", r)
 		}
+	}
+}
+
+// TestForemanOfDesignation pins the D4 rule on the runtime's fleet
+// view: the designation wins while the agent is in the fleet (the
+// roster carries active agents only); a designation outside the fleet
+// (suspended or removed) degrades to the tenure rule.
+func TestForemanOfDesignation(t *testing.T) {
+	old := time.Now().Add(-2 * time.Hour)
+	young := time.Now().Add(-1 * time.Hour)
+	fleet := []FleetAgent{
+		{AccountID: "alpha", Name: "alpha", CreatedAt: old},
+		{AccountID: "bravo", Name: "bravo", CreatedAt: young},
+	}
+	if got := foremanOf(fleet, ""); got == nil || got.AccountID != "alpha" {
+		t.Fatalf("auto foreman = %v, want the oldest (alpha)", got)
+	}
+	if got := foremanOf(fleet, "bravo"); got == nil || got.AccountID != "bravo" {
+		t.Fatalf("designated foreman = %v, want bravo", got)
+	}
+	if got := foremanOf(fleet, "ghost"); got == nil || got.AccountID != "alpha" {
+		t.Fatalf("missing designation = %v, want the auto fallback", got)
 	}
 }

@@ -66,6 +66,9 @@ func TestLLMPromptFencesUntrusted(t *testing.T) {
 	if !strings.Contains(prompt, "Reply with a single JSON object") {
 		t.Fatal("the reply contract is missing")
 	}
+	if !strings.Contains(prompt, "where things stand") {
+		t.Fatal("the pause's note contract is missing from the prompt")
+	}
 	if !strings.HasSuffix(prompt, "/no_think\n") {
 		t.Fatal("the prompt does not close with /no_think")
 	}
@@ -230,6 +233,27 @@ func TestParseLLMAction(t *testing.T) {
 			content: `{"kind":"pause","comment":"needs credentials only a human has"}`,
 			wantOK:  true,
 			check:   func(t *testing.T, a Action) { assertAction(t, a, ActionPause, "", "") },
+		},
+		{
+			name: "pause carries the task-level note", mutate: func(in ActionInput) ActionInput { return in },
+			content: `{"kind":"pause","comment":"needs credentials only a human has","note":"Repro built; blocked on the deploy credentials; a human must grant the deploy role."}`,
+			wantOK:  true,
+			check: func(t *testing.T, a Action) {
+				assertAction(t, a, ActionPause, "", "")
+				if a.Note != "Repro built; blocked on the deploy credentials; a human must grant the deploy role." {
+					t.Fatalf("note = %q, want the model's note", a.Note)
+				}
+			},
+		},
+		{
+			name: "pause note is fenced to the note cap", mutate: func(in ActionInput) ActionInput { return in },
+			content: fmt.Sprintf(`{"kind":"pause","comment":"x","note":"%s"}`, strings.Repeat("n", 9000)),
+			wantOK:  true,
+			check: func(t *testing.T, a Action) {
+				if r := []rune(a.Note); len(r) > noteCap+1 {
+					t.Fatalf("note = %d runes, want <= %d (cap + ellipsis)", len(r), noteCap+1)
+				}
+			},
 		},
 		{
 			name: "unknown kind rejected", mutate: func(in ActionInput) ActionInput { return in },

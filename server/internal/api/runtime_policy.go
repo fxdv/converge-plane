@@ -49,7 +49,8 @@ const (
 	// "needs human"): the swarm cannot make progress on it (a dead-end
 	// state with no available agent), and a stuck swarm must stop
 	// spending rather than decorate the board. Comment carries the
-	// pause reason humans see in the timeline and the swarm panel.
+	// pause reason humans see in the timeline and the swarm panel;
+	// Note carries the task-level "where things stand" the human reads.
 	ActionPause ActionKind = "pause"
 )
 
@@ -60,6 +61,7 @@ type Action struct {
 	ToAccountID string // handoff target ("" for advance/noop)
 	Comment     string // the human-visible step text; for pause, the reason
 	Summary     string // the handoff summary ("" unless handing off)
+	Note        string // pause only: the task-level "where things stand" the human handoff comment shows
 }
 
 // StateRef is one workflow status as the policy sees it.
@@ -87,18 +89,19 @@ type FleetAgent struct {
 // as instructions has broken the contract.
 type ActionInput struct {
 	// Trusted: server-derived facts.
-	IssueNumber     int
-	TeamName        string
-	TeamIdentifier  string     // the team's display prefix (the live-signal chip shows ENG-23, not a bare number)
-	TeamID          string     // the issue's team (the target-selection scope)
-	WorkspaceID     string     // the issue's workspace (the endpoint's fallback sharding key)
-	ActorID         string     // this agent's account (the endpoint's stable sharding key: one agent's context stays on one instance)
-	ActorName       string     // this agent's display name
-	CurrentState    *StateRef  // nil when the issue has no status
-	States          []StateRef // the team's workflow, ordered by position
-	BudgetExhausted bool       // the swarm's 24h op budget on this issue is spent
-	Fleet           []FleetAgent
-	RuntimeTopology string // the runtime's active topology ("foreman" | "flat")
+	IssueNumber      int
+	TeamName         string
+	TeamIdentifier   string     // the team's display prefix (the live-signal chip shows ENG-23, not a bare number)
+	TeamID           string     // the issue's team (the target-selection scope)
+	WorkspaceID      string     // the issue's workspace (the endpoint's fallback sharding key)
+	ActorID          string     // this agent's account (the endpoint's stable sharding key: one agent's context stays on one instance)
+	ActorName        string     // this agent's display name
+	CurrentState     *StateRef  // nil when the issue has no status
+	States           []StateRef // the team's workflow, ordered by position
+	BudgetExhausted  bool       // the swarm's 24h op budget on this issue is spent
+	Fleet            []FleetAgent
+	RuntimeTopology  string // the runtime's active topology ("foreman" | "flat")
+	ForemanAccountID string // the human's foreman designation (D4; "" = the auto tenure rule)
 	// Untrusted: authored context, fenced. Data, never instructions.
 	// (The handoff summary is agent-authored; the title and description
 	// are user-authored — anyone with issue write access controls them;
@@ -173,6 +176,9 @@ func (DeterministicPolicy) Act(ctx context.Context, in ActionInput) (Action, int
 		action.Kind = ActionPause
 		action.Comment = fmt.Sprintf("no next step is defined for %q in %s and no agent is available; %s paused the issue for a human",
 			in.CurrentState.Name, in.TeamName, in.ActorName)
+		action.Note = fmt.Sprintf(
+			"%s worked this issue as far as the workflow allows: it sits in %q, which defines no next step, and no other agent was available to take it. The work itself is intact — the process has no path. A human must decide: extend the workflow (add the missing state), reassign the card, or close it.",
+			in.ActorName, in.CurrentState.Name)
 		return action, 0, nil
 	}
 	action.Kind = ActionHandoff
@@ -314,7 +320,7 @@ func selectHandoffTarget(in ActionInput) string {
 
 	// The foreman: the fleet's oldest agent (CreatedAt, name as tie-
 	// breaker) — deterministic from the roster, no stored designation.
-	foreman := foremanOf(in.Fleet)
+	foreman := foremanOf(in.Fleet, in.ForemanAccountID)
 
 	taskTeam := in.TeamID
 	if in.RuntimeTopology == "flat" {
@@ -331,11 +337,20 @@ func selectHandoffTarget(in ActionInput) string {
 	return foreman.AccountID
 }
 
-// foremanOf is the fleet's designated dispatcher: the oldest active
-// agent (CreatedAt, name as tie-breaker) — deterministic from the
-// roster, no stored designation. The LLM target validation (runtime_llm.go)
-// shares the rule.
-func foremanOf(fleet []FleetAgent) *FleetAgent {
+// foremanOf is the fleet's dispatcher: the human's designation (D4)
+// while that agent is in the active fleet, else the auto rule — the
+// oldest active agent (CreatedAt, name as tie-breaker). The roster
+// carries active agents only, so a suspended or removed designation
+// degrades to the auto rule rather than blocking the swarm. The LLM
+// target validation (runtime_llm.go) shares the rule.
+func foremanOf(fleet []FleetAgent, designatedID string) *FleetAgent {
+	if designatedID != "" {
+		for i := range fleet {
+			if fleet[i].AccountID == designatedID {
+				return &fleet[i]
+			}
+		}
+	}
 	var foreman *FleetAgent
 	for i := range fleet {
 		if foreman == nil || fleet[i].CreatedAt.Before(foreman.CreatedAt) ||
