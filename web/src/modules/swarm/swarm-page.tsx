@@ -1,5 +1,6 @@
 import { AI, Warning } from '@converge/ui/icons';
 import { RoleEnum } from '@converge/types';
+import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
@@ -135,6 +136,47 @@ export const SwarmPage = withApplicationStore(
 
           <section className="rounded-lg border border-grayAlpha-100 dark:border-grayAlpha-300 bg-background-3/40 p-4 flex flex-col gap-4">
             <h3 className="text-sm font-semibold">Fleet settings</h3>
+
+            {data?.brain && (
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <span
+                  className={cn(
+                    'inline-block h-2 w-2 rounded-full',
+                    data.brain.mode === 'llm'
+                      ? 'bg-emerald-500'
+                      : 'bg-amber-500',
+                  )}
+                />
+                <span className="text-muted-foreground">
+                  Brain{' '}
+                  <span
+                    className={cn(
+                      'font-medium',
+                      data.brain.mode === 'llm'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-amber-600 dark:text-amber-400',
+                    )}
+                  >
+                    {data.brain.mode === 'llm' ? 'LLM' : 'floor'}
+                  </span>
+                  {data.brain.model ? ` — ${data.brain.model}` : ''}
+                  {data.brain.endpoints
+                    ? `, ${data.brain.endpoints} endpoints`
+                    : ''}
+                  {data.brain.mode !== 'llm' &&
+                    ' — the deterministic state machine is deciding'}
+                </span>
+                {data.brain.lastDecisionAt && (
+                  <span className="text-muted-foreground">
+                    · last decision{' '}
+                    {formatDistanceToNow(
+                      new Date(data.brain.lastDecisionAt),
+                    )}{' '}
+                    ago
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

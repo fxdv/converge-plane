@@ -76,6 +76,19 @@ export interface SwarmSettings {
   foremanName: string | null;
 }
 
+// The swarm plane's decision-brain indicator: which brain made the last
+// decision — "llm" (the model) or "floor" (the deterministic policy) —
+// and when, with the model name and endpoint count from the deploy
+// config. A swarm on the floor still moves cards, but without judgment;
+// the indicator makes that degradation visible to a human.
+export interface SwarmBrain {
+  mode: string; // "llm" | "floor"
+  note?: string;
+  model?: string;
+  endpoints?: number;
+  lastDecisionAt?: string;
+}
+
 // The reserved Human Review parking column (D1 escalation): the
 // server's needs-human predicate is the pause flag OR this state name,
 // so the client mirrors it with the same OR rule.
@@ -87,6 +100,9 @@ export interface SwarmStatus {
   pausedIssues: SwarmPausedIssue[];
   // The swarm plane's fleet settings (D4): the Swarm page's save target.
   settings: SwarmSettings;
+  // The decision-brain indicator: is the fleet thinking (llm) or
+  // marching (deterministic floor)?
+  brain: SwarmBrain;
 }
 
 export async function getSwarmStatus(workspaceId: string) {
