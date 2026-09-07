@@ -1,8 +1,11 @@
-import { MyIssues, StackLine, TeamLine } from '@converge/ui/icons';
+import { AI, MyIssues, StackLine, TeamLine } from '@converge/ui/icons';
+import { RoleEnum } from '@converge/types';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import * as React from 'react';
+
+import type { UsersOnWorkspaceType } from 'common/types';
 
 import { GlobalShortcuts, IssueShortcutDialogs } from 'modules/shortcuts';
 
@@ -24,13 +27,19 @@ interface LayoutProps {
 }
 
 export const AppLayoutChild = observer(({ children }: LayoutProps) => {
-  const { applicationStore } = useContextStore();
+  const { applicationStore, workspaceStore } = useContextStore();
   useSidebarShortcut();
 
   const {
     query: { workspaceSlug },
   } = useRouter();
   const team = useCurrentTeam();
+
+  // The Swarm link appears only when the workspace has machine
+  // members (the same check as the board's Swarm button).
+  const hasAgents = workspaceStore.usersOnWorkspaces.some(
+    (u: UsersOnWorkspaceType) => u.role === RoleEnum.AGENT,
+  );
 
   return (
     <>
@@ -60,6 +69,15 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
                     icon: TeamLine,
                     href: `/${workspaceSlug}/teams`,
                   },
+                  ...(hasAgents
+                    ? [
+                        {
+                          title: 'Swarm',
+                          icon: AI,
+                          href: `/${workspaceSlug}/swarm`,
+                        },
+                      ]
+                    : []),
                 ]}
               />
               <TeamList />

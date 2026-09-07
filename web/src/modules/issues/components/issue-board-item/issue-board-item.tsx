@@ -12,6 +12,8 @@ import {
   IssueStatusDropdownVariant,
 } from 'modules/issues/components';
 
+import { HUMAN_REVIEW_STATE_NAME } from '@converge/services';
+
 import { ArrowForwardLine, Warning } from '@converge/ui/icons';
 
 import type { IssueHistoryType } from 'common/types';
@@ -56,8 +58,13 @@ export const BoardIssueItem = observer(
     measure,
   }: BoardIssueItemProps) => {
     const { mutate: updateIssue } = useUpdateIssueMutation({});
-    const { issuesStore, applicationStore, issuesHistoryStore, swarmActivityStore } =
-      useContextStore();
+    const {
+      issuesStore,
+      applicationStore,
+      issuesHistoryStore,
+      swarmActivityStore,
+      workflowsStore,
+    } = useContextStore();
     const {
       openIssue,
       issueId: currentViewIssueId,
@@ -65,6 +72,15 @@ export const BoardIssueItem = observer(
     } = React.useContext(IssueViewContext);
     const issue = issuesStore.getIssueById(issueId);
     const team = useTeamWithId(issue.teamId);
+
+    // The aligned needs-human rule (D4): the swarm paused the card, or
+    // the card sits in the Human Review column — the client's mirror of
+    // the server's needs-human predicate (flag OR column).
+    const stateName = workflowsStore.workflows.get(issue.stateId ?? '')?.name;
+    const needsHuman =
+      !!issue.agentPaused ||
+      (!!stateName &&
+        stateName.toLowerCase() === HUMAN_REVIEW_STATE_NAME.toLowerCase());
 
     // spec cs:swarm:activity — Surface A: the in-flight signal. One
     // worker per agent, one record per agent; only a fresh signal
@@ -151,7 +167,7 @@ export const BoardIssueItem = observer(
           <div className="flex items-center gap-2">
             {/* D1: escalation flag — the swarm is paused on this issue;
                 a human must look (agents are blocked from acting). */}
-            {issue.agentPaused && (
+            {needsHuman && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
                 <Warning size={12} />
                 needs human

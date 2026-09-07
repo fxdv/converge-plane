@@ -4,6 +4,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
+import { useRouter } from 'next/router';
+
 import { IssueViewContext } from 'components/side-issue-view';
 import { useCurrentWorkspace } from 'hooks/workspace';
 
@@ -24,6 +26,7 @@ export const SwarmPanel = observer(() => {
   const workspace = useCurrentWorkspace();
   const { teamsStore } = useContextStore();
   const { openIssue } = React.useContext(IssueViewContext);
+  const router = useRouter();
   const { data, isLoading, refetch } = useSwarmQuery(workspace?.id ?? '');
 
   const issuePrefix = (teamId: string, number: number) =>
@@ -39,10 +42,19 @@ export const SwarmPanel = observer(() => {
             {data.agents.length} agent{data.agents.length === 1 ? '' : 's'}
           </span>
         )}
+        {workspace && (
+          <button
+            type="button"
+            onClick={() => router.push(`/${workspace.slug}/swarm`)}
+            className="ml-auto text-xs text-grayAlpha-500 dark:text-grayAlpha-400 hover:underline"
+          >
+            Swarm page →
+          </button>
+        )}
         <button
           type="button"
           onClick={() => refetch()}
-          className="ml-auto text-xs text-grayAlpha-500 dark:text-grayAlpha-400 hover:underline"
+          className="text-xs text-grayAlpha-500 dark:text-grayAlpha-400 hover:underline"
         >
           refresh
         </button>
@@ -91,7 +103,7 @@ export const SwarmPanel = observer(() => {
 
 // A paused issue (D1 escalation): the swarm stopped here and a human is
 // being pointed at it. The guard's own words explain why.
-const PausedIssueRow = ({
+export const PausedIssueRow = ({
   issue,
   prefix,
   onOpen,
