@@ -37,6 +37,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -123,11 +124,12 @@ func (c *llmClient) endpointFor(agentID, workspaceID string) string {
 }
 
 // llmResponse is the slice of the OpenAI-compatible response the
-// policy consumes: the first choice's message (content plus the
-// Qwen-style reasoning block) and the token usage.
+// policy consumes: the first choice (finish reason, message content
+// plus the Qwen-style reasoning block) and the token usage.
 type llmResponse struct {
 	Choices []struct {
-		Message struct {
+		FinishReason string `json:"finish_reason"`
+		Message      struct {
 			Content          string `json:"content"`
 			ReasoningContent string `json:"reasoning_content"`
 		} `json:"message"`
@@ -140,9 +142,9 @@ type llmResponse struct {
 // decide makes one model call for the acting agent's endpoint and returns
 // the completion content plus the token usage (the spend slot counts
 // both thinking and answer tokens). Any failure — down endpoint,
-// timeout, non-200 (the "Loading model" 503 included), malformed
-// response — is an error the fallbackPolicy absorbs; tokens reported
-// alongside a success are real spend.
+// timeout, non-200 (the "Loading model" 503 included), malformed or
+// truncated response — is an error the fallbackPolicy absorbs; tokens
+// reported alongside a failure are real spend.
 func (c *llmClient) decide(ctx context.Context, in ActionInput) (string, int, error) {
 	url := c.endpointFor(in.ActorID, in.WorkspaceID)
 	if url == "" {
@@ -154,6 +156,13 @@ func (c *llmClient) decide(ctx context.Context, in ActionInput) (string, int, er
 		"max_tokens":  c.maxTok,
 		"temperature": 0.2,
 		"stream":      false,
+		// Thinking models (Qwen3.x) would otherwise spend the whole
+		// max_tokens budget on reasoning and return an empty answer
+		// (2026-09-08: 7/7 decisions — 2048 thinking tokens, 0 content).
+		// The template kwarg is the authoritative off-switch; the
+		// /no_think prompt marker remains for templates that honor it
+		// textually. Older llama.cpp builds ignore unknown fields.
+		"chat_template_kwargs": map[string]any{"enable_thinking": false},
 	})
 	if err != nil {
 		return "", 0, err
@@ -184,7 +193,16 @@ func (c *llmClient) decide(ctx context.Context, in ActionInput) (string, int, er
 	if len(out.Choices) == 0 {
 		return "", 0, fmt.Errorf("llm endpoint %s: no choices in response", url)
 	}
-	return out.Choices[0].Message.Content, out.Usage.TotalTokens, nil
+	ch := out.Choices[0]
+	// A length-truncated or empty proposal is never a valid decision:
+	// thinking models can burn the whole budget on reasoning and return
+	// nothing to parse. Fail explicitly — the floor's indicator note
+	// then says "truncated", not the misleading "failed validation".
+	// The spent tokens are reported so the burn slot stays honest.
+	if ch.Message.Content == "" || ch.FinishReason == "length" {
+		return "", out.Usage.TotalTokens, fmt.Errorf("llm endpoint %s: empty or truncated proposal (finish_reason=%q, tokens=%d)", url, ch.FinishReason, out.Usage.TotalTokens)
+	}
+	return ch.Message.Content, out.Usage.TotalTokens, nil
 }
 
 // LLMPolicy is the LLM decision brain (the spec's policy slot,
@@ -216,9 +234,12 @@ func (p LLMPolicy) Act(ctx context.Context, in ActionInput) (Action, int, error)
 	if err != nil {
 		return Action{}, tokens, err
 	}
-	action, ok := parseLLMAction(in, content)
-	if !ok {
-		return Action{}, tokens, fmt.Errorf("llm proposal failed validation")
+	action, err := parseLLMAction(in, content)
+	if err != nil {
+		// The specific reason rides on to the floor's indicator note
+		// (the swarm plane shows it): a constant "failed validation"
+		// hid it for seven decisions straight on 2026-09-08.
+		return Action{}, tokens, fmt.Errorf("llm proposal failed validation: %w", err)
 	}
 	p.log.Debug("llm policy decided", "kind", string(action.Kind), "tokens", tokens)
 	return action, tokens, nil
@@ -371,6 +392,7 @@ func llmDecisionPrompt(in ActionInput) string {
 	b.WriteString(`{"kind":"pause","comment":"<one short sentence: why no agent can proceed>","note":"where things stand, written for a human with zero context: what was done, what was found, what is blocked, what the human must decide or do"}`)
 	b.WriteString("\n- pause: no agent can make progress; a human must act. Park for a human only when a human decision, approval, or input is genuinely required; the card then waits in Human Review until a human resumes it. The note is the human's briefing: they have read nothing else about this issue, so cover the task scope, your findings, and the exact decision or input you need\n")
 	b.WriteString("Rules: copy state and agent names exactly from the lists above; invent nothing. One step only.\n")
+	b.WriteString("A human is never a handoff target: to wait for a human, use pause. A proposed state must be forward of the current state, or omitted for a handoff.\n")
 	b.WriteString("/no_think\n")
 	return b.String()
 }
@@ -413,37 +435,40 @@ func extractDecision(content string) (llmDecision, bool) {
 // and maps it to a runtime Action. It is the output half of the trust
 // boundary: whatever the model says — including text that injected
 // content talked it into saying — must name real states and real fleet
-// members under the active topology, or it is discarded (ok=false,
-// the deterministic fallback decides).
-func parseLLMAction(in ActionInput, content string) (Action, bool) {
+// members under the active topology, or it is discarded (the
+// deterministic fallback decides). The returned error is diagnostic:
+// it names the rule that rejected the proposal, rides on to the brain
+// indicator's note on the swarm plane, and is the prompt-iteration
+// feedback.
+func parseLLMAction(in ActionInput, content string) (Action, error) {
 	dec, ok := extractDecision(content)
 	if !ok {
-		return Action{}, false
+		return Action{}, errors.New("no parseable decision JSON in the model output")
 	}
 	switch strings.ToLower(strings.TrimSpace(dec.Kind)) {
 	case "advance", "complete":
-		stateID, ok := resolveState(in, dec.State)
-		if !ok {
-			return Action{}, false
+		stateID, err := resolveState(in, dec.State)
+		if err != nil {
+			return Action{}, fmt.Errorf("advance: %w", err)
 		}
 		if in.CurrentState != nil && stateID == in.CurrentState.ID {
-			return Action{}, false // a self-advance is a stuck loop
+			return Action{}, fmt.Errorf("advance to the current state %q is a stuck loop", in.CurrentState.Name)
 		}
 		return Action{
 			Kind:    ActionAdvance,
 			StateID: stateID,
 			Comment: capComment(dec.Comment, in.ActorName+" advanced the issue"),
-		}, true
+		}, nil
 	case "handoff":
-		self, target, ok := resolveTarget(in, dec.To)
-		if !ok {
-			return Action{}, false
+		self, target, err := resolveTarget(in, dec.To)
+		if err != nil {
+			return Action{}, fmt.Errorf("handoff: %w", err)
 		}
 		stateID := ""
 		if dec.State != nil && strings.TrimSpace(*dec.State) != "" && strings.ToLower(strings.TrimSpace(*dec.State)) != "null" {
-			id, ok := resolveState(in, dec.State)
-			if !ok {
-				return Action{}, false
+			id, err := resolveState(in, dec.State)
+			if err != nil {
+				return Action{}, fmt.Errorf("handoff state: %w", err)
 			}
 			stateID = id
 		}
@@ -458,15 +483,15 @@ func parseLLMAction(in ActionInput, content string) (Action, bool) {
 			StateID:     stateID,
 			Comment:     capComment(dec.Comment, in.ActorName+" handed the issue off"),
 			Summary:     summary,
-		}, true
+		}, nil
 	case "pause":
 		return Action{
 			Kind:    ActionPause,
 			Comment: capComment(dec.Comment, in.ActorName+" paused the issue for a human"),
 			Note:    capNote(strval(dec.Note)),
-		}, true
+		}, nil
 	default:
-		return Action{}, false
+		return Action{}, fmt.Errorf("unknown kind %q (want advance, handoff, or pause)", strings.TrimSpace(dec.Kind))
 	}
 }
 
@@ -475,13 +500,13 @@ func parseLLMAction(in ActionInput, content string) (Action, bool) {
 // jumps), never a cancellation. A nil/empty/"null" name is invalid
 // (an advance without a state is a guess, not a decision; a handoff
 // may legitimately omit its state — callers check before calling).
-func resolveState(in ActionInput, name *string) (string, bool) {
+func resolveState(in ActionInput, name *string) (string, error) {
 	if name == nil {
-		return "", false
+		return "", errors.New("no state proposed")
 	}
 	want := strings.ToLower(strings.TrimSpace(*name))
 	if want == "" || want == "null" {
-		return "", false
+		return "", fmt.Errorf("no state proposed (%q)", *name)
 	}
 	for i := range in.States {
 		s := in.States[i]
@@ -489,14 +514,14 @@ func resolveState(in ActionInput, name *string) (string, bool) {
 			continue
 		}
 		if strings.ToUpper(s.Category) == "CANCELED" {
-			return "", false // agents do not cancel; humans do
+			return "", fmt.Errorf("state %q is canceled (agents do not cancel; humans do)", s.Name)
 		}
 		if in.CurrentState != nil && s.ID != in.CurrentState.ID && s.Position < in.CurrentState.Position {
-			return "", false // backward jump
+			return "", fmt.Errorf("state %q is a backward jump (forward-only)", s.Name)
 		}
-		return s.ID, true
+		return s.ID, nil
 	}
-	return "", false
+	return "", fmt.Errorf("state %q is not in the team workflow", *name)
 }
 
 // resolveTarget maps a proposed handoff recipient to a fleet member
@@ -504,13 +529,13 @@ func resolveState(in ActionInput, name *string) (string, bool) {
 // enforces on the deterministic path: never the actor itself; flat
 // requires a shared team; foreman requires the foreman (for workers)
 // or a shared team (for the foreman dispatching).
-func resolveTarget(in ActionInput, name *string) (self, target *FleetAgent, ok bool) {
+func resolveTarget(in ActionInput, name *string) (self, target *FleetAgent, err error) {
 	if name == nil {
-		return nil, nil, false
+		return nil, nil, errors.New("no handoff target proposed")
 	}
 	want := strings.ToLower(strings.TrimSpace(*name))
 	if want == "" || want == "null" {
-		return nil, nil, false
+		return nil, nil, fmt.Errorf("no handoff target proposed (%q)", *name)
 	}
 	actor := strings.ToLower(in.ActorName)
 	for i := range in.Fleet {
@@ -522,28 +547,34 @@ func resolveTarget(in ActionInput, name *string) (self, target *FleetAgent, ok b
 			target = &ag
 		}
 	}
-	if self == nil || target == nil || target.AccountID == self.AccountID {
-		return self, target, false
+	if target == nil {
+		return self, nil, fmt.Errorf("handoff target %q is not in the fleet", *name)
+	}
+	if self == nil {
+		return self, target, fmt.Errorf("actor %q is not in the fleet", in.ActorName)
+	}
+	if target.AccountID == self.AccountID {
+		return self, target, fmt.Errorf("handoff target %q is the actor itself (a loop)", *name)
 	}
 	foreman := foremanOf(in.Fleet, in.ForemanAccountID)
 	if in.RuntimeTopology == "flat" {
 		if in.TeamID != "" && !sharesTeam(*target, []string{in.TeamID}) {
-			return self, target, false
+			return self, target, fmt.Errorf("handoff target %q is not on the issue's team (flat)", *name)
 		}
-		return self, target, true
+		return self, target, nil
 	}
 	// foreman: workers hand to the foreman (team-agnostic by design);
 	// the foreman dispatches to a peer on the issue's team.
 	if self.AccountID == foreman.AccountID {
 		if in.TeamID != "" && !sharesTeam(*target, []string{in.TeamID}) {
-			return self, target, false
+			return self, target, fmt.Errorf("handoff target %q is not on the issue's team (foreman)", *name)
 		}
-		return self, target, true
+		return self, target, nil
 	}
 	if foreman == nil || target.AccountID != foreman.AccountID {
-		return self, target, false
+		return self, target, fmt.Errorf("topology is foreman: a worker hands to the foreman, not %q", *name)
 	}
-	return self, target, true
+	return self, target, nil
 }
 
 // capComment bounds the human-visible step text; an empty proposal
