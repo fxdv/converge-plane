@@ -200,7 +200,7 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	} else if tripped {
-		recs, err := a.pauseIssueTx(ctx, tx, workspaceID, row, p, reason, guardPauseNote(reason))
+		recs, _, _, err := a.pauseWithBreakerTx(ctx, tx, workspaceID, row, p, reason, guardPauseNote(reason))
 		if err != nil {
 			a.internalError(w, err)
 			return

@@ -85,6 +85,15 @@ type AgentRuntime struct {
 	brainMode string
 	brainNote string
 	brainAt   time.Time
+
+	// review is the swarm plane's standing-duty indicator (cs:swarm:
+	// review): the foreman review's last pass — when it ran and what it
+	// did. Same pattern as the brain: in-memory, served by the status
+	// endpoint, gone on restart (the pass that matters — the card's
+	// resolution — is on the trace, not in this slot).
+	reviewMu   sync.Mutex
+	reviewAt   time.Time
+	reviewNote string
 }
 
 // newAgentRuntime builds the runtime; it is inert until Start.
@@ -155,9 +164,13 @@ func (rt *AgentRuntime) Start(ctx context.Context) {
 		return
 	}
 	go rt.dispatch(ctx)
+	if rt.a.cfg.SwarmReviewInterval > 0 {
+		go rt.reviewLoop(ctx)
+	}
 	rt.log.Info("agent runtime started",
 		"topology", rt.a.cfg.RuntimeTopology, "tick", rt.a.cfg.RuntimeTick.String(),
-		"policy", rt.policyName())
+		"policy", rt.policyName(),
+		"review", rt.a.cfg.SwarmReviewInterval.String())
 }
 
 // Stop signals the dispatcher and every live worker to drain, then
@@ -966,18 +979,20 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 		// Escalation through the one choke point (the Human Review
 		// protocol): the flag, the column move, the history rows, the
 		// human-handoff comment, the audit row, the refreshed issue
-		// record. tripped=true: the worker moves on (a paused issue is
-		// no longer actionable).
+		// record — unless the cycle breaker fires, in which case the
+		// card is escalated to the human foreman instead of re-parked.
+		// tripped=true either way: the worker moves on (a paused or
+		// handed-over issue is no longer actionable).
 		if action.Comment == "" {
 			action.Comment = "agent runtime paused the issue for a human (no progress possible)"
 		}
 		in.PauseReason = action.Comment
-		pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row,
+		recs, tripped, reason, err := a.pauseWithBreakerTx(ctx, tx, w.workspaceID, row,
 			&Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, action.Comment, action.Note)
 		if err != nil {
 			return nil, false, "", err
 		}
-		return pauseRecs, true, action.Comment, nil
+		return recs, tripped, reason, nil
 
 	case ActionAdvance:
 		if action.StateID == "" {
@@ -1005,11 +1020,11 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 			return nil, false, "", err
 		} else if tripped {
 			in.PauseReason = reason
-			pauseRecs, err := a.pauseIssueTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason, guardPauseNote(reason))
+			recs, btripped, breason, err := a.pauseWithBreakerTx(ctx, tx, w.workspaceID, row, &Principal{AccountID: w.agentID, Kind: auth.AccountKindAgent}, reason, guardPauseNote(reason))
 			if err != nil {
 				return nil, false, "", err
 			}
-			return pauseRecs, true, reason, nil
+			return recs, btripped, breason, nil
 		}
 		stateID := action.StateID
 		issueRec, histRec, _, err := a.applyHandoffTx(ctx, tx, w.workspaceID, row, w.agentID, action.ToAccountID, stateID, action.Summary)

@@ -135,12 +135,14 @@ type swarmBrain struct {
 
 // swarmStatus is the GET /api/v1/workspaces/{id}/swarm response: the
 // fleet roster (busy first), the issues that need a human, the fleet
-// settings (the Swarm page's save target), and the brain indicator.
+// settings (the Swarm page's save target), the brain indicator, and
+// the standing foreman review's state.
 type swarmStatus struct {
 	Agents       []swarmAgent       `json:"agents"`
 	PausedIssues []swarmPausedIssue `json:"pausedIssues"`
 	Settings     swarmSettings      `json:"settings"`
 	Brain        swarmBrain         `json:"brain"`
+	Review       swarmReview        `json:"review"`
 }
 
 // handleSwarmStatus implements GET /api/v1/workspaces/{id}/swarm.
@@ -186,6 +188,7 @@ func (a *API) handleSwarmStatus(w http.ResponseWriter, r *http.Request) {
 		status.Brain = a.runtime.brainView()
 		status.Brain.Model = a.cfg.LLMModel
 		status.Brain.Endpoints = len(a.cfg.LLMURLs)
+		status.Review = a.runtime.reviewView()
 	}
 	writeJSON(w, http.StatusOK, status)
 }

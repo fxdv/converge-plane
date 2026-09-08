@@ -668,6 +668,9 @@ answer reaches the swarm. The client renders the pause as a ``needs
 human'' badge on the card and a timeline event, and the swarm panel
 lists every card waiting on a human --- the pause flag
 \emph{or} the column --- at the top (\S\ref{sec:panel}).
+The escalation's standing-duty half --- what happens to a card the
+swarm keeps parking, unattended --- is the foreman review
+(\S\ref{sec:review}).
 
 \owner{guard constants (3 / 50 / 24h / 4KB) are currently code
   constants; do they become operator-configurable product knobs in v1, or
@@ -917,6 +920,75 @@ comment renders (\S\ref{sec:topology}).
   multi-instance deployment moves to the shared broker
   (\S\ref{sec:seams}).
 \end{itemize}
+
+\section{The foreman review}
+\label{sec:review}
+\cs{swarm:review}\shipped\
+
+A pause is the swarm asking a human a question; the question it asks
+most, unasked, is what happens to a card the human resumed that the
+swarm cannot make progress on. Left alone, the swarm parks it again,
+the human resumes again, and the card cycles through \emph{Human
+Review} --- decorating the queue with noise the reply never changed.
+The foreman review breaks that cycle with \emph{one rule, two
+places}:
+
+\begin{center}
+\begin{tabular}{@{}p{0.22\textwidth}p{0.38\textwidth}p{0.38\textwidth}@{}}
+\toprule
+\textbf{Mechanism} & \textbf{Fires when} & \textbf{Effect}\\
+\midrule
+Cycle breaker (work cycle) & a pause would put the card at $\ge 3$ parks
+  within the shared 24h guard window, or the last park went
+  unanswered for a work session & the pause does not park: the card
+  is \emph{escalated} to the human foreman --- reassigned, In
+  Progress, pause cleared, full disclosure\\
+Standing review (tick) & a card the swarm paused: a human replied
+  since the last park & the swarm \emph{resumes} --- flag cleared,
+  back to In Progress, the reply in its prompt context\\
+ & no reply since the last park, and the card is at $\ge 3$ parks
+  in 24h & \emph{escalated}, the same shape as the breaker\\
+ & no reply since the last park, and the last park is a work
+  session (4h) old & \emph{escalated} --- a parked card may not wait
+  forever: the counter can age out of its 24h window, but the duty
+  cannot\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The breaker sits in the pause choke point every escalation flows
+through (\S\ref{sec:handoff} escalation), so no pause surface --- LLM
+pause, advance-into-\emph{Human Review}, quiet-guard trip --- can
+re-park a cycled card; below the threshold and fresh, a pause parks
+exactly as before (one park is a question, two a pattern, three a
+cycle). The escalation condition is one shared rule --- the cycle
+counter or staleness (a full work session without an answer) ---
+applied at both places. The
+tick is a runtime goroutine on an interval (operator env; default
+30m; \texttt{0} disables the tick while the breaker remains) that runs
+an immediate pass on boot, then reviews every swarm-parked card in
+every workspace. It acts \emph{as the human foreman} (the workspace
+owner, else the oldest admin): the standing delegation is the human's,
+and every action it takes is a history row, a comment, an audit event,
+and the outbox --- the same trace shape as any mutation, so the duty
+is visible in the activity feed, and a brain-indicator-shaped slot on
+the swarm plane reports the interval, the last pass, and what it did.
+
+Escalation is \emph{terminal for the swarm}: the card is assigned to a
+human, and the swarm's queue is agent-assigned (a worker only picks a
+card assigned to itself), so no worker can touch it again --- the
+cycle ends by construction, not by promise. A human who wants the
+swarm back reassigns the card to an agent; the 24h window then clears
+and the swarm gets its full threshold of attempts again. The verdict
+is decided under the team lock against the row re-read under it (the
+work cycle's snapshot/apply shape, \S\ref{sec:runtime}), anchored by
+the row's version: a concurrent human or worker mutation wins, and the
+review commits nothing.
+
+\owner{the park threshold (3/24h), the staleness bound (4h --- one
+  work session), and the review interval (30m) ride on the
+  guard-window family: confirm all three against usage data before
+  they harden into product constants.}
 
 % ============================================================
 \chapter{Architecture}

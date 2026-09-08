@@ -178,6 +178,40 @@ export const SwarmPage = withApplicationStore(
               </div>
             )}
 
+            {data?.review && (
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <span
+                  className={cn(
+                    'inline-block h-2 w-2 rounded-full',
+                    data.review.interval === 'off'
+                      ? 'bg-gray-400'
+                      : 'bg-sky-500',
+                  )}
+                />
+                <span className="text-muted-foreground">
+                  Standing review{' '}
+                  <span
+                    className={cn(
+                      'font-medium',
+                      data.review.interval === 'off'
+                        ? 'text-gray-500 dark:text-gray-400'
+                        : 'text-sky-600 dark:text-sky-400',
+                    )}
+                  >
+                    {data.review.interval === 'off'
+                      ? 'off'
+                      : `every ${data.review.interval}`}
+                  </span>
+                  {data.review.lastRunAt &&
+                    ` · last pass ${formatDistanceToNow(new Date(data.review.lastRunAt))} ago`}
+                  {data.review.lastNote &&
+                    ` · ${data.review.lastNote}`}
+                  {data.review.interval !== 'off' &&
+                    ' — replies resume the swarm, cycled cards escalate to you'}
+                </span>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Topology

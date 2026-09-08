@@ -609,6 +609,18 @@ func fakeAssign(values []any, dest ...any) error {
 				return fmt.Errorf("fakeAssign: want int, got %T", values[i])
 			}
 			*p = n
+		case *int64:
+			n, ok := values[i].(int64)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want int64, got %T", values[i])
+			}
+			*p = n
+		case *bool:
+			b, ok := values[i].(bool)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want bool, got %T", values[i])
+			}
+			*p = b
 		case *time.Time:
 			ts, ok := values[i].(time.Time)
 			if !ok {
@@ -637,11 +649,21 @@ type fakeRule struct {
 	rows    [][]any
 }
 
+// fakeExecCall is one Exec the fake recorded (the SQL and its args);
+// the apply-path tests assert on these — the writes are the contract.
+type fakeExecCall struct {
+	sql  string
+	args []any
+}
+
 // fakeTx is an in-memory pgx.Tx: it replays the canned results for
-// Query and QueryRow and satisfies the rest of the interface inertly.
+// Query and QueryRow, records its writes (Execs and QueryRows) for
+// assertion, and satisfies the rest of the interface inertly.
 type fakeTx struct {
 	t     *testing.T
 	rules []fakeRule
+	execs []fakeExecCall
+	rows  []fakeExecCall // the QueryRow calls
 }
 
 func (f *fakeTx) ruleFor(sql string) *fakeRule {
@@ -666,6 +688,7 @@ func (f *fakeTx) Prepare(ctx context.Context, name, sql string) (*pgconn.Stateme
 	return nil, nil
 }
 func (f *fakeTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	f.execs = append(f.execs, fakeExecCall{sql: sql, args: args})
 	return pgconn.CommandTag{}, nil
 }
 func (f *fakeTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
@@ -673,6 +696,7 @@ func (f *fakeTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, 
 }
 func (f *fakeTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	r := f.ruleFor(sql)
+	f.rows = append(f.rows, fakeExecCall{sql: sql, args: args})
 	return fakeRow{values: r.rowVals, err: r.rowErr}
 }
 func (f *fakeTx) Conn() *pgx.Conn { return nil }

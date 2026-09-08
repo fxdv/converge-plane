@@ -94,6 +94,16 @@ export interface SwarmBrain {
 // so the client mirrors it with the same OR rule.
 export const HUMAN_REVIEW_STATE_NAME = 'Human Review';
 
+// The standing foreman review's state: the interval in effect, the last
+// pass, and what it did ("2 resumed, 1 escalated" / "clean"). The
+// duty resolves the swarm's parked queue on a schedule — a human reply
+// resumes the swarm, a cycled card is escalated to the human foreman.
+export interface SwarmReview {
+  interval: string; // "30m" | "off"
+  lastRunAt?: string;
+  lastNote?: string;
+}
+
 export interface SwarmStatus {
   // Fleet roster, busy agents first.
   agents: SwarmAgent[];
@@ -103,6 +113,8 @@ export interface SwarmStatus {
   // The decision-brain indicator: is the fleet thinking (llm) or
   // marching (deterministic floor)?
   brain: SwarmBrain;
+  // The standing-duty indicator: is the foreman review running?
+  review: SwarmReview;
 }
 
 export async function getSwarmStatus(workspaceId: string) {
