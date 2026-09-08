@@ -128,7 +128,7 @@ export const SwarmPage = withApplicationStore(
               <p className="text-sm text-muted-foreground mt-1">
                 One screen for the swarm: how the fleet coordinates, how
                 each agent is doing, and the work that waits on you.
-                Changes below take effect on the swarm's next decision —
+                Changes below take effect on the next swarm decision —
                 no restart, no redeploy.
               </p>
             </div>
