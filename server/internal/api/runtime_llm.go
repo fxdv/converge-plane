@@ -393,6 +393,7 @@ func llmDecisionPrompt(in ActionInput) string {
 	b.WriteString("\n- pause: no agent can make progress; a human must act. Park for a human only when a human decision, approval, or input is genuinely required; the card then waits in Human Review until a human resumes it. The note is the human's briefing: they have read nothing else about this issue, so cover the task scope, your findings, and the exact decision or input you need\n")
 	b.WriteString("Rules: copy state and agent names exactly from the lists above; invent nothing. One step only.\n")
 	b.WriteString("A human is never a handoff target: to wait for a human, use pause. A proposed state must be forward of the current state, or omitted for a handoff.\n")
+	b.WriteString("A pause may be your last word on this card: cards that park repeatedly are escalated to the human foreman, and your pause reason and note become the full briefing they get. Make them precise and self-contained.\n")
 	b.WriteString("/no_think\n")
 	return b.String()
 }

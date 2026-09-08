@@ -75,6 +75,13 @@ type Config struct {
 	// fast path missed (a restart, a manual DB edit) is picked up within
 	// one tick.
 	RuntimeTick time.Duration
+	// SwarmReviewInterval bounds the foreman review tick (cs:swarm:review):
+	// the standing duty that resolves the swarm's parked queue — a human
+	// reply since the last park resumes the swarm; a card that has parked
+	// the cycle threshold times without a reply is escalated to the human
+	// foreman as their work. Zero disables the tick (the work-cycle
+	// circuit breaker still applies on every pause).
+	SwarmReviewInterval time.Duration
 	// LLMEnabled turns on the LLM decision policy (the D3+ brain): the
 	// policy slot is populated by a self-hosted model fleet instead of
 	// the deterministic policy. Default OFF: the deterministic policy
@@ -136,6 +143,8 @@ type Config struct {
 //	CONVERGE_RUNTIME           agent runtime, on by default ("false" disables)
 //	CONVERGE_RUNTIME_TOPOLOGY   foreman|flat              (default "foreman")
 //	CONVERGE_RUNTIME_TICK       dispatcher backstop tick   (default "5s")
+//	CONVERGE_SWARM_REVIEW_INTERVAL
+//	                           foreman review tick        (default "30m", "0" disables)
 //	CONVERGE_LLM               LLM decision policy, off by default ("true" enables)
 //	CONVERGE_LLM_URLS          OpenAI-compatible endpoints, comma-separated (one per GPU)
 //	CONVERGE_LLM_MODEL         model name the endpoints serve (default "qwen3.8-27b")
@@ -197,6 +206,15 @@ func Load() (Config, error) {
 			return cfg, fmt.Errorf("invalid CONVERGE_RUNTIME_TICK %q: expected a duration >= 1s", v)
 		}
 		cfg.RuntimeTick = d
+	}
+	// "0" disables the standing review (the pause-side breaker remains).
+	cfg.SwarmReviewInterval = 30 * time.Minute
+	if v := os.Getenv("CONVERGE_SWARM_REVIEW_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 || (d > 0 && d < time.Second) {
+			return cfg, fmt.Errorf("invalid CONVERGE_SWARM_REVIEW_INTERVAL %q: expected a duration, 0 disables", v)
+		}
+		cfg.SwarmReviewInterval = d
 	}
 	switch strings.ToLower(os.Getenv("CONVERGE_LLM")) {
 	case "true", "1", "on":

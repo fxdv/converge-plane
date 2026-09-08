@@ -89,6 +89,58 @@ issue (handoff, update, move, delete, comment); humans act freely, and
 any human mutation on the paused issue resumes it — the human's fix is
 the unblock.
 
+### The foreman review (as built)
+
+`spec cs:swarm:review`
+
+A pause is the swarm asking a human a question. The question it asks
+most, unasked, is what happens to a card the human resumed that the
+swarm still cannot progress on — left alone, the card cycles through
+Human Review (park, resume, park) decorating the queue with noise the
+reply never changed. The review protocol breaks that cycle with **one
+rule, two places**:
+
+| Mechanism | Fires when | Effect |
+| --- | --- | --- |
+| Cycle breaker (work cycle) | a pause would put the card at ≥ 3 parks within the shared 24h guard window, **or** the last park went unanswered for a work session | the pause does **not** park: the card is **escalated** to the human foreman — reassigned, In Progress, pause cleared, full disclosure |
+| Standing review (tick) | a swarm-parked card has a human reply since the last park | the swarm **resumes** — flag cleared, back to In Progress, the reply in its prompt context |
+| Standing review (tick) | no reply since the last park, and the card is at ≥ 3 parks in 24h | **escalated**, the same shape as the breaker |
+| Standing review (tick) | no reply since the last park, and the last park is a work session (4h) old | **escalated** — a parked card may not wait forever: the counter can age out of its 24h window, but the duty cannot |
+
+The breaker sits in the pause choke point every escalation flows
+through, so no pause surface (LLM pause, advance-into-Human-Review,
+quiet-guard trip) can re-park a cycled card; below the threshold and
+fresh, a pause parks exactly as before (one park is a question, two a
+pattern, three a cycle). The escalation condition is one shared rule
+— the cycle counter or staleness (a full work session without an
+answer) — applied at both places. The tick is a runtime goroutine on an interval
+(`CONVERGE_SWARM_REVIEW_INTERVAL`, default 30m, `0` disables the tick
+while the breaker remains) that runs an immediate pass on boot, then
+reviews every swarm-parked card in every workspace. It acts **as the
+human foreman** (the workspace owner, else the oldest admin): the
+standing delegation is the human's, and every action it takes is a
+history row, a comment, an audit event, and the outbox — the same trace
+shape as any mutation, so the duty is visible in the activity feed, and
+a brain-indicator-shaped slot on the swarm plane reports the interval,
+the last pass, and what it did.
+
+Escalation is **terminal for the swarm**: the card is assigned to a
+human, and the swarm's queue is agent-assigned (a worker only picks a
+card assigned to itself), so no worker can touch it again — the cycle
+ends by construction, not by promise. A human who wants the swarm back
+reassigns the card to an agent; the 24h window then clears and the
+swarm gets its full threshold of attempts again. The verdict is
+decided under the team lock against the row re-read under it (the work
+cycle's snapshot/apply shape), anchored by the row's version: a
+concurrent human or worker mutation wins, and the review commits
+nothing.
+
+**Constants (shipped):** park threshold = 3 within the shared 24h
+window (the quiet-guard family); staleness = 4h (one work session
+without an answer); review interval = `CONVERGE_SWARM_REVIEW_INTERVAL`
+default 30m (`0` disables the tick, the breaker remains). To confirm
+against usage data before they harden into product constants.
+
 ## Data and API
 
 - `issue_handoffs(id, workspace_id, issue_id, from_account_id,
