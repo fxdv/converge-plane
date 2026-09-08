@@ -66,6 +66,9 @@ func TestLLMPromptFencesUntrusted(t *testing.T) {
 	if !strings.Contains(prompt, "Reply with a single JSON object") {
 		t.Fatal("the reply contract is missing")
 	}
+	if !strings.Contains(prompt, "A human is never a handoff target") {
+		t.Fatal("the human-is-not-a-handoff-target rule is missing from the prompt")
+	}
 	if !strings.Contains(prompt, "where things stand") {
 		t.Fatal("the pause's note contract is missing from the prompt")
 	}
@@ -290,9 +293,9 @@ func TestParseLLMAction(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			in := tc.mutate(llmTestInput())
-			action, ok := parseLLMAction(in, tc.content)
-			if ok != tc.wantOK {
-				t.Fatalf("parseLLMAction ok = %v, want %v (action %+v)", ok, tc.wantOK, action)
+			action, err := parseLLMAction(in, tc.content)
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("parseLLMAction err = %v, wantOK %v (action %+v)", err, tc.wantOK, action)
 			}
 			if tc.wantOK && tc.check != nil {
 				tc.check(t, action)
@@ -311,13 +314,14 @@ func assertAction(t *testing.T, a Action, kind ActionKind, stateID, toAccountID 
 
 // llmTestServer is an in-test OpenAI-compatible endpoint.
 type llmTestServer struct {
-	t        *testing.T
-	body     map[string]any // the captured request (last)
-	calls    int
-	status   int
-	content  string
-	totalTok int
-	delay    time.Duration
+	t            *testing.T
+	body         map[string]any // the captured request (last)
+	calls        int
+	status       int
+	content      string
+	finishReason string // "" = omitted from the response
+	totalTok     int
+	delay        time.Duration
 }
 
 func (s *llmTestServer) handler() http.HandlerFunc {
@@ -337,11 +341,15 @@ func (s *llmTestServer) handler() http.HandlerFunc {
 		}
 		w.Header().Set("content-type", "application/json")
 		w.WriteHeader(s.status)
+		choice := map[string]any{
+			"message": map[string]string{"content": s.content, "reasoning_content": "thinking..."},
+		}
+		if s.finishReason != "" {
+			choice["finish_reason"] = s.finishReason
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []map[string]any{
-				{"message": map[string]string{"content": s.content, "reasoning_content": "thinking..."}},
-			},
-			"usage": map[string]int{"total_tokens": s.totalTok},
+			"choices": []map[string]any{choice},
+			"usage":   map[string]int{"total_tokens": s.totalTok},
 		})
 	}
 }
@@ -412,6 +420,84 @@ func TestLLMClientSharding(t *testing.T) {
 	empty := newLLMClient(nil, "m", time.Second, 1, discardLogger())
 	if _, _, err := empty.decide(context.Background(), llmTestInput()); err != errLLMNotConfigured {
 		t.Fatalf("empty fleet error = %v, want errLLMNotConfigured", err)
+	}
+}
+
+// TestLLMClientRejectsTruncatedOutput pins the guard: a proposal
+// truncated at the token budget, or an empty answer (thinking models
+// spending the whole budget on reasoning), fails the call explicitly —
+// the floor's indicator note then says what happened instead of
+// "failed validation" (the 2026-09-08 floor storm).
+func TestLLMClientRejectsTruncatedOutput(t *testing.T) {
+	cases := []struct {
+		name         string
+		finishReason string
+		content      string
+	}{
+		{"truncated at the budget", "length", `{"kind":"advance","state":"D`},
+		{"empty answer", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &llmTestServer{t: t, status: 200, content: tc.content, finishReason: tc.finishReason, totalTok: 2048}
+			ts := httptest.NewServer(srv.handler())
+			defer ts.Close()
+			c := newLLMClient([]string{ts.URL}, "qwen3.8-27b", 5*time.Second, 2048, discardLogger())
+			_, _, err := c.decide(context.Background(), llmTestInput())
+			if err == nil {
+				t.Fatal("decide: want an error for a truncated or empty proposal")
+			}
+			if !strings.Contains(err.Error(), "empty or truncated") {
+				t.Fatalf("error = %q, want the explicit truncation failure", err)
+			}
+		})
+	}
+}
+
+// TestLLMClientDisablesThinking pins the request contract: the model
+// gets chat_template_kwargs.enable_thinking=false, so a Qwen3.x
+// reasoning block can never starve the answer of the token budget.
+func TestLLMClientDisablesThinking(t *testing.T) {
+	srv := &llmTestServer{t: t, status: 200, content: `{"kind":"pause"}`, totalTok: 9}
+	ts := httptest.NewServer(srv.handler())
+	defer ts.Close()
+	c := newLLMClient([]string{ts.URL}, "qwen3.8-27b", 5*time.Second, 2048, discardLogger())
+	if _, _, err := c.decide(context.Background(), llmTestInput()); err != nil {
+		t.Fatalf("decide: %v", err)
+	}
+	kw, _ := srv.body["chat_template_kwargs"].(map[string]any)
+	if kw == nil || kw["enable_thinking"] != false {
+		t.Fatalf("chat_template_kwargs = %v, want enable_thinking=false", srv.body["chat_template_kwargs"])
+	}
+}
+
+// TestParseLLMActionDiagnosticErrors pins the error side: each
+// rejection must name the rule that fired — that text reaches the
+// brain indicator's note on the swarm plane, and it is the
+// prompt-iteration feedback (2026-09-08: a constant "failed
+// validation" hid the reason for seven straight floor decisions).
+func TestParseLLMActionDiagnosticErrors(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		wantSub string
+	}{
+		{"no JSON in the output", "I cannot decide, the issue is ambiguous.", "no parseable decision JSON"},
+		{"unknown kind", `{"kind":"teleport"}`, "unknown kind"},
+		{"invented state", `{"kind":"advance","state":"Shipped"}`, `state "Shipped" is not in the team workflow`},
+		{"backward jump", `{"kind":"advance","state":"Backlog"}`, "backward jump"},
+		{"self-advance", `{"kind":"advance","state":"In Progress"}`, "stuck loop"},
+		{"invented handoff target", `{"kind":"handoff","to":"Steve"}`, `target "Steve" is not in the fleet`},
+		{"handoff to self", `{"kind":"handoff","to":"vega","comment":"x"}`, "actor itself"},
+		{"backward handoff state", `{"kind":"handoff","to":"atlas","state":"Backlog"}`, "backward jump"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseLLMAction(llmTestInput(), tc.content)
+			if err == nil || !strings.Contains(err.Error(), tc.wantSub) {
+				t.Fatalf("err = %v, want it to contain %q", err, tc.wantSub)
+			}
+		})
 	}
 }
 
