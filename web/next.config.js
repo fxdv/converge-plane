@@ -2,6 +2,9 @@
 
 module.exports = {
   reactStrictMode: false,
+  // Overridable output dir (CONVERGE_WEB_DIST_DIR=.next-ci) so a `next build`
+  // repro can run without clobbering a live dev server's .next cache.
+  distDir: process.env.CONVERGE_WEB_DIST_DIR || '.next',
   transpilePackages: ['geist', '@converge/ui'],
   async redirects() {
     return [
