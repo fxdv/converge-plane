@@ -67,7 +67,7 @@ func (a *API) handleSearch(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&row.ID, &row.TeamID, &row.Number, &row.Priority, &row.SortOrder,
 			&row.Title, &row.DescRaw, &row.Status, &row.CreatedAt, &row.UpdatedAt,
 			&row.CreatedByID, &row.AssigneeID, &row.ParentID, &row.StatusID,
-			&row.LabelIDs, &row.Children); err != nil {
+			&row.AgentPaused, &row.LabelIDs, &row.Children, &row.RelationRaw); err != nil {
 			a.internalError(w, err)
 			return
 		}

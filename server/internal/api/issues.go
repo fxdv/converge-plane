@@ -17,6 +17,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -94,6 +95,9 @@ type issueRequest struct {
 	ParentID    *string  `json:"parentId"`
 	TeamID      *string  `json:"teamId"`
 	SortOrder   *int     `json:"sortOrder"`
+	// IssueRelation is the related picker's create op (v1.1): the
+	// client posts it alongside the (possibly untouched) issue fields.
+	IssueRelation *issueRelationRequest `json:"issueRelation"`
 }
 
 // toJSONB renders a client string for a jsonb column: valid JSON is
@@ -254,7 +258,7 @@ func (a *API) issueByIDTx(ctx context.Context, tx pgx.Tx, id string) (issueRow, 
 		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.LabelIDs, &r.Children)
+		&r.AgentPaused, &r.LabelIDs, &r.Children, &r.RelationRaw)
 	return r, err
 }
 
@@ -331,6 +335,27 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.IssueRelation != nil {
+		if !isUUID(req.IssueRelation.RelatedIssueID) {
+			writeError(w, http.StatusBadRequest, "relatedIssueId must be a valid issue id")
+			return
+		}
+		if req.IssueRelation.RelatedIssueID == id {
+			writeError(w, http.StatusConflict, "an issue cannot be related to itself")
+			return
+		}
+		// The tenant boundary is the workspace; the related picker keeps
+		// the reader to one team, but the API does not pretend it cannot
+		// reach a neighbour team's issue.
+		if !a.issueInWorkspace(ctx, req.IssueRelation.RelatedIssueID, workspaceID) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		if err := relationTypeAllowed(req.IssueRelation.Type); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+	}
 	if req.LabelIDs != nil {
 		for _, labelID := range req.LabelIDs {
 			ok := a.labelInWorkspace(ctx, labelID, workspaceID)
@@ -358,7 +383,27 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	if !changed {
+	// The relation edge is independent of field changes: the client
+	// posts issueRelation alone, and the op must still land (the edge
+	// plus the timeline row) with both endpoints refreshed.
+	var relRecs []syncActionRecord
+	if req.IssueRelation != nil {
+		relRecs, err = a.applyIssueRelationTx(ctx, tx, p, workspaceID, row, *req.IssueRelation)
+		if err != nil {
+			switch {
+			case errors.Is(err, errRelationExists):
+				writeError(w, http.StatusConflict, "a relation of this kind already exists")
+				return
+			case errors.Is(err, errRelationCycle):
+				writeError(w, http.StatusConflict, "this relation would create a blocks cycle")
+				return
+			default:
+				a.internalError(w, err)
+				return
+			}
+		}
+	}
+	if !changed && req.IssueRelation == nil {
 		// Nothing to persist; return the current object.
 		_ = tx.Commit(ctx)
 		writeJSON(w, http.StatusOK, a.issueData(row))
@@ -386,6 +431,9 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	a.broadcastRecord(rec)
 	for i := range historyRecs {
 		a.broadcastRecord(historyRecs[i])
+	}
+	for i := range relRecs {
+		a.broadcastRecord(relRecs[i])
 	}
 	// D3 fast path: a reassignment to an agent, or a human mutation that
 	// resumed a paused issue, is new work for the assignee.
@@ -471,6 +519,12 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		if _, err := tx.Exec(ctx, `update issues set parent_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, nullForEmpty(req.ParentID)); err != nil {
 			return false, nil, err
 		}
+		rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID,
+			"updated", "parent", strval(row.ParentID), strval(req.ParentID), "")
+		if err != nil {
+			return false, nil, err
+		}
+		historyRecs = append(historyRecs, rec)
 		row.ParentID = ptrOrNull(*req.ParentID)
 		changed = true
 	}
@@ -500,8 +554,9 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 	}
 	// D1 escalation recovery: a human mutation on a paused issue resumes
 	// the swarm. (Agents never reach this: the paused guard rejects
-	// them before the transaction opens.)
-	if changed && row.AgentPaused {
+	// them before the transaction opens.) A relation edge counts as a
+	// mutation even when no other field moved.
+	if (changed || req.IssueRelation != nil) && row.AgentPaused {
 		if _, err := tx.Exec(ctx, "update issues set agent_paused = false where id = $1", row.ID); err != nil {
 			return false, nil, err
 		}

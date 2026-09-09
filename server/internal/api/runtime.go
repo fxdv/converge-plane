@@ -571,7 +571,7 @@ func (a *API) loadIssueRowTx(ctx context.Context, tx pgx.Tx, issueID string, row
 		&row.ID, &row.TeamID, &row.Number, &row.Priority, &row.SortOrder,
 		&row.Title, &row.DescRaw, &row.Status, &row.CreatedAt, &row.UpdatedAt,
 		&row.CreatedByID, &row.AssigneeID, &row.ParentID, &row.StatusID,
-		&row.AgentPaused, &row.LabelIDs, &row.Children, &row.Version)
+		&row.AgentPaused, &row.LabelIDs, &row.Children, &row.RelationRaw, &row.Version)
 }
 
 // snapshotTx is the work cycle's first phase: one short transaction

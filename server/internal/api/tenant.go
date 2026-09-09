@@ -127,6 +127,10 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/issues/{id}", a.handleUpdateIssue)
 		r.Delete("/issues/{id}", a.handleDeleteIssue)
 		r.Post("/issues/{id}/move", a.handleMoveIssue)
+		// v1.1: first-class issue relations (docs/spec 08): the edge
+		// itself (create rides the issue update) and the reader's list.
+		r.Delete("/issue_relation/{id}", a.handleDeleteIssueRelation)
+		r.Get("/issues/{id}/relations", a.handleListIssueRelations)
 		// D1: the agent handoff protocol (docs/spec/12).
 		r.Post("/issues/{id}/handoff", a.handleHandoff)
 		r.Post("/issues/{id}/subscribe", a.handleSubscribeIssue)

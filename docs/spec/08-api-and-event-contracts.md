@@ -75,7 +75,7 @@ These are capability endpoints, not a fixed framework/router prescription.
 | Resource | Reads | Commands |
 | --- | --- | --- |
 | Saved view/bookmark | list/get/run | create/update/delete/bookmark |
-| Relation | list by issue | create/delete/resolve duplicate behavior |
+| Relation (shipped v1.1 — spec `api:relations`) | reader's-side list by issue | create rides the issue update (`issueRelation` field); soft delete (`DELETE /issue_relation/{id}`, creator or owner/admin); guards: self, duplicate edge (409), blocks cycle (409, 64-hop walk) |
 | Attachment | metadata/download authorization | initiate/complete/delete upload |
 | Notification | recipient list/count | mark read/unread, mute, clear |
 | Project | list/get/issues/progress | create/update/archive, link/unlink issue |

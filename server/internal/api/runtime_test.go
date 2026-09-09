@@ -633,6 +633,12 @@ func fakeAssign(values []any, dest ...any) error {
 				return fmt.Errorf("fakeAssign: want []string, got %T", values[i])
 			}
 			*p = sl
+		case *json.RawMessage:
+			jm, ok := values[i].(json.RawMessage)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want json.RawMessage, got %T", values[i])
+			}
+			*p = jm
 		default:
 			return fmt.Errorf("fakeAssign: unsupported target %T", d)
 		}
