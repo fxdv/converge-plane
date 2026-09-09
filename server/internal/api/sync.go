@@ -187,6 +187,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]sy
 		return a.collectLabels(ctx, workspaceID, emit)
 	case "Issue":
 		return a.collectIssues(ctx, workspaceID, emit)
+	case "Project":
+		return a.collectProjects(ctx, workspaceID, emit)
 	case "IssueComment":
 		return a.collectComments(ctx, workspaceID, emit)
 	case "IssueRelation":
@@ -376,13 +378,14 @@ func descriptionForClient(raw string) string {
 }
 
 // issueColumns is the shared SELECT list for issue rows: everything the
-// client Issue shape needs, including label and child id arrays and the
-// denormalized relations (v1.1: the reader's-side edges, a JSON array).
+// client Issue shape needs, including label and child id arrays, the
+// project membership, and the denormalized relations (v1.1: the
+// reader's-side edges, a JSON array).
 const issueColumns = `
 		i.id, i.team_id, i.number, i.priority, i.sort_order, i.title,
 		i.description, i.status, i.created_at, i.updated_at,
 		i.created_by, i.assignee_id, i.parent_id, i.status_id,
-		i.agent_paused,
+		i.agent_paused, i.project_ids,
 		coalesce((select array_agg(il.label_id) from issue_labels il where il.issue_id = i.id), '{}'),
 		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}'),
 	` + relationListSQL
@@ -406,6 +409,10 @@ type issueRow struct {
 	// AgentPaused is the D1 escalation flag: agents may not act on a
 	// paused issue, humans act freely and resume it.
 	AgentPaused bool
+	// ProjectIds is the v1.1 project membership: at most one project
+	// (the table constraint is the authority; the API enforces it for a
+	// clean 422). Empty when the issue is not in a project.
+	ProjectIds []string
 	// Version is the row's optimistic-concurrency anchor. Only the
 	// runtime's work cycle scans it (the sync scans and the client
 	// shape do not); every issue mutation bumps it, so equality is a
@@ -418,12 +425,22 @@ type issueRow struct {
 // the identical vocabulary. (stateId is a required string in the client
 // model; an issue without a status serializes as empty, never null.)
 func (a *API) issueData(r issueRow) map[string]any {
-	// The client's v1 Issue model has no relations field (MST drops
-	// it); the client-state rewrite (SWR-15) consumes it. Always an
-	// array: a JSON null here would crash a strict model.
+	// v1.1: both denormalized arrays must always be arrays, never null
+	// (a JSON null would crash a strict model).
 	relations := r.RelationRaw
 	if len(relations) == 0 {
 		relations = []byte(`[]`)
+	}
+	projectIds := r.ProjectIds
+	if projectIds == nil {
+		projectIds = []string{}
+	}
+	// projectId (the legacy singular wire field) derives from the
+	// membership — one source of truth, two projections: v1 is a single
+	// project, so the first element is the answer.
+	var projectID any = nil
+	if len(projectIds) > 0 {
+		projectID = projectIds[0]
 	}
 	return map[string]any{
 		"id":                 r.ID,
@@ -444,7 +461,8 @@ func (a *API) issueData(r issueRow) map[string]any {
 		"stateId":            strval(r.StatusID),
 		"subscriberIds":      []string{},
 		"cycleId":            nil,
-		"projectId":          nil,
+		"projectId":          projectID,
+		"projectIds":         projectIds,
 		"projectMilestoneId": nil,
 		"sourceMetadata":     nil,
 		"children":           r.Children,
@@ -460,7 +478,7 @@ func (a *API) issueByID(ctx context.Context, id string) (issueRow, error) {
 		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
+		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
 		return r, err
 	}
 	return r, nil
@@ -483,7 +501,7 @@ func (a *API) collectIssues(ctx context.Context, workspaceID string, emit emitFn
 		if err := rows.Scan(&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 			&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 			&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-			&r.AgentPaused, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
+			&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
 			return nil, err
 		}
 		rec, err := emit(r.ID, a.issueData(r))

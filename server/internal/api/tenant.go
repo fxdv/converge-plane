@@ -161,6 +161,13 @@ func (a *API) Mount(r chi.Router) {
 		r.Post("/labels/{id}", a.handleUpdateLabel)
 		r.Delete("/labels/{id}", a.handleDeleteLabel)
 		r.Get("/labels", a.handleListLabels)
+
+		// v1.1: projects (workspace-scoped meaning labels; the board's
+		// project rail).
+		r.Get("/projects", a.handleListProjects)
+		r.Post("/projects", a.handleCreateProject)
+		r.Post("/projects/{id}", a.handleUpdateProject)
+		r.Post("/projects/{id}/delete", a.handleDeleteProject)
 		r.Post("/views", a.handleCreateView)
 		r.Post("/views/{id}", a.handleUpdateView)
 		r.Delete("/views/{id}", a.handleDeleteView)

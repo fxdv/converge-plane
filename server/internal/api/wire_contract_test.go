@@ -168,6 +168,23 @@ func TestIssueDataWireContract(t *testing.T) {
 		t.Errorf("agentPaused must serialize as a boolean, got %v (%T)", m["agentPaused"], m["agentPaused"])
 	}
 
+	// v1.1: projectIds must always be a JSON array (never null); the
+	// legacy singular projectId derives from it (nil with no
+	// membership, the member id with one).
+	requireArray(t, m, "projectIds")
+	if m["projectId"] != nil {
+		t.Errorf("projectId must be null without a project, got %v", m["projectId"])
+	}
+	member := issueRow{ID: "i3", TeamID: "t1", Number: 9, Title: "T", Status: "active",
+		CreatedAt: wireNow, UpdatedAt: wireNow, StatusID: &stateID, ProjectIds: []string{"p1"}}
+	mm := wirePayload(t, a.issueData(member))
+	if mm["projectId"] != "p1" {
+		t.Errorf("projectId must derive from the membership, got %v", mm["projectId"])
+	}
+	if v, ok := mm["projectIds"].([]any); !ok || len(v) != 1 || v[0] != "p1" {
+		t.Errorf("projectIds must carry the membership, got %v", mm["projectIds"])
+	}
+
 	// null priority must survive the round trip as null (client: number|null)
 	row := issueRow{ID: "i2", TeamID: "t1", Number: 8, Title: "T", Status: "active",
 		CreatedAt: wireNow, UpdatedAt: wireNow, StatusID: &stateID, AgentPaused: true}

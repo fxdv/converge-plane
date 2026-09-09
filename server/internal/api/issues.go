@@ -95,6 +95,10 @@ type issueRequest struct {
 	ParentID    *string  `json:"parentId"`
 	TeamID      *string  `json:"teamId"`
 	SortOrder   *int     `json:"sortOrder"`
+	// ProjectIds is the v1.1 project membership (the board's project
+	// rail). v1 is a single project: the array is the wire shape, at
+	// most one element.
+	ProjectIds []string `json:"projectIds"`
 	// IssueRelation is the related picker's create op (v1.1): the
 	// client posts it alongside the (possibly untouched) issue fields.
 	IssueRelation *issueRelationRequest `json:"issueRelation"`
@@ -258,7 +262,7 @@ func (a *API) issueByIDTx(ctx context.Context, tx pgx.Tx, id string) (issueRow, 
 		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.LabelIDs, &r.Children, &r.RelationRaw)
+		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw)
 	return r, err
 }
 
@@ -361,6 +365,18 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 			ok := a.labelInWorkspace(ctx, labelID, workspaceID)
 			if !ok {
 				writeError(w, http.StatusUnprocessableEntity, "labelIds contains a label outside this workspace")
+				return
+			}
+		}
+	}
+	if req.ProjectIds != nil {
+		if len(req.ProjectIds) > 1 {
+			writeError(w, http.StatusUnprocessableEntity, "v1 supports a single project per issue")
+			return
+		}
+		for _, projectID := range req.ProjectIds {
+			if projectID != "" && !a.projectInWorkspace(ctx, projectID, workspaceID) {
+				writeError(w, http.StatusUnprocessableEntity, "projectIds contains a project outside this workspace")
 				return
 			}
 		}
@@ -527,6 +543,39 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		historyRecs = append(historyRecs, rec)
 		row.ParentID = ptrOrNull(*req.ParentID)
 		changed = true
+	}
+	if req.ProjectIds != nil {
+		next := make([]string, 0, 1)
+		for _, projectID := range req.ProjectIds {
+			if projectID != "" {
+				next = append(next, projectID)
+			}
+		}
+		same := len(next) == len(row.ProjectIds)
+		if same {
+			for i, projectID := range next {
+				if row.ProjectIds[i] != projectID {
+					same = false
+					break
+				}
+			}
+		}
+		if !same {
+			if _, err := tx.Exec(ctx, `update issues set project_ids = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, &next); err != nil {
+				return false, nil, err
+			}
+			// The timeline row is a trace (the v1 client renders no
+			// project branch; v2 consumes it) — the ids stay in
+			// from/to for that day.
+			rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID,
+				"updated", "project", projectKey(row.ProjectIds), projectKey(next), "")
+			if err != nil {
+				return false, nil, err
+			}
+			historyRecs = append(historyRecs, rec)
+			row.ProjectIds = next
+			changed = true
+		}
 	}
 	if req.LabelIDs != nil {
 		old, _ := json.Marshal(row.LabelIDs)
