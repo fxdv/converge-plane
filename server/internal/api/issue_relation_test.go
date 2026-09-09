@@ -64,6 +64,10 @@ func TestRelationListSQL(t *testing.T) {
 		"'DUPLICATE' then 'DUPLICATE_OF'", "'DUPLICATE_OF' then 'DUPLICATE'",
 		"r.deleted_at is null", "i.status <> 'deleted'",
 		"'[]'::jsonb", "'issueId', i.id",
+		// The reader's-side endpoint: the other side of the edge, never
+		// the reader itself (the relatedIssueId self-reference that
+		// live smoke caught 2026-09-09).
+		"case when r.issue_id = i.id then r.related_issue_id else r.issue_id end",
 	} {
 		if !strings.Contains(relationListSQL, want) {
 			t.Errorf("relationListSQL lost %q", want)

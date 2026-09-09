@@ -89,6 +89,8 @@ func reverseRelationType(t string) string {
 // vocabulary: an edge appears on both endpoints' records, each from
 // its own side. Edges touching a soft-deleted endpoint are excluded
 // (a deleted issue links to nothing and is linked to by nothing).
+// The standalone list endpoint selects it alone (no comma); issueColumns
+// appends it after the children column with the comma.
 const relationListSQL = `
 	coalesce((
 		select jsonb_agg(jsonb_build_object(
@@ -97,7 +99,7 @@ const relationListSQL = `
 			'updatedAt', to_char(r.updated_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
 			'issueId', i.id,
 			'createdById', r.created_by,
-			'relatedIssueId', case when r.issue_id = i.id then r.related_issue_id else i.id end,
+			'relatedIssueId', case when r.issue_id = i.id then r.related_issue_id else r.issue_id end,
 			'type', case when r.issue_id = i.id then r.type else
 				case r.type
 					when 'BLOCKS' then 'BLOCKED'
