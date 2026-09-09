@@ -70,6 +70,7 @@ const issue = (
   subscriberIds: [],
   children: [],
   agentPaused: false,
+  relations: [],
   ...over,
 });
 
@@ -156,6 +157,43 @@ describe('Issue model', () => {
   it('defaults agentPaused on pre-D1 payloads (outbox retention)', () => {
     const { agentPaused: _omitted, ...legacy } = issue();
     assert.equal(Issue.create(legacy as never).agentPaused, false);
+  });
+
+  // v1.1: the denormalized relations array (server/internal/api/
+  // issue_relation.go relationListSQL — the reader's perspective).
+  const relation = (over: Record<string, unknown> = {}) => ({
+    id: 'r1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    issueId: 'i1',
+    createdById: 'u1',
+    relatedIssueId: 'i2',
+    type: 'BLOCKS',
+    ...over,
+  });
+
+  it('accepts the server relations payload (reader-side rewrite)', () => {
+    const node = Issue.create(
+      issue({
+        relations: [
+          relation(),
+          relation({ id: 'r2', relatedIssueId: 'i3', type: 'BLOCKED' }),
+        ],
+      }) as never,
+    );
+    assert.equal(node.relations.length, 2);
+    assert.equal(node.relations[0].type, 'BLOCKS');
+    assert.equal(node.relations[1].relatedIssueId, 'i3');
+  });
+  it('accepts a null createdById (the denormalized subselect emits null)', () => {
+    const node = Issue.create(
+      issue({ relations: [relation({ createdById: null })] }) as never,
+    );
+    assert.equal(node.relations[0].createdById, null);
+  });
+  it('defaults relations on pre-v1.1 payloads (outbox retention)', () => {
+    const { relations: _omitted, ...legacy } = issue();
+    assert.deepEqual(Issue.create(legacy as never).relations, []);
   });
 });
 

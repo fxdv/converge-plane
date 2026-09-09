@@ -3,6 +3,7 @@ export * from './create-issue-comment';
 export * from './update-issue-comment';
 export * from './update-issue';
 export * from './delete-issue';
+export * from './delete-issue-relation';
 export * from './handoff-issue';
 export * from './move-issue-to-team';
 export * from './summarise-issue';

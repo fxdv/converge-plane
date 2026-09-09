@@ -14,9 +14,13 @@ import {
 
 import { HUMAN_REVIEW_STATE_NAME } from '@converge/services';
 
-import { ArrowForwardLine, Warning } from '@converge/ui/icons';
+import { ArrowForwardLine, BlockedFill, BlocksFill, Warning } from '@converge/ui/icons';
 
-import type { IssueHistoryType } from 'common/types';
+import {
+  IssueRelationEnum,
+  type IssueHistoryType,
+  type IssueRelationType,
+} from 'common/types';
 
 import { IssueViewContext } from 'components/side-issue-view';
 import { useTeamWithId } from 'hooks/teams/use-current-team';
@@ -113,6 +117,18 @@ export const BoardIssueItem = observer(
       }
     }
 
+    // v1.1: the relations indicator (spec cs:api:relations) — how many
+    // issues this one blocks / is blocked by, from the denormalized
+    // array. Red for both directions: a blocked card is the one that
+    // needs attention, and the count says why.
+    const relations: IssueRelationType[] = issue.relations ?? [];
+    const blocksCount = relations.filter(
+      (r: IssueRelationType) => r.type === IssueRelationEnum.BLOCKS,
+    ).length;
+    const blockedCount = relations.filter(
+      (r: IssueRelationType) => r.type === IssueRelationEnum.BLOCKED,
+    ).length;
+
     const statusChange = (stateId: string) => {
       updateIssue({ id: issue.id, stateId, teamId: issue.teamId });
     };
@@ -191,6 +207,23 @@ export const BoardIssueItem = observer(
         </div>
 
         <IssueLabels labelIds={issue.labelIds} />
+
+        {(blocksCount > 0 || blockedCount > 0) && (
+          <div className="flex items-center gap-2 text-[11px] text-red-600 dark:text-red-400">
+            {blockedCount > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <BlockedFill size={12} />
+                blocked by {blockedCount}
+              </span>
+            )}
+            {blocksCount > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <BlocksFill size={12} />
+                blocks {blocksCount}
+              </span>
+            )}
+          </div>
+        )}
 
         {latestHandoff?.summary && (
           <div className="flex items-start gap-1 text-[11px] text-muted-foreground line-clamp-1">

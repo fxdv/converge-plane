@@ -11,6 +11,10 @@ import { useTeamWithId } from 'hooks/teams';
 
 import { useContextStore } from 'store/global-context-provider';
 
+// spec cs:api:relations — the timeline entry for a relation change.
+// Every type the server can emit has a branch here (the render-total
+// policy): a value without an entry would crash the icon lookup.
+
 interface StatusActivityProps {
   issueHistory: IssueHistoryType;
   fullname: string;
@@ -39,6 +43,10 @@ const ICON_MAP: Record<string, { icon: any; color: string }> = {
     icon: DuplicateLine,
     color: 'text-muted-foreground',
   },
+  [IssueRelationEnum.SIMILAR]: {
+    icon: RiFileTransferLine,
+    color: 'text-muted-foreground',
+  },
 };
 
 export function RelatedActivity({
@@ -47,13 +55,30 @@ export function RelatedActivity({
   showTime = false,
 }: StatusActivityProps) {
   const relatedChanges = issueHistory.relationChanges;
-  const Icon = ICON_MAP[relatedChanges.type];
+  const Icon =
+    ICON_MAP[relatedChanges.type] ??
+    ICON_MAP[IssueRelationEnum.RELATED];
   const {
     query: { workspaceSlug },
   } = useRouter();
   const { issuesStore } = useContextStore();
   const relatedIssue = issuesStore.getIssueById(relatedChanges.relatedIssueId);
-  const team = useTeamWithId(relatedIssue.teamId);
+  const team = useTeamWithId(relatedIssue ? relatedIssue.teamId : '');
+
+  // The related issue may have been deleted since the change (or not
+  // synced to this client yet): degrade to a plain mention, never crash.
+  const relatedRef = relatedIssue ? (
+    <a
+      className="text-foreground mx-1"
+      href={`/${workspaceSlug}/issue/${team?.identifier ?? ''}-${relatedIssue.number}`}
+    >
+      {team?.identifier ?? ''}-{relatedIssue.number}
+    </a>
+  ) : (
+    <span className="text-muted-foreground mx-1 italic">
+      a removed issue
+    </span>
+  );
 
   const getText = () => {
     if (relatedChanges.type === IssueRelationEnum.RELATED) {
@@ -63,12 +88,7 @@ export function RelatedActivity({
           <span>
             {relatedChanges.isDeleted ? 'removed' : 'added'} related issue
           </span>
-          <a
-            className="text-foreground mx-1"
-            href={`/${workspaceSlug}/issue/${team.identifier}-${relatedIssue.number}`}
-          >
-            {team.identifier}-{relatedIssue.number}
-          </a>
+          {relatedRef}
         </div>
       );
     }
@@ -81,12 +101,7 @@ export function RelatedActivity({
             {relatedChanges.isDeleted ? 'removed' : 'marked'} this issue as
             being blocked by
           </span>
-          <a
-            className="text-foreground mx-1"
-            href={`/${workspaceSlug}/issue/${team.identifier}-${relatedIssue.number}`}
-          >
-            {team.identifier}-{relatedIssue.number}
-          </a>
+          {relatedRef}
         </div>
       );
     }
@@ -99,12 +114,7 @@ export function RelatedActivity({
             {relatedChanges.isDeleted ? 'removed' : 'marked'} this issue as
             blocking
           </span>
-          <a
-            className="text-foreground mx-1"
-            href={`/${workspaceSlug}/issue/${team.identifier}-${relatedIssue.number}`}
-          >
-            {team.identifier}-{relatedIssue.number}
-          </a>
+          {relatedRef}
         </div>
       );
     }
@@ -117,12 +127,7 @@ export function RelatedActivity({
             {relatedChanges.isDeleted ? 'removed' : 'marked'} this issue as
             duplicate of
           </span>
-          <a
-            className="text-foreground mx-1"
-            href={`/${workspaceSlug}/issue/${team.identifier}-${relatedIssue.number}`}
-          >
-            {team.identifier}-{relatedIssue.number}
-          </a>
+          {relatedRef}
         </div>
       );
     }
@@ -135,22 +140,38 @@ export function RelatedActivity({
             {relatedChanges.isDeleted ? 'removed' : 'marked'} this issue as
             duplicated by
           </span>
-          <a
-            className="text-foreground mx-1"
-            href={`/${workspaceSlug}/issue/${team.identifier}-${relatedIssue.number}`}
-          >
-            {team.identifier}-{relatedIssue.number}
-          </a>
+          {relatedRef}
         </div>
       );
     }
 
-    return null;
+    if (relatedChanges.type === IssueRelationEnum.SIMILAR) {
+      return (
+        <div className="flex items-center">
+          <span className="text-foreground mr-2">{fullname}</span>
+          <span>
+            {relatedChanges.isDeleted ? 'removed' : 'marked'} this issue as
+            similar to
+          </span>
+          {relatedRef}
+        </div>
+      );
+    }
+
+    // An unknown type from a future server: still render the row, never
+    // crash the feed.
+    return (
+      <div className="flex items-center">
+        <span className="text-foreground mr-2">{fullname}</span>
+        <span>made a relation change</span>
+        {relatedRef}
+      </div>
+    );
   };
 
   return (
     <TimelineItem
-      key={`${issueHistory.id}-removedLabels`}
+      key={`${issueHistory.id}-related`}
       hasMore
       date={showTime && issueHistory.updatedAt}
     >
