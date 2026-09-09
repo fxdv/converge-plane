@@ -48,6 +48,10 @@ export const Issue = types.model('Issue', {
   // Optional with an empty default — outbox retention and the local
   // cache hold pre-v1.1 payloads without the field.
   relations: types.optional(types.array(IssueRelationEntry), []),
+  // v1.1: the project membership (spec cs:api:projects). The server
+  // always emits the array (v1: at most one element); retained
+  // pre-v1.1 payloads lack the field, so it defaults to [].
+  projectIds: types.optional(types.array(types.string), []),
 });
 
 export const IssuesMap = types.map(Issue);

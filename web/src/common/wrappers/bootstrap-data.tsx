@@ -37,12 +37,14 @@ export function BootstrapWrapper({ children }: Props) {
     workspaceStore,
     teamsStore,
     labelsStore,
+    projectsStore,
     viewsStore,
     swarmActivityStore,
   } = useContextStore();
 
   const MODEL_STORE_MAP = {
     [MODELS.Label]: labelsStore,
+    [MODELS.Project]: projectsStore,
     [MODELS.Workspace]: workspaceStore,
     [MODELS.UsersOnWorkspaces]: workspaceStore,
     [MODELS.Team]: teamsStore,

@@ -20,6 +20,7 @@ import { Comment } from 'store/comments/models';
 import { Issue } from 'store/issues/models';
 import { IssueHistory } from 'store/issue-history/models';
 import { Label } from 'store/labels/models';
+import { Project } from 'store/projects/models';
 import { Team } from 'store/teams/models';
 import { saveSwarmActivityData } from 'store/swarm-activity/save-data';
 import { SwarmActivity } from 'store/swarm-activity/models';
@@ -71,6 +72,7 @@ const issue = (
   children: [],
   agentPaused: false,
   relations: [],
+  projectIds: [],
   ...over,
 });
 
@@ -194,6 +196,64 @@ describe('Issue model', () => {
   it('defaults relations on pre-v1.1 payloads (outbox retention)', () => {
     const { relations: _omitted, ...legacy } = issue();
     assert.deepEqual(Issue.create(legacy as never).relations, []);
+  });
+
+  // v1.1: the project membership (server/internal/api/project.go +
+  // sync.go — the server always emits the array; v1: at most one).
+  it('accepts the server projectIds payload (single membership)', () => {
+    const node = Issue.create(issue({ projectIds: ['p1'] }) as never);
+    assert.deepEqual(node.projectIds, ['p1']);
+  });
+  it('defaults projectIds on pre-v1.1 payloads (outbox retention)', () => {
+    const { projectIds: _omitted, ...legacy } = issue();
+    assert.deepEqual(Issue.create(legacy as never).projectIds, []);
+  });
+});
+
+describe('Project model', () => {
+  // Mirrors server/internal/api/project.go projectData exactly.
+  const project = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'p1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    name: 'Rail',
+    description: '',
+    color: '#3B82F6',
+    startDate: null,
+    endDate: null,
+    status: 'ACTIVE',
+    leadUserId: null,
+    teams: [],
+    workspaceId: 'w1',
+    ...over,
+  });
+
+  it('accepts the server payload (all nullable variants)', () => {
+    const node = Project.create(project() as never);
+    assert.equal(node.name, 'Rail');
+    assert.equal(node.status, 'ACTIVE');
+    assert.deepEqual(node.teams, []);
+    assert.equal(node.leadUserId, null);
+    assert.equal(node.color, '#3B82F6');
+  });
+  it('accepts populated optionals (lead, dates, teams)', () => {
+    const node = Project.create(
+      project({
+        leadUserId: 'u1',
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+        teams: ['t1', 't2'],
+        description: 'scope',
+      }) as never,
+    );
+    assert.equal(node.leadUserId, 'u1');
+    assert.equal(node.startDate, '2026-09-01');
+    assert.deepEqual(node.teams, ['t1', 't2']);
+  });
+  it('rejects a degraded payload (missing the required wire fields)', () => {
+    assert.throws(() => Project.create({ id: 'p1' } as never));
   });
 });
 

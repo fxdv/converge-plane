@@ -29,6 +29,10 @@ export interface IssueType {
   agentPaused?: boolean;
 
   projectId?: string;
+  // v1.1: the project membership (spec cs:api:projects). The server
+  // always emits an array (v1: at most one element); the board's
+  // project rail and the card chip read it directly.
+  projectIds?: string[];
   cycleId?: string;
   projectMilestoneId?: string;
 

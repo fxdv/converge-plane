@@ -34,6 +34,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       workspaceStore,
       teamsStore,
       labelsStore,
+      projectsStore,
       viewsStore,
       swarmActivityStore,
     } = useContextStore();
@@ -73,6 +74,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const MODEL_STORE_MAP = {
         [MODELS.Label]: labelsStore,
+        [MODELS.Project]: projectsStore,
         [MODELS.Workspace]: workspaceStore,
         [MODELS.UsersOnWorkspaces]: workspaceStore,
         [MODELS.Team]: teamsStore,

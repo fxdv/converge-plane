@@ -14,6 +14,7 @@ export const WorkspaceStoreInit = observer(
       workspaceStore,
       teamsStore,
       labelsStore,
+      projectsStore,
       issuesStore,
       workflowsStore,
       viewsStore,
@@ -40,6 +41,7 @@ export const WorkspaceStoreInit = observer(
 
       await Promise.all([
         labelsStore.load(),
+        projectsStore.load(),
         issuesStore.load(),
         viewsStore.load(),
       ]);

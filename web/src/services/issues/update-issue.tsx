@@ -22,6 +22,9 @@ export interface UpdateIssueParams {
 
   cycleId?: string;
   projectId?: string;
+  // v1.1: the project membership (spec cs:api:projects) — the board's
+  // project rail assigns/clears it through this patch.
+  projectIds?: string[];
   projectMilestoneId?: string;
 
   issueRelation?: {

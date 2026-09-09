@@ -37,6 +37,9 @@ export async function saveIssuesData(
         // pre-v1.1 retained payloads lack the field — normalize to []
         // so the model's optional default and the store agree.
         relations: record.data.relations ?? [],
+        // v1.1: the project membership (spec cs:api:projects). Same
+        // retention normalization as relations.
+        projectIds: record.data.projectIds ?? [],
       };
 
       switch (record.action) {

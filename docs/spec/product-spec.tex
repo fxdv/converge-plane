@@ -375,9 +375,10 @@ Swarm plane\csr{swarm:panel} & The dedicated Swarm page: fleet settings
 From the greenfield inventory, unchanged in intent: team cycles with
 rollover; attachments; watchers; in-app Inbox and notifications; bounded
 bulk edit; due dates; personal bookmarks. Projects shipped ahead of the
-v1.1 cut (server: CRUD, sync, membership --- \S\ref{sec:projects}; the
-board rail and derived progress land with the client card). Issue
-relations shipped ahead of the cut as well (\S\ref{sec:relations}).
+v1.1 cut in full, board rail included
+(\S\ref{sec:projects}); the remaining groupings' rails are a v2 polish
+item, not a cut. Issue relations shipped ahead of the cut as well
+(\S\ref{sec:relations}).
 Entry gate: the v1 core exit criteria stay green. \owner{confirm NEXT
   ordering for the Converge line --- the greenfield order (views $\to$
   relations $\to$ projects $\to$ cycles $\to$ attachments $\to$ inbox
@@ -581,6 +582,7 @@ that ride on \texttt{issues.parent\_id}, the single source of truth.
 \section{Projects}
 \label{sec:projects}
 \cs{api:projects}
+\cs{ui:projects-rail}
 
 A project is a workspace-scoped \textbf{meaning label}, not a workflow:
 it groups issues on the board without touching their state machine. An
@@ -608,6 +610,21 @@ membership change on the issue patch.
   derived from the issues' workflow categories (a read-only view, not a
   stored state). A card shows in its project stack \emph{and} its state
   column; the card is never ``in'' a project in the state machine.
+\item \textbf{Rail mechanics}: the drag registry keeps one draggable per
+  id, so a card that belongs to a project is mirrored in its stack under
+  a \emph{proxy} id (\texttt{project:<issueId>}); the column keeps the
+  real id. Drop on a stack assigns the project
+  (\texttt{projectIds = [p]}, state untouched); a card dragged out of
+  the stack clears it (\texttt{projectIds = []}); a card moving between
+  columns keeps it. The card carries a dot + name so it can be found in
+  its stack.
+\item \textbf{CRUD surface}: owners and admins create (a row on the
+  rail, colored, team-scoped to the board they are on), rename, and
+  delete from the stack header; delete clears member membership in the
+  server transaction and the stacks converge via the feed.
+\item \textbf{Scope}: the rail ships on the category board (the default
+  board view); the other groupings (assignee / priority / label / team)
+  take the same rail in v2.
 \end{itemize}
 
 % ============================================================

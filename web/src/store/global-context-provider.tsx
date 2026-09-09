@@ -8,15 +8,17 @@ import { IssueHistoryStore } from './issue-history';
 import { SwarmActivityStore } from './swarm-activity';
 import { IssuesStore } from './issues';
 import { LabelsStore } from './labels';
+import { ProjectsStore } from './projects';
 import { TeamsStore } from './teams';
 import { ViewsStore } from './views';
 import { WorkflowsStore } from './workflows';
 import { WorkspaceStore } from './workspace';
 
 // v1 store set per the release scope (docs/spec 09/11): the issue loop,
-// workflow, labels, members, and saved views. Forked features outside the
-// active release (projects, cycles, notifications, AI, support/CRM,
-// integrations, ...) were trimmed in the M3 dead-feature pass.
+// workflow, labels, projects (v1.1), members, and saved views. Forked
+// features outside the active release (cycles, notifications, AI,
+// support/CRM, integrations, ...) were trimmed in the M3 dead-feature
+// pass.
 const StoreContextModel = types.model({
   commentsStore: CommentsStore,
   issuesHistoryStore: IssueHistoryStore,
@@ -24,6 +26,7 @@ const StoreContextModel = types.model({
   issuesStore: IssuesStore,
   workflowsStore: WorkflowsStore,
   labelsStore: LabelsStore,
+  projectsStore: ProjectsStore,
   teamsStore: TeamsStore,
   workspaceStore: WorkspaceStore,
   applicationStore: ApplicationStore,
@@ -49,6 +52,10 @@ export const storeContextStore = StoreContextModel.create({
   },
   labelsStore: {
     labels: [],
+    workspaceId: undefined,
+  },
+  projectsStore: {
+    projects: [],
     workspaceId: undefined,
   },
   teamsStore: {

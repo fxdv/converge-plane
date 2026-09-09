@@ -68,6 +68,7 @@ export const BoardIssueItem = observer(
       issuesHistoryStore,
       swarmActivityStore,
       workflowsStore,
+      projectsStore,
     } = useContextStore();
     const {
       openIssue,
@@ -207,6 +208,26 @@ export const BoardIssueItem = observer(
         </div>
 
         <IssueLabels labelIds={issue.labelIds} />
+
+        {/* v1.1: the project the card belongs to (spec cs:ui:projects-rail)
+            — a dot + name so the card can be found in its rail stack. */}
+        {(() => {
+          const project = issue.projectIds?.length
+            ? projectsStore.getProjectById(issue.projectIds[0])
+            : undefined;
+          if (!project) {
+            return null;
+          }
+          return (
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span
+                className="size-2 rounded-full shrink-0"
+                style={{ backgroundColor: project.color || '#888888' }}
+              />
+              <span className="truncate">{project.name}</span>
+            </div>
+          );
+        })()}
 
         {(blocksCount > 0 || blockedCount > 0) && (
           <div className="flex items-center gap-2 text-[11px] text-red-600 dark:text-red-400">
