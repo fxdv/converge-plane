@@ -7,6 +7,7 @@ import type {
   IssueHistoryType,
   IssueType,
   LabelType,
+  ProjectType,
   TeamType,
   UsersOnWorkspaceType,
   ViewType,
@@ -30,11 +31,12 @@ export class ConvergeDatabase extends Dexie {
   comments: Dexie.Table<IssueCommentType, string>;
   usersOnWorkspaces: Dexie.Table<UsersOnWorkspaceType, string>;
   views: Dexie.Table<ViewType, string>;
+  projects: Dexie.Table<ProjectType, string>;
 
   constructor(databaseName: string) {
     super(databaseName);
 
-    this.version(19).stores({
+    this.version(20).stores({
       [MODELS.Workspace]: 'id,createdAt,updatedAt,name,slug,preferences',
       [MODELS.Label]:
         'id,createdAt,updatedAt,name,color,description,workspaceId,groupId,teamId',
@@ -52,6 +54,8 @@ export class ConvergeDatabase extends Dexie {
         'id,createdAt,updatedAt,userId,issueId,body,parentId,sourceMetadata',
       [MODELS.View]:
         'id,createdAt,updatedAt,workspaceId,name,description,filters,isBookmarked,teamId',
+      [MODELS.Project]:
+        'id,createdAt,updatedAt,name,color,description,workspaceId',
     });
 
     this.workspaces = this.table(MODELS.Workspace);
@@ -63,6 +67,7 @@ export class ConvergeDatabase extends Dexie {
     this.issueHistory = this.table(MODELS.IssueHistory);
     this.comments = this.table(MODELS.IssueComment);
     this.views = this.table(MODELS.View);
+    this.projects = this.table(MODELS.Project);
   }
 }
 

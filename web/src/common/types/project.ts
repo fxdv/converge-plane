@@ -14,6 +14,7 @@ export interface ProjectType {
   updatedAt: string;
   name: string;
   description?: string;
+  color?: string;
   startDate?: string;
   endDate?: string;
   status: string;

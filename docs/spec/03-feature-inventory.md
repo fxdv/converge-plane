@@ -107,7 +107,7 @@ This inventory is the authoritative classification. Repository evidence comes fr
 | CAP-COL-02 | Issue notifications | ADAPT | NEXT | Assignment, mention, comment, relation, watched changes |
 | CAP-COL-03 | Email notification delivery | DEFER | EXCLUDED | Requires preferences, batching, unsubscribe, bounce handling |
 | CAP-COL-04 | Authorized realtime updates | ADAPT | NEXT | Server-scoped events; reconnect/refetch correctness |
-| CAP-PLAN-01 | Projects | ADAPT | SHIPPED (v1.1) | Workspace-scoped meaning label; one project per issue; board rail with derived done/total rollup (the client card follows) |
+| CAP-PLAN-01 | Projects | ADAPT | SHIPPED (v1.1) | Workspace-scoped meaning label; one project per issue; board rail (create/rename/delete, drag assign + clear, derived done/total rollup); the other board groupings take the rail in v2 |
 | CAP-PLAN-02 | Derived project progress | ADAPT | NEXT | Computed from issue workflow categories |
 | CAP-PLAN-03 | Project milestones | DEFER | EXCLUDED | Add only after project adoption evidence |
 | CAP-PLAN-04 | Team cycles | ADAPT | NEXT | Time-boxed team issue collection with explicit rollover |

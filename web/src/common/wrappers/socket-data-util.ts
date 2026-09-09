@@ -6,6 +6,7 @@ import { saveCommentsData } from 'store/comments';
 import { saveIssueHistoryData } from 'store/issue-history';
 import { saveIssuesData } from 'store/issues';
 import { saveLabelData } from 'store/labels';
+import { saveProjectData } from 'store/projects';
 import { MODELS } from 'store/models';
 import { saveSwarmActivityData } from 'store/swarm-activity';
 import { saveTeamData } from 'store/teams';
@@ -56,6 +57,7 @@ export async function saveSocketData(
       [MODELS.IssueHistory]: saveIssueHistoryData,
       [MODELS.IssueComment]: saveCommentsData,
       [MODELS.View]: saveViewData,
+      [MODELS.Project]: saveProjectData,
       [MODELS.SwarmActivity]: saveSwarmActivityData,
     };
 
