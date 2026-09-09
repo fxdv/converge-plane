@@ -298,6 +298,10 @@ Teams\cs{feat:teams} & Workspace-owned; membership; immutable
 Issues\cs{feat:issues} & Team-keyed (ENG-42), title/description
   (sanitized JSON rich text), priority, assignee, labels, parent links,
   optimistic concurrency, archive lifecycle & \shipped\\
+Issue relations\csr{api:relations} & First-class directed edges
+  (blocks / related / duplicate): the reader's-side rewrite, the cycle
+  guard, the timeline trace, denormalized into the issue record
+  (\S\ref{sec:relations}) & \shipped\\
 Workflows\cs{feat:workflows} & Team statuses in six categories
   (triage, backlog, unstarted, started, completed, canceled) & \shipped\\
 Labels\cs{feat:labels} & Workspace-scoped, colored, multi-assign & \shipped\\
@@ -365,9 +369,9 @@ Swarm plane\csr{swarm:panel} & The dedicated Swarm page: fleet settings
 \cs{feat:next}
 
 From the greenfield inventory, unchanged in intent: projects and derived
-progress; team cycles with rollover; issue hierarchy and
-blocks/related/duplicate relations; attachments; watchers; in-app Inbox
+progress; team cycles with rollover; attachments; watchers; in-app Inbox
 and notifications; bounded bulk edit; due dates; personal bookmarks.
+(Issue relations shipped ahead of the v1.1 cut --- \S\ref{sec:relations}.)
 Entry gate: the v1 core exit criteria stay green. \owner{confirm NEXT
   ordering for the Converge line --- the greenfield order (views $\to$
   relations $\to$ projects $\to$ cycles $\to$ attachments $\to$ inbox
@@ -471,7 +475,7 @@ Teams & CRUD, member add/remove, preferences\\
 Workflows & per-team status CRUD\\
 Labels & CRUD\\
 Issues & create, update, delete, move, subscribe, \textbf{handoff},
-  swarm status\\
+  relations (list, delete; create rides the update), swarm status\\
 Comments & CRUD, replies\\
 Agents & create, list, token rotate / revoke, delete\\
 Search & full-text + key search, permission-scoped\\
@@ -489,8 +493,9 @@ feed speak the same vocabulary.
 \cs{arch:sync}
 
 \begin{itemize}
-\item \textbf{Bootstrap} returns the full tenant object set (nine model
-  collectors, run concurrently) plus the server watermark.
+\item \textbf{Bootstrap} returns the full tenant object set (ten model
+  collectors, run concurrently --- IssueRelation joined in v1.1) plus the
+  server watermark.
 \item \textbf{Delta} returns outbox records newer than the client
   watermark; if the client cursor predates the retained window, the delta
   is marked \texttt{stale} and the client falls back to full bootstrap.
@@ -525,6 +530,39 @@ tests (server) and an MST replay harness (client) fail CI on drift.
   (\S\ref{sec:metrics}).
 \item Every security-relevant action writes an audit row: actor, tenant,
   object, timestamp, kind.
+\end{itemize}
+
+\section{Issue relations}
+\label{sec:relations}
+\cs{api:relations}
+
+First-class directed edges between issues (v1.1). One row per edge,
+stored from the \textbf{actor's} side, rewritten from the reader's side
+on read: an edge $A \rightarrow B$ of type \texttt{BLOCKS} reads back on $B$'s
+record as \texttt{BLOCKED}; \texttt{DUPLICATE} / \texttt{DUPLICATE\_OF} invert the
+same way, and \texttt{RELATED} / \texttt{SIMILAR} are symmetric. Hierarchy never
+uses this table: \texttt{PARENT} / \texttt{SUB\_ISSUE} are client enum members
+that ride on \texttt{issues.parent\_id}, the single source of truth.
+
+\begin{itemize}
+\item \textbf{Write}: creation rides the issue update (\texttt{POST /issues/{id}}
+  with an \texttt{issueRelation} field --- the related picker's path); deletion
+  is \texttt{DELETE /issue\_relation/{id}} (the edge's creator or a workspace
+  owner/admin; others get a plain 404) and soft-deletes (the partial unique
+  index admits re-creation).
+\item \textbf{Guards}: no self-relation, no duplicate edge (same issue, target,
+  type --- the partial unique index is the authority under concurrency), and
+  no \texttt{BLOCKS} cycle (a bounded forward walk, 64 hops, before insert);
+  all three are clean 409s.
+\item \textbf{Reads}: the denormalized \texttt{relations} array on the Issue record
+  (both endpoints refresh on every edge change; edges touching a
+  soft-deleted endpoint read back absent) plus a standalone
+  \texttt{IssueRelation} model on the sync feed. The v1 client renders from
+  the Issue record and history and drops the model; the client-state
+  rewrite consumes it.
+\item \textbf{Trace}: one \texttt{issue\_history} row per change (action
+  \texttt{relation} / \texttt{relation\_deleted}); the client renders it as its
+  related-activity timeline entry.
 \end{itemize}
 
 % ============================================================
@@ -1090,8 +1128,9 @@ D2 & Swarm panel & fleet roster, paused issues, 24h accounting & \shipped\\
 \toprule
 \textbf{Release} & \textbf{Scope} & \textbf{Gate}\\
 \midrule
-v1.1 & NEXT features (projects, cycles, relations, attachments, Inbox,
-  bulk) + client-state rewrite (B: server-authoritative cache) & v1 exit
+v1.1 & NEXT features (projects, cycles, attachments, Inbox, bulk) +
+  client-state rewrite (B: server-authoritative cache); relations already
+  shipped in the v1 cut & v1 exit
   criteria green; product evidence per slice\\
 Pre-scale (C) & Multi-instance: shared broker + distributed limits behind
   the seams & measured need (single instance has headroom; the delta

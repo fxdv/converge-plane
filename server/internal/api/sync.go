@@ -189,6 +189,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]sy
 		return a.collectIssues(ctx, workspaceID, emit)
 	case "IssueComment":
 		return a.collectComments(ctx, workspaceID, emit)
+	case "IssueRelation":
+		return a.collectIssueRelations(ctx, workspaceID, emit)
 	case "IssueHistory":
 		return a.collectHistory(ctx, workspaceID, emit)
 	case ModelSwarmActivity:
@@ -374,14 +376,16 @@ func descriptionForClient(raw string) string {
 }
 
 // issueColumns is the shared SELECT list for issue rows: everything the
-// client Issue shape needs, including label and child id arrays.
+// client Issue shape needs, including label and child id arrays and the
+// denormalized relations (v1.1: the reader's-side edges, a JSON array).
 const issueColumns = `
 		i.id, i.team_id, i.number, i.priority, i.sort_order, i.title,
 		i.description, i.status, i.created_at, i.updated_at,
 		i.created_by, i.assignee_id, i.parent_id, i.status_id,
 		i.agent_paused,
 		coalesce((select array_agg(il.label_id) from issue_labels il where il.issue_id = i.id), '{}'),
-		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}')`
+		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}')` +
+	relationListSQL
 
 // issueRow is one issues-table row with everything the client shape
 // needs, shared by the sync collectors and the mutation handlers.
@@ -395,6 +399,10 @@ type issueRow struct {
 	CreatedByID, AssigneeID *string
 	ParentID, StatusID      *string
 	LabelIDs, Children      []string
+	// RelationRaw is the denormalized relations JSON (the SQL
+	// coalesce guarantees an array; zero values in tests are
+	// normalized to [] by issueData).
+	RelationRaw json.RawMessage
 	// AgentPaused is the D1 escalation flag: agents may not act on a
 	// paused issue, humans act freely and resume it.
 	AgentPaused bool
@@ -410,6 +418,13 @@ type issueRow struct {
 // the identical vocabulary. (stateId is a required string in the client
 // model; an issue without a status serializes as empty, never null.)
 func (a *API) issueData(r issueRow) map[string]any {
+	// The client's v1 Issue model has no relations field (MST drops
+	// it); the client-state rewrite (SWR-15) consumes it. Always an
+	// array: a JSON null here would crash a strict model.
+	relations := r.RelationRaw
+	if len(relations) == 0 {
+		relations = []byte(`[]`)
+	}
 	return map[string]any{
 		"id":                 r.ID,
 		"createdAt":          r.CreatedAt.Format(iso),
@@ -434,6 +449,7 @@ func (a *API) issueData(r issueRow) map[string]any {
 		"sourceMetadata":     nil,
 		"children":           r.Children,
 		"agentPaused":        r.AgentPaused,
+		"relations":          relations,
 	}
 }
 
@@ -444,7 +460,7 @@ func (a *API) issueByID(ctx context.Context, id string) (issueRow, error) {
 		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.LabelIDs, &r.Children); err != nil {
+		&r.AgentPaused, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
 		return r, err
 	}
 	return r, nil
@@ -467,7 +483,7 @@ func (a *API) collectIssues(ctx context.Context, workspaceID string, emit emitFn
 		if err := rows.Scan(&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 			&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 			&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-			&r.AgentPaused, &r.LabelIDs, &r.Children); err != nil {
+			&r.AgentPaused, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
 			return nil, err
 		}
 		rec, err := emit(r.ID, a.issueData(r))
@@ -581,6 +597,19 @@ func historyData(id string, createdAt, updatedAt time.Time, actorID *string, iss
 			if json.Unmarshal([]byte(t), &arr) == nil {
 				data["addedLabelIds"] = arr
 			}
+		}
+	case "parent":
+		data["fromParentId"] = nullOrEmpty(strval(from))
+		data["toParentId"] = nullOrEmpty(strval(to))
+	case "relation", "relation_deleted":
+		// The timeline's RelatedActivity entry: the client renders
+		// from relationChanges (added vs removed) with the related
+		// issue's identifier.
+		data["relationChanges"] = map[string]any{
+			"isDeleted":      action == "relation_deleted",
+			"issueId":        nullOrEmpty(issueID),
+			"relatedIssueId": nullOrEmpty(strval(from)),
+			"type":           strval(to),
 		}
 	case "assignee":
 		data["fromAssigneeId"] = nullOrEmpty(strval(from))

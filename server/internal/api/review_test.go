@@ -48,19 +48,22 @@ func TestDecideReview(t *testing.T) {
 }
 
 // reviewRow builds the issue row the protocol reads: an active card,
-// agent-assigned, in statusID. The 17 values are issueColumns' scan
-// shape (issueByIDTx); loadIssueRowTx appends the version.
+// agent-assigned, in statusID. The 18 values are issueColumns' scan
+// shape (issueByIDTx; the relations JSON is nil — the fake skips it,
+// issueData normalizes zero values to []); loadIssueRowTx appends the
+// version.
 func reviewRow(paused bool, statusID string) []any {
 	now := time.Now()
 	return []any{
 		"iss1", "team1", 7, nil, 0, "Test card", "", "active", now, now,
-		"ag1", "ag1", nil, statusID, paused, nil, nil,
+		"ag1", "ag1", nil, statusID, paused, nil, nil, nil,
 	}
 }
 
 // reviewFixture is the full canned result set of the review's queries.
-// Rule order matters: the version-carrying load (18 values) before the
-// plain issueByID (17), since both share the "from issues i" tail.
+// Rule order matters: the version-carrying load (issueColumns + the
+// version) before the plain issueByID, since both share the "from
+// issues i" tail.
 // statusID is the row's current state (the parked column for the tick
 // tests, In Progress for the work-cycle breaker test).
 func reviewFixture(t *testing.T, statusID string, parkCount, replies int, foremanErr error, paused bool) *fakeTx {
