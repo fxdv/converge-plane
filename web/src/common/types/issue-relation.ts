@@ -29,7 +29,13 @@ export interface IssueRelationType {
   updatedAt: string;
 
   issueId: string;
-  createdById: string;
+  // null is possible: the denormalized array on the Issue record
+  // serializes a NULL created_by as null (the standalone record
+  // serializes it as the empty string).
+  createdById: string | null;
   relatedIssueId: string;
-  type: IssueRelationEnum;
+  // The known vocabulary is IssueRelationEnum, but the wire is a
+  // plain string: the render-total policy (a future type from a newer
+  // server degrades to a fallback, never crashes the models).
+  type: string;
 }

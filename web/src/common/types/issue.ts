@@ -1,4 +1,4 @@
-import { IssueRelationEnumType } from './issue-relation';
+import { IssueRelationEnumType, type IssueRelationType } from './issue-relation';
 
 export interface IssueSourceMetadataType {
   type: string;
@@ -31,6 +31,12 @@ export interface IssueType {
   projectId?: string;
   cycleId?: string;
   projectMilestoneId?: string;
+
+  // v1.1: the denormalized relations array — every edge touching this
+  // issue, each already rewritten to this issue's perspective by the
+  // server (BLOCKS<->BLOCKED, DUPLICATE<->DUPLICATE_OF). The board
+  // indicator and the side-panel Related section read it directly.
+  relations: IssueRelationType[];
 
   // for frontend usage
   // TODO: fix this circular dependency

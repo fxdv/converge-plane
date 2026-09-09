@@ -72,7 +72,7 @@ This inventory is the authoritative classification. Repository evidence comes fr
 | CAP-ISS-13 | Due date | ADAPT | NEXT | Optional; timezone/date-only semantics specified before build |
 | CAP-ISS-14 | Estimate/manual ordering | DEFER | EXCLUDED | Requires planning evidence |
 | CAP-ISS-15 | Parent/sub-issues | ADAPT | NEXT | One parent, ordered children, no cycles |
-| CAP-ISS-16 | Blocks/related/duplicate relations | ADAPT | SHIPPED (v1.1) | Inverses derived server-side; duplicate behavior explicit; PARENT/SUB_ISSUE ride on `parent_id` |
+| CAP-ISS-16 | Blocks/related/duplicate relations | ADAPT | SHIPPED (v1.1) | Inverses derived server-side; duplicate behavior explicit; PARENT/SUB_ISSUE ride on `parent_id`; UI = timeline entry + board indicator + related section with removal |
 | CAP-ISS-17 | Attachments | ADAPT | NEXT | Authorized object storage, quotas, validation, scanning hook |
 | CAP-ISS-18 | Watchers/subscribers | ADAPT | NEXT | Notification participation plus mute controls |
 | CAP-ISS-19 | Bulk edit | ADAPT | NEXT | Preview scope, partial-failure contract, per-object authorization |

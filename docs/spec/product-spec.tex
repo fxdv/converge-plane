@@ -560,6 +560,13 @@ that ride on \texttt{issues.parent\_id}, the single source of truth.
   \texttt{IssueRelation} model on the sync feed. The v1 client renders from
   the Issue record and history and drops the model; the client-state
   rewrite consumes it.
+\item \textbf{UI surfaces}: the timeline entry for every change (all six types
+  render; a removed or unsynced related issue degrades to a plain
+  mention); a board-card indicator counting \texttt{blocks} / \texttt{blocked by}
+  from the denormalized array (zero extra fetches); and a Related section
+  in the issue side panel listing the live edges with one-click removal
+  (optimistic strip; the broadcasted refresh is the source of truth). The
+  creation picker posts through the write path above.
 \item \textbf{Trace}: one \texttt{issue\_history} row per change (action
   \texttt{relation} / \texttt{relation\_deleted}); the client renders it as its
   related-activity timeline entry.

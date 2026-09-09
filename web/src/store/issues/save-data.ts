@@ -33,6 +33,10 @@ export async function saveIssuesData(
         projectMilestoneId: record.data.projectMilestoneId,
         sourceMetadata: JSON.stringify(record.data.sourceMetadata),
         agentPaused: record.data.agentPaused ?? false,
+        // v1.1: the server always emits the array (never null), but
+        // pre-v1.1 retained payloads lack the field — normalize to []
+        // so the model's optional default and the store agree.
+        relations: record.data.relations ?? [],
       };
 
       switch (record.action) {
