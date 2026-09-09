@@ -48,7 +48,7 @@ func TestDecideReview(t *testing.T) {
 }
 
 // reviewRow builds the issue row the protocol reads: an active card,
-// agent-assigned, in statusID. The 18 values are issueColumns' scan
+// agent-assigned, in statusID. The 19 values are issueColumns' scan
 // shape (issueByIDTx; the relations JSON is nil — the fake skips it,
 // issueData normalizes zero values to []); loadIssueRowTx appends the
 // version.
@@ -56,7 +56,7 @@ func reviewRow(paused bool, statusID string) []any {
 	now := time.Now()
 	return []any{
 		"iss1", "team1", 7, nil, 0, "Test card", "", "active", now, now,
-		"ag1", "ag1", nil, statusID, paused, nil, nil, nil,
+		"ag1", "ag1", nil, statusID, paused, nil, nil, nil, nil,
 	}
 }
 

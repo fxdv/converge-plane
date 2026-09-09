@@ -211,11 +211,12 @@ func TestApplyIssueRelationTx(t *testing.T) {
 			{frag: "insert into issue_relations", rowVals: []any{"rel1", now, now}},
 			{frag: "insert into issue_history", rowVals: []any{"hist1"}},
 			{frag: "select created_at from issue_history where id", rowVals: []any{now}},
-			// issueByIDTx on the related endpoint: the 18 issueColumns
-			// values (relations is the new 18th) with the rewritten edge.
+			// issueByIDTx on the related endpoint: the 19 issueColumns
+			// values (project_ids, labels, children, relations) with the
+			// rewritten edge.
 			{frag: "from issues i where i.id", rowVals: []any{
 				"iss2", "team1", 8, nil, 0, "T2", "", "active", now, now,
-				"hum1", nil, nil, "st1", false, nil, nil, relJSON,
+				"hum1", nil, nil, "st1", false, nil, nil, nil, relJSON,
 			}},
 			{frag: "insert into sync_sequences", rowVals: []any{int64(1), int64(2), int64(3)}},
 		},
@@ -271,8 +272,8 @@ func TestApplyRelationDeleteTx(t *testing.T) {
 			{frag: "insert into sync_sequences", rowVals: []any{int64(1), int64(2), int64(3), int64(4), int64(5)}},
 			// Both endpoints re-load with the edge gone from their arrays.
 			{frag: "from issues i where i.id", rows: [][]any{
-				{"iss1", "team1", 7, nil, 0, "T1", "", "active", now, now, "hum1", nil, nil, "st1", false, nil, nil, empty},
-				{"iss2", "team1", 8, nil, 0, "T2", "", "active", now, now, "hum1", nil, nil, "st1", false, nil, nil, empty},
+				{"iss1", "team1", 7, nil, 0, "T1", "", "active", now, now, "hum1", nil, nil, "st1", false, nil, nil, nil, empty},
+				{"iss2", "team1", 8, nil, 0, "T2", "", "active", now, now, "hum1", nil, nil, "st1", false, nil, nil, nil, empty},
 			}},
 		},
 	}

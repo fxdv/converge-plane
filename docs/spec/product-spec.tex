@@ -302,6 +302,10 @@ Issue relations\csr{api:relations} & First-class directed edges
   (blocks / related / duplicate): the reader's-side rewrite, the cycle
   guard, the timeline trace, denormalized into the issue record
   (\S\ref{sec:relations}) & \shipped\\
+Projects\csr{api:projects} & Workspace-scoped meaning labels: one
+  project per issue, the board's project rail with a done/total rollup,
+  membership denormalized into the issue record
+  (\S\ref{sec:projects}) & \shipped\\
 Workflows\cs{feat:workflows} & Team statuses in six categories
   (triage, backlog, unstarted, started, completed, canceled) & \shipped\\
 Labels\cs{feat:labels} & Workspace-scoped, colored, multi-assign & \shipped\\
@@ -368,10 +372,12 @@ Swarm plane\csr{swarm:panel} & The dedicated Swarm page: fleet settings
 \section{NEXT --- collaboration and planning}
 \cs{feat:next}
 
-From the greenfield inventory, unchanged in intent: projects and derived
-progress; team cycles with rollover; attachments; watchers; in-app Inbox
-and notifications; bounded bulk edit; due dates; personal bookmarks.
-(Issue relations shipped ahead of the v1.1 cut --- \S\ref{sec:relations}.)
+From the greenfield inventory, unchanged in intent: team cycles with
+rollover; attachments; watchers; in-app Inbox and notifications; bounded
+bulk edit; due dates; personal bookmarks. Projects shipped ahead of the
+v1.1 cut (server: CRUD, sync, membership --- \S\ref{sec:projects}; the
+board rail and derived progress land with the client card). Issue
+relations shipped ahead of the cut as well (\S\ref{sec:relations}).
 Entry gate: the v1 core exit criteria stay green. \owner{confirm NEXT
   ordering for the Converge line --- the greenfield order (views $\to$
   relations $\to$ projects $\to$ cycles $\to$ attachments $\to$ inbox
@@ -570,6 +576,38 @@ that ride on \texttt{issues.parent\_id}, the single source of truth.
 \item \textbf{Trace}: one \texttt{issue\_history} row per change (action
   \texttt{relation} / \texttt{relation\_deleted}); the client renders it as its
   related-activity timeline entry.
+\end{itemize}
+
+\section{Projects}
+\label{sec:projects}
+\cs{api:projects}
+
+A project is a workspace-scoped \textbf{meaning label}, not a workflow:
+it groups issues on the board without touching their state machine. An
+issue belongs to at most one project (\texttt{issues.project\_ids}, at
+most one element in v1 --- the array shape keeps the multi-project door
+open for v2) and moves between the project rail and its column by
+membership change on the issue patch.
+
+\begin{itemize}
+\item \textbf{Model}: \{name (unique per workspace, case-insensitive),
+  color, teams[] (the teams whose board shows it; empty = all), lead,
+  dates\}. Every workspace member sees projects; create, rename, and
+  delete are owner/admin.
+\item \textbf{Tenancy of membership}: the project id on the issue is
+  validated against the issue's workspace; the legacy singular
+  \texttt{projectId} wire field derives from the array (one source of
+  truth, two projections).
+\item \textbf{Sync}: Project records (CREATE / UPDATE / DELETE) on the
+  feed; \texttt{projectIds} denormalized into the Issue record and
+  refreshed on every membership change, so the rail renders with zero
+  extra fetches. Deleting a project soft-deletes it and clears its
+  members' \texttt{project\_ids} in the same transaction.
+\item \textbf{Board}: projects render as a filter rail --- a stack per
+  project with at least one issue in view; the done/total rollup is
+  derived from the issues' workflow categories (a read-only view, not a
+  stored state). A card shows in its project stack \emph{and} its state
+  column; the card is never ``in'' a project in the state machine.
 \end{itemize}
 
 % ============================================================
