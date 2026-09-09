@@ -384,8 +384,8 @@ const issueColumns = `
 		i.created_by, i.assignee_id, i.parent_id, i.status_id,
 		i.agent_paused,
 		coalesce((select array_agg(il.label_id) from issue_labels il where il.issue_id = i.id), '{}'),
-		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}')` +
-	relationListSQL
+		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}'),
+	` + relationListSQL
 
 // issueRow is one issues-table row with everything the client shape
 // needs, shared by the sync collectors and the mutation handlers.
