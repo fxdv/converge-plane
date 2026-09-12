@@ -606,10 +606,14 @@ membership change on the issue patch.
   extra fetches. Deleting a project soft-deletes it and clears its
   members' \texttt{project\_ids} in the same transaction.
 \item \textbf{Board}: projects render as a filter rail --- a stack per
-  project with at least one issue in view; the done/total rollup is
-  derived from the issues' workflow categories (a read-only view, not a
-  stored state). A card shows in its project stack \emph{and} its state
-  column; the card is never ``in'' a project in the state machine.
+  project on the team's board; the done/total rollup is derived from
+  the issues' workflow categories (a read-only view, not a stored
+  state). A brand-new empty project renders as a compact drop target
+  (a created project must appear at once, to be filled); a stack is
+  hidden only when the project has issues but the current view filters
+  every one of them out. A card shows in its project stack
+  \emph{and} its state column; the card is never ``in'' a project in
+  the state machine.
 \item \textbf{Rail mechanics}: the drag registry keeps one draggable per
   id, so a card that belongs to a project is mirrored in its stack under
   a \emph{proxy} id (\texttt{project:<issueId>}); the column keeps the

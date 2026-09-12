@@ -76,16 +76,25 @@ export const ProjectRail = observer(({ workflows }: ProjectRailProps) => {
   const projects: ProjectType[] =
     projectsStore.getProjectsForTeam(team.id);
 
-  // Only stacks with at least one issue in view (the approved design);
-  // keep the rail visible for an admin so the create row has a home.
+  // A stack renders for every project on this team's board — including
+  // brand-new empty ones (a created project must appear at once, as a
+  // drop target to fill). A stack is hidden only when the project HAS
+  // issues but the current view filters every one of them out.
   const stacks = projects
-    .map((project) => ({
-      project,
-      issues: viewIssues.filter((issue) =>
+    .map((project) => {
+      const inView = viewIssues.filter((issue) =>
         issue.projectIds?.includes(project.id),
-      ),
-    }))
-    .filter((stack) => stack.issues.length > 0);
+      );
+      const anywhere = teamIssues.filter((issue) =>
+        issue.projectIds?.includes(project.id),
+      );
+      return {
+        project,
+        issues: inView,
+        hidden: anywhere.length > 0 && inView.length === 0,
+      };
+    })
+    .filter((stack) => !stack.hidden);
 
   if (stacks.length === 0 && !isAdmin) {
     return null;
@@ -104,7 +113,7 @@ export const ProjectRail = observer(({ workflows }: ProjectRailProps) => {
   };
 
   return (
-    <div className="flex flex-col gap-2 w-[350px] shrink-0 max-h-full pr-2">
+    <div className="flex flex-col gap-2 w-[350px] shrink-0 h-full pr-2">
       {isAdmin && (
         creating ? (
           <div className="group flex justify-between mb-0 bg-background-3 dark:bg-grayAlpha-100 rounded-xl p-2 px-4">

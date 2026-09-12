@@ -7,11 +7,7 @@ import {
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
 import { WorkflowCategoryEnum } from '@converge/types';
-import {
-  DeleteLine,
-  EditLine,
-  Project as ProjectIcon,
-} from '@converge/ui/icons';
+import { DeleteLine, EditLine } from '@converge/ui/icons';
 import { Button } from '@converge/ui/components/button';
 import { Input } from '@converge/ui/components/input';
 import {
@@ -134,7 +130,12 @@ export const ProjectBoardList = observer(
       );
     };
 
+    // The Droppable's own wrapper div carries no sizing of its own, so
+    // it is wrapped in a flex item with a definite height: the wrapper
+    // stretches to it, and the content's h-full (and the AutoSizer that
+    // measures inside it) resolves against a real box.
     const stack = (
+      <div className="flex-1 min-h-0 flex">
       <Droppable
         droppableId={projectDroppableId(project.id)}
         type="BoardColumn"
@@ -163,51 +164,51 @@ export const ProjectBoardList = observer(
             : issues.length;
 
           return (
-            <div className="flex flex-col max-h-full w-[350px]">
+            <div className="flex flex-col h-full w-[350px] min-h-0 rounded-xl overflow-hidden">
               <div
-                className="flex items-center justify-between p-2.5 pb-1.5 bg-background-3 dark:bg-grayAlpha-100 rounded-t-xl"
+                className="flex items-center gap-1.5 px-2.5 py-2 bg-background-3 dark:bg-grayAlpha-100"
                 style={{
                   borderLeft: `3px solid ${project.color ?? 'transparent'}`,
                 }}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <ProjectIcon size={14} />
-                  {editing ? (
-                    <Input
-                      value={name}
-                      className="h-7 flex-1 min-w-0"
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Project name"
-                    />
-                  ) : (
-                    <h3 className="pl-1 truncate">{project.name}</h3>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="rounded-2xl bg-grayAlpha-100 p-1.5 px-2 font-mono text-xs">
-                    {doneCount}/{issues.length}
-                  </div>
-                  {isAdmin && !editing && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => setEditing(true)}
-                      >
-                        <EditLine size={12} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => setConfirmDelete(true)}
-                      >
-                        <DeleteLine size={12} />
-                      </Button>
-                    </>
-                  )}
-                </div>
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: project.color || '#888888' }}
+                />
+                {editing ? (
+                  <Input
+                    value={name}
+                    className="h-7 flex-1 min-w-0"
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Project name"
+                  />
+                ) : (
+                  <h3 className="truncate text-sm font-medium">{project.name}</h3>
+                )}
+                <span className="flex-1" />
+                <span className="font-mono text-xs text-muted-foreground">
+                  {doneCount}/{issues.length}
+                </span>
+                {isAdmin && !editing && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0"
+                      onClick={() => setEditing(true)}
+                    >
+                      <EditLine size={11} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0"
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <DeleteLine size={11} />
+                    </Button>
+                  </>
+                )}
               </div>
 
               {editing && (
@@ -245,8 +246,8 @@ export const ProjectBoardList = observer(
                 </div>
               )}
 
-              <div className="flex flex-col grow">
-                <AutoSizer className="pb-10 h-full">
+              <div className="flex-1 min-h-0 px-2 pt-2 bg-grayAlpha-50/60 dark:bg-grayAlpha-100/40">
+                <AutoSizer className="h-full w-full">
                   {({ width, height }) => (
                     <List
                       ref={(ref) => {
@@ -260,7 +261,13 @@ export const ProjectBoardList = observer(
                       }}
                       height={height}
                       overscanRowCount={10}
-                      noRowsRenderer={() => <></>}
+                      noRowsRenderer={() => (
+                        <div className="m-1 flex h-full min-h-[56px] items-center justify-center rounded-lg border border-dashed border-grayAlpha-300/70 dark:border-grayAlpha-200/40">
+                          <span className="px-2 text-center text-[11px] text-muted-foreground">
+                            Drop a card here to add it to {project.name}
+                          </span>
+                        </div>
+                      )}
                       width={width}
                       rowCount={itemCount}
                       outerRef={droppableProvided.innerRef}
@@ -276,6 +283,7 @@ export const ProjectBoardList = observer(
           );
         }}
       </Droppable>
+      </div>
     );
 
     return (
