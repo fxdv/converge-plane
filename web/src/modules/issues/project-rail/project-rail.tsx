@@ -113,9 +113,10 @@ export const ProjectRail = observer(({ workflows }: ProjectRailProps) => {
   };
 
   return (
-    <div className="flex flex-col gap-2 w-[350px] shrink-0 h-full pr-2">
+    <div className="flex flex-col w-[350px] shrink-0 h-full pr-2">
       {isAdmin && (
-        creating ? (
+        <div className="shrink-0 mb-2">
+        {creating ? (
           <div className="group flex justify-between mb-0 bg-background-3 dark:bg-grayAlpha-100 rounded-xl p-2 px-4">
             <div className="flex items-center justify-center gap-3 w-full">
               <div
@@ -170,9 +171,11 @@ export const ProjectRail = observer(({ workflows }: ProjectRailProps) => {
             <AddLine size={14} />
             New project
           </button>
-        )
+        )}
+        </div>
       )}
 
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pb-2">
       {stacks.map(({ project, issues }) => (
         <ProjectBoardList
           key={project.id}
@@ -181,6 +184,7 @@ export const ProjectRail = observer(({ workflows }: ProjectRailProps) => {
           isAdmin={isAdmin}
         />
       ))}
+      </div>
     </div>
   );
 });

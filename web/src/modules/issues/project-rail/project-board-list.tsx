@@ -48,6 +48,12 @@ import {
   realIdFromProxyDraggable,
 } from './constants';
 
+// A body taller than this starts scrolling inside the stack (column-like);
+// shorter stacks size to their content and the rail scrolls instead.
+const MAX_STACK_LIST_HEIGHT = 480;
+// The drop-zone height for a brand-new (issue-less) project.
+const EMPTY_STACK_HEIGHT = 64;
+
 interface ProjectBoardListProps {
   project: ProjectType;
   // The project's members already restricted to the current view (the
@@ -56,10 +62,11 @@ interface ProjectBoardListProps {
   isAdmin: boolean;
 }
 
-// One stack on the project rail: a droppable column whose cards are
-// proxy draggables (see constants.ts) mirroring the card in its state
-// column. The header shows the done/total rollup; owners and admins get
-// rename and delete affordances.
+// One stack on the project rail: a droppable whose cards are proxy
+// draggables (see constants.ts) mirroring the card in its state column.
+// The header shows the done/total rollup; owners and admins get rename
+// and delete affordances. The stack sizes to its content (up to the cap,
+// then it scrolls like a column); the rail scrolls across stacks.
 export const ProjectBoardList = observer(
   ({ project, issues, isAdmin }: ProjectBoardListProps) => {
     const { workflowsStore } = useContextStore();
@@ -96,6 +103,7 @@ export const ProjectBoardList = observer(
       const issue = issues[index];
 
       if (!issue) {
+        // The drag placeholder index maps to no issue: an empty gap row.
         return null;
       }
 
@@ -130,12 +138,7 @@ export const ProjectBoardList = observer(
       );
     };
 
-    // The Droppable's own wrapper div carries no sizing of its own, so
-    // it is wrapped in a flex item with a definite height: the wrapper
-    // stretches to it, and the content's h-full (and the AutoSizer that
-    // measures inside it) resolves against a real box.
     const stack = (
-      <div className="flex-1 min-h-0 flex">
       <Droppable
         droppableId={projectDroppableId(project.id)}
         type="BoardColumn"
@@ -159,12 +162,29 @@ export const ProjectBoardList = observer(
           droppableProvided: DroppableProvided,
           snapshot: DroppableStateSnapshot,
         ) => {
-          const itemCount: number = snapshot.isUsingPlaceholder
+          const count: number = snapshot.isUsingPlaceholder
             ? issues.length + 1
             : issues.length;
 
+          // Content-sized stack: the list is as tall as its measured
+          // rows (the CellMeasurer cache converges after first paint),
+          // capped so a large project scrolls like a column.
+          let listHeight: number;
+          if (count === 0) {
+            listHeight = EMPTY_STACK_HEIGHT;
+          } else {
+            let content = 0;
+            for (let i = 0; i < count; i++) {
+              // The published type wants {index}, but the runtime API (and
+              // the List's own calls) pass the number — keep the number.
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              content += (cache.rowHeight as any)(i) ?? 0;
+            }
+            listHeight = Math.min(content, MAX_STACK_LIST_HEIGHT);
+          }
+
           return (
-            <div className="flex flex-col h-full w-[350px] min-h-0 rounded-xl overflow-hidden">
+            <div className="flex flex-col w-[350px] shrink-0 rounded-xl overflow-hidden">
               <div
                 className="flex items-center gap-1.5 px-2.5 py-2 bg-background-3 dark:bg-grayAlpha-100"
                 style={{
@@ -183,7 +203,9 @@ export const ProjectBoardList = observer(
                     placeholder="Project name"
                   />
                 ) : (
-                  <h3 className="truncate text-sm font-medium">{project.name}</h3>
+                  <h3 className="truncate text-sm font-medium">
+                    {project.name}
+                  </h3>
                 )}
                 <span className="flex-1" />
                 <span className="font-mono text-xs text-muted-foreground">
@@ -215,7 +237,7 @@ export const ProjectBoardList = observer(
                 <div className="flex items-center gap-2 px-2.5 pb-1.5">
                   <div
                     className="h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: project.color ?? '#888888' }}
+                    style={{ backgroundColor: project.color || '#888888' }}
                   />
                   <span className="text-xs text-muted-foreground">
                     {project.color ?? ''}
@@ -246,9 +268,9 @@ export const ProjectBoardList = observer(
                 </div>
               )}
 
-              <div className="flex-1 min-h-0 px-2 pt-2 bg-grayAlpha-50/60 dark:bg-grayAlpha-100/40">
-                <AutoSizer className="h-full w-full">
-                  {({ width, height }) => (
+              <div className="px-2 pt-2 pb-2 bg-grayAlpha-50/60 dark:bg-grayAlpha-100/40">
+                <AutoSizer className="w-full">
+                  {({ width }) => (
                     <List
                       ref={(ref) => {
                         if (ref) {
@@ -259,7 +281,7 @@ export const ProjectBoardList = observer(
                           }
                         }
                       }}
-                      height={height}
+                      height={listHeight}
                       overscanRowCount={10}
                       noRowsRenderer={() => (
                         <div className="m-1 flex h-full min-h-[56px] items-center justify-center rounded-lg border border-dashed border-grayAlpha-300/70 dark:border-grayAlpha-200/40">
@@ -269,7 +291,7 @@ export const ProjectBoardList = observer(
                         </div>
                       )}
                       width={width}
-                      rowCount={itemCount}
+                      rowCount={count}
                       outerRef={droppableProvided.innerRef}
                       rowHeight={cache.rowHeight}
                       deferredMeasurementCache={cache}
@@ -283,7 +305,6 @@ export const ProjectBoardList = observer(
           );
         }}
       </Droppable>
-      </div>
     );
 
     return (
