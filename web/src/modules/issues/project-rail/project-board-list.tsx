@@ -8,6 +8,7 @@ import {
 } from '@hello-pangea/dnd';
 import { WorkflowCategoryEnum } from '@converge/types';
 import { DeleteLine, EditLine } from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { Button } from '@converge/ui/components/button';
 import { Input } from '@converge/ui/components/input';
 import {
@@ -51,8 +52,9 @@ import {
 // A body taller than this starts scrolling inside the stack (column-like);
 // shorter stacks size to their content and the rail scrolls instead.
 const MAX_STACK_LIST_HEIGHT = 480;
-// The drop-zone height for a brand-new (issue-less) project.
-const EMPTY_STACK_HEIGHT = 64;
+// The drop-strip height for a brand-new (issue-less) project: one quiet
+// dashed line, not a block. A 0/0 stack stays ~60px tall end to end.
+const EMPTY_STACK_HEIGHT = 18;
 
 interface ProjectBoardListProps {
   project: ProjectType;
@@ -64,9 +66,14 @@ interface ProjectBoardListProps {
 
 // One stack on the project rail: a droppable whose cards are proxy
 // draggables (see constants.ts) mirroring the card in its state column.
-// The header shows the done/total rollup; owners and admins get rename
-// and delete affordances. The stack sizes to its content (up to the cap,
-// then it scrolls like a column); the rail scrolls across stacks.
+//
+// Visual language (the clean-rail pass): the stack is a quiet container.
+// The 3px project-color spine on the left is the differentiator; the body
+// is transparent so the cards float on the board background exactly like
+// the column cards; the header is the only loud element, and its
+// rename/delete actions appear only on hover (they stay keyboard-
+// reachable). A stack sizes to its content (up to the cap, then it
+// scrolls like a column); the rail scrolls across stacks.
 export const ProjectBoardList = observer(
   ({ project, issues, isAdmin }: ProjectBoardListProps) => {
     const { workflowsStore } = useContextStore();
@@ -184,13 +191,17 @@ export const ProjectBoardList = observer(
           }
 
           return (
-            <div className="flex flex-col w-[350px] shrink-0 rounded-xl overflow-hidden">
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-2 bg-background-3 dark:bg-grayAlpha-100"
-                style={{
-                  borderLeft: `3px solid ${project.color ?? 'transparent'}`,
-                }}
-              >
+            // w-full: the rail owns the width (350px content + its right
+            // gutter); the stack must not set its own or it overflows the
+            // rail's padding box. Square on purpose — the workflow columns
+            // are square, and the color spine does the differentiating.
+            <div
+              className="group flex flex-col w-full shrink-0"
+              style={{
+                borderLeft: `3px solid ${project.color || 'transparent'}`,
+              }}
+            >
+              <div className="flex items-center gap-1.5 px-2.5 py-2 bg-background-3 dark:bg-grayAlpha-100">
                 <span
                   className="h-2 w-2 rounded-full shrink-0"
                   style={{ backgroundColor: project.color || '#888888' }}
@@ -212,7 +223,9 @@ export const ProjectBoardList = observer(
                   {doneCount}/{issues.length}
                 </span>
                 {isAdmin && !editing && (
-                  <>
+                  // Quiet by default: visible on hover, always reachable
+                  // by keyboard (opacity, not display, keeps them focusable).
+                  <span className="flex items-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -229,7 +242,7 @@ export const ProjectBoardList = observer(
                     >
                       <DeleteLine size={11} />
                     </Button>
-                  </>
+                  </span>
                 )}
               </div>
 
@@ -268,7 +281,17 @@ export const ProjectBoardList = observer(
                 </div>
               )}
 
-              <div className="px-2 pt-2 pb-2 bg-grayAlpha-50/60 dark:bg-grayAlpha-100/40">
+              {/* Transparent by design: the cards carry their own
+                  background and float on the board background. The only
+                  state it paints is a drag-over tint — color only, no
+                  size change, so nothing shifts mid-drag. */}
+              <div
+                className={cn(
+                  'px-2 py-1.5',
+                  snapshot.isDraggingOver &&
+                    'bg-background-3/60 dark:bg-grayAlpha-100/25',
+                )}
+              >
                 <AutoSizer className="w-full">
                   {({ width }) => (
                     <List
@@ -284,8 +307,8 @@ export const ProjectBoardList = observer(
                       height={listHeight}
                       overscanRowCount={10}
                       noRowsRenderer={() => (
-                        <div className="m-1 flex h-full min-h-[56px] items-center justify-center rounded-lg border border-dashed border-grayAlpha-300/70 dark:border-grayAlpha-200/40">
-                          <span className="px-2 text-center text-[11px] text-muted-foreground">
+                        <div className="m-1 flex h-full items-center justify-center rounded border border-dashed border-grayAlpha-300/70 dark:border-grayAlpha-200/40">
+                          <span className="px-2 text-center text-[10px] text-muted-foreground">
                             Drop a card here to add it to {project.name}
                           </span>
                         </div>

@@ -113,77 +113,82 @@ export const ProjectRail = observer(({ workflows }: ProjectRailProps) => {
   };
 
   return (
-    <div className="flex flex-col w-[350px] shrink-0 h-full pr-2">
+    // 350px content (the columns' width) + a 12px right gutter (the
+    // columns' spacing): the rail aligns with the board and keeps a
+    // visible gap before the first column.
+    <div className="flex flex-col w-[362px] shrink-0 h-full pr-3">
       {isAdmin && (
         <div className="shrink-0 mb-2">
-        {creating ? (
-          <div className="group flex justify-between mb-0 bg-background-3 dark:bg-grayAlpha-100 rounded-xl p-2 px-4">
-            <div className="flex items-center justify-center gap-3 w-full">
-              <div
-                className="h-3 w-3 rounded-full shrink-0"
-                style={{ backgroundColor: color }}
-              />
-              <div className="grow min-w-0">
-                <Input
-                  value={name}
-                  className="w-full"
-                  placeholder="Project name"
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && name.trim()) {
-                      submitCreate();
-                    }
-                    if (e.key === 'Escape') {
-                      setCreating(false);
-                    }
-                  }}
+          {creating ? (
+            <div className="flex justify-between bg-background-3 dark:bg-grayAlpha-100 rounded-md p-2 px-3">
+              <div className="flex items-center justify-center gap-3 w-full">
+                <div
+                  className="h-3 w-3 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
                 />
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={creatingBusy}
-                  onClick={() => setCreating(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  isLoading={creatingBusy}
-                  variant="secondary"
-                  size="sm"
-                  disabled={name.trim().length === 0}
-                  onClick={() => submitCreate()}
-                >
-                  Save
-                </Button>
+                <div className="grow min-w-0">
+                  <Input
+                    value={name}
+                    className="w-full"
+                    placeholder="Project name"
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && name.trim()) {
+                        submitCreate();
+                      }
+                      if (e.key === 'Escape') {
+                        setCreating(false);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={creatingBusy}
+                    onClick={() => setCreating(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    isLoading={creatingBusy}
+                    variant="secondary"
+                    size="sm"
+                    disabled={name.trim().length === 0}
+                    onClick={() => submitCreate()}
+                  >
+                    Save
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <button
-            className="flex items-center gap-2 w-full bg-background-3 dark:bg-grayAlpha-100 hover:bg-background-3/70 rounded-xl p-2.5 px-3 text-xs font-medium text-muted-foreground"
-            onClick={() => {
-              setName('');
-              setCreating(true);
-            }}
-          >
-            <AddLine size={14} />
-            New project
-          </button>
-        )}
+          ) : (
+            // Quiet by default: a dashed outline that only warms on
+            // hover — the stacks, not the create row, are the content.
+            <button
+              className="flex items-center gap-2 w-full border border-dashed border-grayAlpha-300/70 dark:border-grayAlpha-200/40 hover:bg-background-3/50 dark:hover:bg-grayAlpha-100/25 rounded-md p-2.5 px-3 text-xs font-medium text-muted-foreground transition-colors"
+              onClick={() => {
+                setName('');
+                setCreating(true);
+              }}
+            >
+              <AddLine size={14} />
+              New project
+            </button>
+          )}
         </div>
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pb-2">
-      {stacks.map(({ project, issues }) => (
-        <ProjectBoardList
-          key={project.id}
-          project={project}
-          issues={issues}
-          isAdmin={isAdmin}
-        />
-      ))}
+        {stacks.map(({ project, issues }) => (
+          <ProjectBoardList
+            key={project.id}
+            project={project}
+            issues={issues}
+            isAdmin={isAdmin}
+          />
+        ))}
       </div>
     </div>
   );

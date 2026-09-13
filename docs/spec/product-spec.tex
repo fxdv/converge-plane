@@ -512,6 +512,13 @@ feed speak the same vocabulary.
   authorization.
 \item The client applies records to MST models and a bounded IndexedDB
   cache; the server remains authoritative.
+\item The client reconciles on \textbf{bootstrap} only: the snapshot is
+  the one authoritative set, so every local row inside the snapshot's
+  workspace domain that the snapshot does not list is pruned (cache row
+  and store node), self-healing deletions that never reached the client
+  (an operator's SQL fix, a dropped stream record, a trimmed outbox
+  window). Delta and stream are forward-only and never prune; rows of
+  other workspaces are union cache, not residue, and are never touched.
 \end{itemize}
 
 \section{Wire discipline}
@@ -626,6 +633,14 @@ membership change on the issue patch.
   capped --- a large stack then scrolls like a column), and the rail
   itself scrolls across stacks; the New project row stays pinned at the
   top of the rail.
+\item \textbf{Visual language}: the rail speaks the columns' language ---
+  square stacks on a transparent body (cards carry their own chrome and
+  float on the board background), the project color as a full-height 3px
+  spine, the header the only loud element with its rename/delete actions
+  on hover only, an empty project a single quiet dashed drop line, and
+  the create row a dashed ghost that warms on hover. The rail's content
+  width matches the columns' (a 12px gutter separates rail from board);
+  a drag-over tint on a stack is color-only, so nothing shifts mid-drag.
 \item \textbf{CRUD surface}: owners and admins create (a row on the
   rail, colored, team-scoped to the board they are on), rename, and
   delete from the stack header; delete clears member membership in the

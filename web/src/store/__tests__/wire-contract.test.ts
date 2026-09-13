@@ -14,7 +14,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
+import type { SyncActionRecord } from 'common/types';
+
 import { safePriorityIndex } from 'common/priority';
+
+import {
+  liveIdsByModel,
+  pruneStaleLocalRecords,
+  staleIdsForModel,
+  type PruneDomain,
+  type PruneRow,
+} from 'common/wrappers/socket-data-util';
 
 import { Comment } from 'store/comments/models';
 import { Issue } from 'store/issues/models';
@@ -596,5 +606,174 @@ describe('saveSwarmActivityData (the sync handler)', () => {
       store,
     );
     assert.equal(store.activities.size, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bootstrap reconciliation (the prune pass): the client-side policy that
+// keeps the cache from resurrecting rows the server no longer has (a
+// deletion that never reached this client as a DELETE record).
+// The pure decision core is pinned here — a wrong deletion is unrecoverable
+// data loss; the Dexie read/write glue mirrors the save-data handlers the
+// harness already exercises.
+// ---------------------------------------------------------------------------
+
+const rec = (
+  modelName: string,
+  id: string,
+  action: 'I' | 'U' | 'D',
+): SyncActionRecord =>
+  ({
+    data: { id },
+    modelName,
+    modelId: id,
+    action,
+    workspaceId: 'w1',
+    sequenceId: '1',
+  }) as SyncActionRecord;
+
+const pruneRow = (id: string, over: Partial<PruneRow> = {}): PruneRow => ({
+  id,
+  ...over,
+});
+
+const domain = (over: Partial<PruneDomain> = {}): PruneDomain => ({
+  workspaceId: 'w1',
+  teamIds: new Set(['t1']),
+  issueIds: new Set(['i1']),
+  ...over,
+});
+
+describe('liveIdsByModel (snapshot -> live id sets)', () => {
+  it('groups I/U records by model and keeps every synced model present', () => {
+    const live = liveIdsByModel([
+      rec('Project', 'p1', 'I'),
+      rec('Project', 'p2', 'U'),
+      rec('Issue', 'i1', 'I'),
+    ]);
+    assert.deepEqual([...live.get('Project')!.values()], ['p1', 'p2']);
+    assert.deepEqual([...live.get('Issue')!.values()], ['i1']);
+    // A model the snapshot never mentions is an empty set, not absent:
+    // zero rows in the snapshot is a truth the prune may act on.
+    assert.equal(live.get('View')!.size, 0);
+  });
+
+  it('treats D records as not-live', () => {
+    const live = liveIdsByModel([rec('Project', 'p1', 'D')]);
+    assert.equal(live.get('Project')!.size, 0);
+  });
+
+  it('survives a null snapshot (the defensive array check)', () => {
+    const live = liveIdsByModel(null as never);
+    assert.equal(live.get('Project')!.size, 0);
+  });
+});
+
+describe('staleIdsForModel (the deletion policy)', () => {
+  const projectRows: PruneRow[] = [
+    pruneRow('p1', { workspaceId: 'w1' }), // live in the snapshot
+    pruneRow('p2', { workspaceId: 'w1' }), // residue: in domain, not live
+    pruneRow('p9', { workspaceId: 'w2' }), // another workspace: cache, never
+  ];
+
+  it('prunes in-domain rows missing from the snapshot and nothing else', () => {
+    const live = liveIdsByModel([rec('Project', 'p1', 'I')]);
+    assert.deepEqual(
+      staleIdsForModel('Project', domain(), projectRows, live),
+      ['p2'],
+    );
+  });
+
+  it('prunes the whole in-domain set when the snapshot has zero rows', () => {
+    // An empty snapshot means the workspace has zero live projects:
+    // every in-domain row (p1 and p2) is residue; the foreign-workspace
+    // row (p9) is still untouched.
+    const live = liveIdsByModel([]);
+    assert.deepEqual(
+      staleIdsForModel('Project', domain(), projectRows, live),
+      ['p1', 'p2'],
+    );
+  });
+
+  it('scopes issues through their team (other workspaces stay untouched)', () => {
+    const live = liveIdsByModel([rec('Issue', 'i1', 'I')]);
+    const rows: PruneRow[] = [
+      pruneRow('i1', { teamId: 't1' }), // live
+      pruneRow('i2', { teamId: 't1' }), // residue
+      pruneRow('i9', { teamId: 'tX' }), // outside this workspace
+    ];
+    assert.deepEqual(
+      staleIdsForModel('Issue', domain(), rows, live),
+      ['i2'],
+    );
+  });
+
+  it('scopes comments and history through their issue', () => {
+    const live = liveIdsByModel([
+      rec('IssueComment', 'c1', 'I'),
+      rec('IssueHistory', 'h1', 'I'),
+    ]);
+    const comments: PruneRow[] = [
+      pruneRow('c1', { issueId: 'i1' }),
+      pruneRow('c2', { issueId: 'i1' }), // residue
+      pruneRow('c9', { issueId: 'iX' }), // another workspace: untouched
+    ];
+    assert.deepEqual(
+      staleIdsForModel('IssueComment', domain(), comments, live),
+      ['c2'],
+    );
+    const history: PruneRow[] = [
+      pruneRow('h1', { issueId: 'i1' }),
+      pruneRow('h2', { issueId: 'i1' }), // residue
+      pruneRow('h9', { issueId: 'iX' }),
+    ];
+    assert.deepEqual(
+      staleIdsForModel('IssueHistory', domain(), history, live),
+      ['h2'],
+    );
+  });
+
+  it('scopes workflows through their team', () => {
+    const live = liveIdsByModel([rec('Workflow', 's1', 'I')]);
+    const rows: PruneRow[] = [
+      pruneRow('s1', { teamId: 't1' }),
+      pruneRow('s2', { teamId: 't1' }), // residue
+      pruneRow('s9', { teamId: 'tX' }),
+    ];
+    assert.deepEqual(
+      staleIdsForModel('Workflow', domain(), rows, live),
+      ['s2'],
+    );
+  });
+
+  it('never prunes workspace rows (the picker relies on the union cache)', () => {
+    const live = liveIdsByModel([rec('Workspace', 'w1', 'I')]);
+    const rows: PruneRow[] = [pruneRow('w1'), pruneRow('w2')];
+    assert.deepEqual(
+      staleIdsForModel('Workspace', domain(), rows, live),
+      [],
+    );
+  });
+
+  it('prunes swarm signals the snapshot no longer reports (crashed workers)', () => {
+    const live = liveIdsByModel([rec('SwarmActivity', 'a1', 'I')]);
+    const rows: PruneRow[] = [pruneRow('a1'), pruneRow('a2')];
+    assert.deepEqual(
+      staleIdsForModel('SwarmActivity', domain(), rows, live),
+      ['a2'],
+    );
+  });
+});
+
+describe('pruneStaleLocalRecords (the reconciliation pass)', () => {
+  it('is a safe no-op when no database is initialized (this harness)', async () => {
+    // convergeDatabase is undefined here; the pass must resolve, never
+    // throw, no matter what the snapshot carries.
+    await pruneStaleLocalRecords(
+      [rec('Project', 'p1', 'I')],
+      'w1',
+      {} as never,
+    );
+    await pruneStaleLocalRecords(null as never, '', {} as never);
   });
 });
