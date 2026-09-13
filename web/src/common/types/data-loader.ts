@@ -1,8 +1,9 @@
-const enum Action {
-  'I' = 'I',
-  'U' = 'U',
-  'D' = 'D',
-}
+// The client's sync-action vocabulary. The server's outbox maps its
+// internal CREATE/UPDATE/DELETE onto exactly these values (the server's
+// wireAction), and the client's save-data handlers switch on them.
+// A literal union rather than an enum: it is used in type position only,
+// and a const enum would refuse literal assignment from other files.
+export type Action = 'I' | 'U' | 'D';
 
 export interface SyncActionRecord {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

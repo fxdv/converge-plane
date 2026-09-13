@@ -15,7 +15,7 @@ import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
 
-import { saveSocketData } from './socket-data-util';
+import { pruneStaleLocalRecords, saveSocketData } from './socket-data-util';
 
 interface Props {
   children: React.ReactElement;
@@ -85,6 +85,17 @@ export function BootstrapWrapper({ children }: Props) {
     userId: user.id,
     onSuccess: async (data: BootstrapResponse) => {
       await saveSocketData(data.syncActions, MODEL_STORE_MAP);
+
+      // The snapshot is the server's full tenant set, but the upsert-only
+      // apply above can never remove rows: anything deleted server-side
+      // without a DELETE record reaching this client (an operator's SQL
+      // fix, a dropped stream record) would resurrect on every load.
+      // Reconcile the residue away before the UI wakes. Never throws.
+      await pruneStaleLocalRecords(
+        data.syncActions,
+        workspace?.id ?? '',
+        MODEL_STORE_MAP,
+      );
 
       localStorage.setItem(
         `lastSequenceId_${hash(hashKey)}`,

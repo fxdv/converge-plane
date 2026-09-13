@@ -15,6 +15,7 @@ import { ProjectRail } from '../../../../project-rail';
 import {
   isProjectDroppableId,
   projectIdFromDroppable,
+  realIdFromProxyDraggable,
 } from '../../../../project-rail/constants';
 
 import { CategoryBoardList } from './category-board-list';
@@ -29,7 +30,11 @@ export const CategoryBoard = observer(({ workflows }: CategoryBoardProps) => {
   const { workflowMap } = useComputedWorkflows();
 
   const onDragEnd = (result: DropResult) => {
-    const issueId = result.draggableId;
+    // A card mirrored in a project stack drags under its proxy id
+    // (project:<issueId>); strip it so the lookup below resolves the
+    // real issue. Without this, any drag that starts in the stack is a
+    // silent no-op (the map lookup misses and the card snaps back).
+    const issueId = realIdFromProxyDraggable(result.draggableId);
     const sourceId = result.source?.droppableId;
     const destId = result.destination?.droppableId ?? '';
 
