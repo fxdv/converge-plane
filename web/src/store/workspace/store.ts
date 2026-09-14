@@ -1,6 +1,7 @@
 import {
   type IAnyStateTreeNode,
   type Instance,
+  getSnapshot,
   types,
   flow,
 } from 'mobx-state-tree';
@@ -27,12 +28,12 @@ export const WorkspaceStore: IAnyStateTreeNode = types
 
       if (indexToUpdate !== -1) {
         // Update the object at the found index with the new data
-        self.usersOnWorkspaces[indexToUpdate] = {
-          ...self.usersOnWorkspaces[indexToUpdate],
+        // Re-created into the slot (array elements are model instances);
+        // the wire merge validates field by field through create().
+        self.usersOnWorkspaces[indexToUpdate] = UsersOnWorkspace.create({
+          ...getSnapshot(self.usersOnWorkspaces[indexToUpdate]),
           ...userRecord,
-          // TODO fix array type mismatch
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any;
+        });
       } else {
         self.usersOnWorkspaces.push(userRecord);
       }

@@ -2,6 +2,7 @@ import { sort } from 'fast-sort';
 import {
   type IAnyStateTreeNode,
   type Instance,
+  getSnapshot,
   types,
   flow,
 } from 'mobx-state-tree';
@@ -10,7 +11,7 @@ import type { TeamType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
 
-import { Teams } from './models';
+import { Team, Teams } from './models';
 
 export const TeamsStore: IAnyStateTreeNode = types
   .model({
@@ -23,12 +24,12 @@ export const TeamsStore: IAnyStateTreeNode = types
 
       if (indexToUpdate !== -1) {
         // Update the object at the found index with the new data
-        self.teams[indexToUpdate] = {
-          ...self.teams[indexToUpdate],
+        // Re-created into the slot (array elements are model instances);
+        // the wire merge validates field by field through create().
+        self.teams[indexToUpdate] = Team.create({
+          ...getSnapshot(self.teams[indexToUpdate]),
           ...team,
-          // TODO fix the any and have a type with Issuetype
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any;
+        });
       } else {
         self.teams.push(team);
       }

@@ -31,10 +31,16 @@ import {
 
 import { Comment } from 'store/comments/models';
 import { Issue } from 'store/issues/models';
+import { IssuesStore } from 'store/issues/store';
 import { IssueHistory } from 'store/issue-history/models';
+import { IssueHistoryStore } from 'store/issue-history/store';
 import { Label } from 'store/labels/models';
+import { LabelsStore } from 'store/labels/store';
 import { Project } from 'store/projects/models';
+import { ProjectsStore } from 'store/projects/store';
 import { Team } from 'store/teams/models';
+import { TeamsStore } from 'store/teams/store';
+import { ViewsStore } from 'store/views/store';
 import { saveSwarmActivityData } from 'store/swarm-activity/save-data';
 import { SwarmActivity } from 'store/swarm-activity/models';
 import { SwarmActivityStore, swarmActivityTTL } from 'store/swarm-activity/store';
@@ -123,15 +129,20 @@ describe('UsersOnWorkspace model', () => {
 });
 
 describe('WorkspaceStore D-record handling (the sync crash regression)', () => {
-  it('crashes on a minimal {id} upsert — so the handler must special-case D', () => {
+  it('a degraded upsert over an existing row keeps the last good values (no board crash)', () => {
     const store = WorkspaceStore.create({
       workspace: undefined,
       usersOnWorkspaces: [member() as never],
     });
-    // Pre-fix saveWorkspaceData built this from a D record and upserted it.
-    assert.throws(() =>
-      store.updateUsers({ id: 'm1' } as never, 'm1'),
-    );
+    // The pre-fix crash: a minimal record (what a D record carries) upserted
+    // over a live row took the store down. The merge now spreads the
+    // existing snapshot first, so a degraded wire record retains the last
+    // good values instead — the handler's D special-case still owns
+    // deletions, and a payload with *wrong* values still fails create()
+    // (pinned in the model block above); only *missing* fields are kept.
+    store.updateUsers({ id: 'm1' } as never, 'm1');
+    assert.equal(store.usersOnWorkspaces.length, 1);
+    assert.equal(store.usersOnWorkspaces[0].role, 'USER');
   });
   it('deletes cleanly by id (the fixed path)', () => {
     const store = WorkspaceStore.create({
@@ -839,5 +850,216 @@ describe('dedupeLiveRecords (the SWR-51 idempotency guard)', () => {
     const before = tabHighWater();
     assert.equal(seedTabHighWater(String(Math.max(0, before - 1))), before);
     assert.equal(tabHighWater(), before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Store update merges (SWR-49): the wire -> model seams.
+//
+// The create-level tests above pin a full record through each model; the
+// merge path — the existing node's snapshot plus the wire record,
+// re-created — is what the any-casts used to hide. These run the real
+// store actions (the exact code the sync handlers and the optimistic
+// mutation services call per record), so a wire field that drifts from
+// the model's shape (a nested object, an array) now fails the harness
+// instead of silently overwriting state.
+// ---------------------------------------------------------------------------
+
+describe('store update merges (the SWR-49 wire->model seams)', () => {
+  // Local factories (the create-level ones are scoped to their blocks):
+  // same shapes, one wire record each.
+  const team = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 't1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    name: 'Engineering',
+    identifier: 'ENG',
+    workspaceId: 'w1',
+    currentCycle: null,
+    preferences: { cyclesEnabled: false, teamType: 'engineering' },
+    ...over,
+  });
+  const view = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'v1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    name: 'My view',
+    description: '',
+    filters: {},
+    isBookmarked: false,
+    workspaceId: 'w1',
+    teamId: null,
+    createdById: 'u1',
+    ...over,
+  });
+  const project = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'p1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    name: 'Rail',
+    description: '',
+    color: '#3B82F6',
+    startDate: null,
+    endDate: null,
+    status: 'ACTIVE',
+    leadUserId: null,
+    teams: [],
+    workspaceId: 'w1',
+    ...over,
+  });
+  const label = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'l1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    name: 'Bug',
+    color: '#f00',
+    description: null,
+    workspaceId: 'w1',
+    teamId: null,
+    groupId: null,
+    ...over,
+  });
+  const hist = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'h1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    userId: 'u1',
+    issueId: 'i1',
+    addedLabelIds: [],
+    removedLabelIds: [],
+    fromPriority: null,
+    toPriority: null,
+    fromStateId: null,
+    toStateId: null,
+    fromEstimate: null,
+    toEstimate: null,
+    fromAssigneeId: null,
+    toAssigneeId: null,
+    fromParentId: null,
+    toParentId: null,
+    relationChanges: null,
+    sourceMetadata: null,
+    ...over,
+  });
+
+  it('teams: a nested preferences object merges through create()', () => {
+    const store = TeamsStore.create({
+      teams: [team() as never],
+      workspaceId: 'w1',
+    });
+    store.update(
+      team({
+        name: 'Eng',
+        preferences: { cyclesEnabled: true, teamType: 'engineering' },
+      }) as never,
+      't1',
+    );
+    assert.equal(store.teams[0].name, 'Eng');
+    assert.equal(store.teams[0].identifier, 'ENG'); // untouched survives
+    assert.equal(store.teams[0].preferences.cyclesEnabled, true);
+  });
+
+  it('views: the embedded filters model merges through create()', () => {
+    const store = ViewsStore.create({
+      views: [view() as never],
+      workspaceId: 'w1',
+    });
+    store.update(
+      view({
+        name: 'Renamed',
+        filters: { priority: { value: [1, 2], filterType: 'INCLUDES' } },
+      }) as never,
+      'v1',
+    );
+    assert.equal(store.views[0].name, 'Renamed');
+    assert.deepEqual(store.views[0].filters.priority?.value, [1, 2]);
+    assert.equal(store.views[0].filters.priority?.filterType, 'INCLUDES');
+  });
+
+  it('views: a legacy filterType is rejected at the model boundary, not mid-merge', () => {
+    // The filter vocabulary is a closed enumeration written client-side
+    // (the server passes the filters jsonb through untouched), so a
+    // legacy value cannot be authored — but a hand-edited database row
+    // could carry one. The contract: it fails create() loudly, at the
+    // model boundary, exactly as any out-of-vocabulary value does.
+    const store = ViewsStore.create({
+      views: [view() as never],
+      workspaceId: 'w1',
+    });
+    assert.throws(
+      () =>
+        store.update(
+          view({
+            filters: { priority: { value: [1], filterType: 'isAnyOf' } },
+          }) as never,
+          'v1',
+        ),
+    );
+  });
+
+  it('projects: the teams array merges through create()', () => {
+    const store = ProjectsStore.create({
+      projects: [project() as never],
+      workspaceId: 'w1',
+    });
+    store.update(project({ name: 'Rail 2', teams: ['t1', 't2'] }) as never, 'p1');
+    assert.equal(store.projects[0].name, 'Rail 2');
+    assert.deepEqual(store.projects[0].teams, ['t1', 't2']);
+  });
+
+  it('workspace: a member\'s teamIds array and settings merge through create()', () => {
+    const store = WorkspaceStore.create({
+      workspace: undefined,
+      usersOnWorkspaces: [member() as never],
+    });
+    store.updateUsers(
+      { ...member(), role: 'AGENT', teamIds: ['t1'], settings: { ai: true } } as never,
+      'm1',
+    );
+    assert.equal(store.usersOnWorkspaces[0].role, 'AGENT');
+    assert.deepEqual(store.usersOnWorkspaces[0].teamIds, ['t1']);
+    assert.equal(store.usersOnWorkspaces[0].settings.ai, true);
+  });
+
+  it('issues: an optimistic merge validates; a missing row is a no-op', () => {
+    const store = IssuesStore.create({
+      issuesMap: { i1: issue() as never },
+      teamId: undefined,
+    });
+    store.updateIssue({ title: 'Renamed', relations: [] } as never, 'i1');
+    assert.equal(store.issuesMap.get('i1')?.title, 'Renamed');
+    // A DELETE-first race leaves the row absent: the merge must skip,
+    // not crash — the any-cast this replaced also hid the null.
+    store.updateIssue({ title: 'x' } as never, 'never-loaded');
+  });
+
+  it('issue-history: the transition arrays merge through create()', () => {
+    const store = IssueHistoryStore.create({
+      issueHistories: { i1: [hist() as never] },
+    });
+    store.update(hist({ fromStateId: 's2', toStateId: 's3' }) as never, 'h1');
+    const entry = store.issueHistories.get('i1')?.[0];
+    assert.equal(entry?.toStateId, 's3');
+    assert.equal(entry?.userId, 'u1'); // untouched survives
+  });
+
+  it('labels: the flat merge (the cosmetic class) still validates', () => {
+    const store = LabelsStore.create({
+      labels: [label() as never],
+      workspaceId: 'w1',
+    });
+    store.update(label({ name: 'Renamed' }) as never, 'l1');
+    assert.equal(store.labels[0].name, 'Renamed');
+    assert.equal(store.labels[0].color, '#f00');
   });
 });
