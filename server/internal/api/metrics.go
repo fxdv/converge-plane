@@ -33,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"converge/internal/auth"
 )
 
@@ -225,12 +227,14 @@ func (a *API) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// poolGauges snapshots the database pool (zero-safe on a nil pool).
+// poolGauges snapshots the database pool (zero-safe on a missing or
+// non-pool db — the tests' fake has no gauges).
 func (a *API) poolGauges() poolGauges {
-	if a.pool == nil {
+	p, ok := a.pool.(*pgxpool.Pool)
+	if !ok || p == nil {
 		return poolGauges{}
 	}
-	s := a.pool.Stat()
+	s := p.Stat()
 	return poolGauges{
 		Acquired: int(s.AcquiredConns()),
 		Idle:     int(s.IdleConns()),
