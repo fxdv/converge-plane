@@ -134,7 +134,7 @@ export const SwarmPage = withApplicationStore(
             </div>
           </section>
 
-          <section className="rounded-lg border border-grayAlpha-100 dark:border-grayAlpha-300 bg-background-3/40 p-4 flex flex-col gap-4">
+          <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 p-4 flex flex-col gap-4">
             <h3 className="text-sm font-semibold">Fleet settings</h3>
 
             {data?.brain && (
@@ -304,7 +304,7 @@ export const SwarmPage = withApplicationStore(
             </div>
           </section>
 
-          <section className="rounded-lg border border-grayAlpha-100 dark:border-grayAlpha-300 bg-background-3/40 overflow-hidden">
+          <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 overflow-hidden">
             <h3 className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-b border-grayAlpha-100 dark:border-grayAlpha-300">
               Fleet
             </h3>
@@ -324,7 +324,7 @@ export const SwarmPage = withApplicationStore(
             )}
           </section>
 
-          <section className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50/50 dark:bg-amber-500/5 overflow-hidden">
+          <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 overflow-hidden">
             <h3 className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400 border-b border-amber-200 dark:border-amber-500/30 flex items-center gap-1.5">
               <Warning size={14} /> Work waiting on you (
               {data?.pausedIssues.length ?? 0})
