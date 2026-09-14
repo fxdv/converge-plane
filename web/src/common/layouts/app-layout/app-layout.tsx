@@ -1,4 +1,10 @@
-import { AI, MyIssues, StackLine, TeamLine } from '@converge/ui/icons';
+import {
+  AI,
+  ChartLine,
+  MyIssues,
+  StackLine,
+  TeamLine,
+} from '@converge/ui/icons';
 import { RoleEnum } from '@converge/types';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
@@ -75,6 +81,11 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
                           title: 'Swarm',
                           icon: AI,
                           href: `/${workspaceSlug}/swarm`,
+                        },
+                        {
+                          title: 'Metrics',
+                          icon: ChartLine,
+                          href: `/${workspaceSlug}/metrics`,
                         },
                       ]
                     : []),

@@ -35,6 +35,7 @@ export * from './arrow-forward-line';
 export * from './label-line';
 export * from './gmail';
 export * from './ai';
+export * from './chart-line';
 export * from './help-line';
 export * from './create-issue-line';
 export * from './search-line';
