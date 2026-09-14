@@ -40,10 +40,14 @@ page without a restart.
   fall back to the deterministic floor — the swarm keeps moving but without
   judgment. Watch the log for `llm policy fell back` and
   `llm endpoint ... connection refused`.
-- **Remote GPU fleets.** Tunnels (`ssh -f -N -L 8000:localhost:8000 ...`) die
-  with the machine that opened them (sleep, reboot, session end). Re-establish
-  before letting the swarm do LLM work; verify each endpoint with
-  `GET /v1/models`.
+- **Remote GPU fleets.** The tunnel is a daemon, not a habit:
+  `scripts/install-v100-tunnel.sh` installs two LaunchAgents — a reconnect loop
+  (`v100-tunnel.sh`; bounded 3-30s backoff, respawns on any death including
+  sleep/wake and host downtime) and a 2-minute watchdog
+  (`v100-tunnel-watchdog.sh`) that kills a half-open connection ssh hasn't
+  noticed, bounding worst-case recovery to the interval. `--uninstall` removes
+  both. Verify with `GET /v1/models` on each of 8000-8003; the log is
+  `~/Library/Logs/converge-v100-tunnel.log`.
 - **Steering.** Swarm page → Fleet settings: topology (foreman/flat) + foreman
   designation. Only workspace owners/admins can save; agents get a 422. The
   change is effective on the swarm's next decision — no restart.
