@@ -1,6 +1,7 @@
 import {
   type IAnyStateTreeNode,
   type Instance,
+  getSnapshot,
   types,
   flow,
 } from 'mobx-state-tree';
@@ -23,8 +24,16 @@ export const IssuesStore: IAnyStateTreeNode = types
 
     const updateIssue = (updateProps: Partial<IssueType>, id: string) => {
       const issue = self.issuesMap.get(id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const issueJson = (issue as any).toJSON();
+      if (!issue) {
+        // The row is not in this tab's map (its DELETE arrived first, or
+        // it never loaded): nothing to merge into. The sync upsert path
+        // re-creates rows from the feed, so skipping is the only safe
+        // resolution — the any this used to hide also hid the null.
+        return;
+      }
+      // getSnapshot is the typed snapshot (MST instances expose no toJSON
+      // in their typings); the merge validates field by field through set.
+      const issueJson = getSnapshot(issue);
       self.issuesMap.set(id, { ...issueJson, ...updateProps });
     };
 

@@ -13,15 +13,23 @@ export const CommonStore: IAnyStateTreeNode = types
     conversationStreaming: types.union(types.undefined, types.boolean),
   })
   .actions((self) => ({
-    update(data: Partial<typeof self>) {
-      Object.entries(data).forEach(([key, value]) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (self as any)[key] = value;
-      });
+    update(data: Partial<CommonStoreState>) {
+      // The model's properties are settable (MST observes the writes);
+      // the state type bounds the keys so a stray field is a compile
+      // error instead of a silent extra property.
+      Object.assign(self, data);
     },
   }));
 
+export interface CommonStoreState {
+  chatOpen: boolean;
+  currentConversationId?: string;
+  conversationStreaming?: boolean;
+}
+
 export interface CommonStoreType {
   chatOpen: boolean;
-  update: (data: Partial<CommonStoreType>) => void;
+  currentConversationId?: string;
+  conversationStreaming?: boolean;
+  update: (data: Partial<CommonStoreState>) => void;
 }

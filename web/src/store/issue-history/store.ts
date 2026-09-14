@@ -1,6 +1,7 @@
 import {
   type IAnyStateTreeNode,
   type Instance,
+  getSnapshot,
   types,
   flow,
 } from 'mobx-state-tree';
@@ -9,7 +10,7 @@ import type { IssueHistoryType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
 
-import { IssueHistoriesModel } from './models';
+import { IssueHistoriesModel, IssueHistory } from './models';
 
 export const IssueHistoryStore: IAnyStateTreeNode = types
   .model({
@@ -29,11 +30,12 @@ export const IssueHistoryStore: IAnyStateTreeNode = types
 
       if (indexToUpdate !== -1) {
         // Update the object at the found index with the new data
-        issueHistoriesArray[indexToUpdate] = {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ...(issueHistoriesArray[indexToUpdate] as any),
+        // Re-created into the slot (array elements are model instances);
+        // the wire merge validates field by field through create().
+        issueHistoriesArray[indexToUpdate] = IssueHistory.create({
+          ...getSnapshot(issueHistoriesArray[indexToUpdate]),
           ...issueHistory,
-        };
+        });
       } else {
         issueHistoriesArray.push(issueHistory);
       }

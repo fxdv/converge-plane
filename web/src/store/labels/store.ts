@@ -25,9 +25,7 @@ export const LabelsStore: IAnyStateTreeNode = types
         self.labels[indexToUpdate] = {
           ...self.labels[indexToUpdate],
           ...label,
-          // TODO fix the any and have a type with Issuetype
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any;
+        };
       } else {
         self.labels.push(label);
       }

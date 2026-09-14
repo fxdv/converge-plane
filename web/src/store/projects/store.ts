@@ -1,6 +1,7 @@
 import {
   type IAnyStateTreeNode,
   type Instance,
+  getSnapshot,
   types,
   flow,
 } from 'mobx-state-tree';
@@ -21,12 +22,12 @@ export const ProjectsStore: IAnyStateTreeNode = types
       const indexToUpdate = self.projects.findIndex((obj) => obj.id === id);
 
       if (indexToUpdate !== -1) {
-        self.projects[indexToUpdate] = {
-          ...self.projects[indexToUpdate],
+        // Re-created into the slot (array elements are model instances);
+        // the wire merge validates field by field through create().
+        self.projects[indexToUpdate] = Project.create({
+          ...getSnapshot(self.projects[indexToUpdate]),
           ...project,
-          // TODO fix the any and have a type with ProjectType
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any;
+        });
       } else {
         self.projects.push(project);
       }

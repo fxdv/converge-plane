@@ -2,6 +2,7 @@ import { sort } from 'fast-sort';
 import {
   type IAnyStateTreeNode,
   type Instance,
+  getSnapshot,
   types,
   flow,
 } from 'mobx-state-tree';
@@ -10,7 +11,7 @@ import type { ViewType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
 
-import { Views } from './models';
+import { View, Views } from './models';
 
 export const ViewsStore: IAnyStateTreeNode = types
   .model({
@@ -23,12 +24,14 @@ export const ViewsStore: IAnyStateTreeNode = types
 
       if (indexToUpdate !== -1) {
         // Update the object at the found index with the new data
-        self.views[indexToUpdate] = {
-          ...self.views[indexToUpdate],
+        // Array slots hold model instances, so the merged snapshot is
+        // re-created into one. getSnapshot is the typed snapshot (MST
+        // instances expose no toJSON in their typings) and create()
+        // validates the wire merge field by field.
+        self.views[indexToUpdate] = View.create({
+          ...getSnapshot(self.views[indexToUpdate]),
           ...view,
-          // TODO fix the any and have a type with Issuetype
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any;
+        });
       } else {
         self.views.push(view);
       }

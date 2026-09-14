@@ -24,9 +24,6 @@ export const WorkspaceStoreInit = observer(
 
     React.useEffect(() => {
       if (currentWorkspace) {
-        // Setting this to help upload the images to this workspace
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).workspaceId = currentWorkspace.id;
         initWorkspaceBasedStores();
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps

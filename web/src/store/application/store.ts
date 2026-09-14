@@ -1,4 +1,9 @@
-import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
+import {
+  type IAnyStateTreeNode,
+  type Instance,
+  getSnapshot,
+  types,
+} from 'mobx-state-tree';
 
 import {
   DisplaySettingsModel,
@@ -49,8 +54,9 @@ export const ApplicationStore: IAnyStateTreeNode = types
   })
   .actions((self) => ({
     updateFilters(updateBody: UpdateBody) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const currentFilters = (self.filters as any).toJSON();
+      // getSnapshot is the typed snapshot (MST instances expose no toJSON
+      // in their typings).
+      const currentFilters = getSnapshot(self.filters);
 
       const toUpdateBody = { ...updateBody };
       const mergedAttributes = {
@@ -74,8 +80,7 @@ export const ApplicationStore: IAnyStateTreeNode = types
       );
     },
     updateSilentFilters(updateBody: UpdateBody) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const currentFilters = (self.silentFilters as any).toJSON();
+      const currentFilters = getSnapshot(self.silentFilters);
 
       const toUpdateBody = { ...updateBody };
       const mergedAttributes = {
