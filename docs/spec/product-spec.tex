@@ -920,6 +920,9 @@ Issue timeline (all history: changes,
   handoff summaries fenced as \emph{untrusted data} (\S\ref{sec:runtime})\\
 Swarm panel (roster, burn, paused) & full read & no read path (the panel
   is a human instrument)\\
+Metrics plane (product / codebase / swarm / proxy) & full read (any active
+  member) & no read path (a human instrument; every datum is an aggregate
+  of rows the reader can already see)\\
 Swarm activity (live in-flight signal) & full read (board chip, feed,
   panel) & none (the worker emits its own signal; it is not an input to
   decisions)\\
@@ -939,19 +942,61 @@ coordinate through channels we cannot audit.
 
 \section{Metrics}
 \label{sec:metrics}
-\cs{swarm:metrics}
+\cs{swarm:metrics}\shipped\
 
-\textbf{Shipped} (swarm panel, per agent, 24h window): API request count
-(the token-burn proxy), agent-authored operations, handoffs received; per
-issue: paused flag + guard reason.
+The metrics plane is one read-only surface for everything a foreman
+watches while the product, the codebase, and the swarm are alive: one
+endpoint (\texttt{GET /api/v1/workspaces/\{id\}/metrics}; any active
+workspace member may read --- every datum is an aggregate of rows the
+member can already see, or of in-memory slots the plane exists to
+expose) and one page (\texttt{Metrics} in the workspace navigation)
+with four sections:
+
+\begin{itemize}
+\item \textbf{Product} --- what the tenant uses and what moved:
+  members, teams, workflow states, labels, projects, views, live issues
+  with the state distribution, comments, history depth; bounded-window
+  flows (creations, completions, comments, handoffs) over 24h and 7d.
+\item \textbf{Codebase} --- the running artifact and its live process:
+  version / git SHA / build time from link-time buildinfo (a dev build
+  says \emph{dev} --- a visible state, not a blank one), uptime,
+  goroutines, database pool gauges, realtime subscribers, outbox depth,
+  feed watermark. Converge has no repository model, so
+  ``codebase'' means the artifact that is running, not a source tree.
+\item \textbf{Swarm} --- the fleet: the panel's roster (reused verbatim,
+  so the panel and the plane cannot diverge) plus swarm-level rates:
+  token spend, operations, handoffs, pause rate (pauses against all
+  terminal-ish outcomes in the window --- a swarm that neither pauses
+  nor completes reads as zero), mean time-to-human-resume, and the
+  agent share of completed work over 7d.
+\item \textbf{Proxy} --- the LLM fleet router: per-node requests,
+  success / failure, average and worst latency, tokens, last event (a
+  node the fleet never reached is a row of zeros --- a dead node is
+  visible, not absent); plus per-account rate-limit usage (the burn
+  proxy) and the brain's mode (\texttt{llm} / \texttt{floor} /
+  \texttt{off}).
+\end{itemize}
+
+Shipped per-agent metrics, 24h window (swarm panel and plane): API
+request count (the token-burn proxy), agent-authored operations,
+handoffs received, and model-token spend (D3+ --- the spend slot the
+runtime counts on every decision, including failed ones); per issue:
+paused flag + guard reason.
+
+The page renders a vitals strip (eight small multiples), the four
+sections as hairline tables (tabular numerals, direct labels, status
+color reserved for meaning), and the full registry flattened into a
+sortable advanced table. The fleet registry is a live instrument since
+process start, not a ledger: a restart zeros it; the durable spend
+history is the runtime's spend slot, not this registry. Cost: a handful
+of bounded indexed reads per poll --- the plane scales with the roster,
+not with the work.
 
 \textbf{Future} (D3 and beyond) \owner{ratify the list; these are the
   candidates from the runtime work}:
-per-agent model-token spend (replaces the request proxy in the same slot)
-$\cdot$ cost per completed issue $\cdot$ handoff-graph volume and
-longest chain $\cdot$ pause rate and mean time-to-human-resume $\cdot$
-budget consumption curves per agent/team $\cdot$ agent share of completed
-work $\cdot$ loop-detection hit rate per topology.
+cost per completed issue $\cdot$ handoff-graph volume and
+longest chain $\cdot$ budget consumption curves per agent/team $\cdot$
+loop-detection hit rate per topology.
 
 \section{Agent runtime}
 \label{sec:runtime}
