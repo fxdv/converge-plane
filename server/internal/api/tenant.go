@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,17 +37,20 @@ type API struct {
 	// runtime is the in-process agent runtime (D3): it acts for agents
 	// that have work, through the same transactional paths as the API.
 	runtime *AgentRuntime
+	// startedAt is the process birth (the metrics plane's uptime source).
+	startedAt time.Time
 }
 
 func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service, notifySvc *notify.Service) *API {
 	a := &API{
-		pool:    pool,
-		cfg:     cfg,
-		log:     log,
-		auth:    authSvc,
-		notify:  notifySvc,
-		bcast:   broadcast.New(),
-		limiter: newAccountRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
+		pool:      pool,
+		cfg:       cfg,
+		log:       log,
+		auth:      authSvc,
+		notify:    notifySvc,
+		bcast:     broadcast.New(),
+		limiter:   newAccountRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst),
+		startedAt: time.Now(),
 	}
 	a.runtime = newAgentRuntime(a)
 	return a
@@ -180,6 +184,9 @@ func (a *API) Mount(r chi.Router) {
 		// M6: agent actors (swarm-capable machine members).
 		// D2: the swarm panel's fleet roster (read-only, any member).
 		r.Get("/workspaces/{id}/swarm", a.handleSwarmStatus)
+		// The metrics plane (docs/spec ch. 6, §Metrics): product,
+		// codebase, swarm, proxy — read-only, any active member.
+		r.Get("/workspaces/{id}/metrics", a.handleMetrics)
 		// D4: the swarm plane's fleet settings (owner/admin; agents 422).
 		r.Post("/workspaces/{id}/swarm/settings", a.handleUpdateSwarmSettings)
 		r.Post("/workspaces/{id}/agents", a.handleCreateAgent)

@@ -44,6 +44,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -75,7 +76,9 @@ var errLLMNotConfigured = fmt.Errorf("llm policy: no endpoints configured")
 // llmClient is the transport to the model fleet: OpenAI-compatible
 // /v1/chat/completions over the stdlib HTTP client (zero new
 // dependencies). Stateless: one request per decision, the endpoint
-// picked per workspace.
+// picked per workspace. The proxy layer keeps per-node telemetry
+// (the metrics plane's LLM-fleet section): the router is the only
+// place that knows which physical instance a decision cost.
 type llmClient struct {
 	urls    []string
 	model   string
@@ -83,6 +86,13 @@ type llmClient struct {
 	maxTok  int
 	log     *slog.Logger
 	http    *http.Client
+
+	// stats: url -> the node's aggregate telemetry since process start.
+	// In-memory only: a restart zeros the counters (the plane is a live
+	// instrument, not a ledger — the durable spend history is the
+	// runtime's spend slot, not this registry).
+	statsMu sync.Mutex
+	stats   map[string]*endpointStat
 }
 
 func newLLMClient(urls []string, model string, timeout time.Duration, maxTok int, log *slog.Logger) *llmClient {
@@ -99,7 +109,106 @@ func newLLMClient(urls []string, model string, timeout time.Duration, maxTok int
 		maxTok:  maxTok,
 		log:     log,
 		http:    &http.Client{},
+		stats:   make(map[string]*endpointStat),
 	}
+}
+
+// endpointStat is one fleet node's aggregate telemetry (the metrics
+// plane's proxy section). Latency is kept as sum+max rather than a
+// ring: the plane shows avg and worst-case per node, and the decision
+// rate is low enough (one per agent per work cycle) that a ring of
+// samples buys nothing.
+type endpointStat struct {
+	url           string
+	Requests      int64
+	Successes     int64
+	Failures      int64
+	LatencySum    time.Duration
+	LatencyMax    time.Duration
+	Tokens        int64 // tokens the node served (success plus failed spend)
+	LastError     string
+	LastErrorAt   *time.Time
+	LastSuccessAt *time.Time
+}
+
+// record folds one decision into the node's aggregate. Called on every
+// decided call (success and failure alike — a failed call still routed,
+// still cost a round trip, and may still have burned tokens).
+func (c *llmClient) record(url string, d time.Duration, ok bool, tokens int, err error) {
+	now := time.Now()
+	c.statsMu.Lock()
+	defer c.statsMu.Unlock()
+	s, exists := c.stats[url]
+	if !exists {
+		s = &endpointStat{url: url}
+		c.stats[url] = s
+	}
+	s.Requests++
+	if d > s.LatencyMax {
+		s.LatencyMax = d
+	}
+	if ok {
+		s.Successes++
+		s.LatencySum += d
+		s.Tokens += int64(tokens)
+		s.LastSuccessAt = &now
+		// A recovered node shows no error — the timestamp goes with it
+		// (a bare lastErrorAt with no error text is a ghost on the wire).
+		s.LastError = ""
+		s.LastErrorAt = nil
+	} else {
+		s.Failures++
+		if tokens > 0 {
+			s.Tokens += int64(tokens)
+		}
+		if err != nil {
+			s.LastError = err.Error()
+			s.LastErrorAt = &now
+		}
+	}
+}
+
+// FleetNodeStat is the wire shape of one node's row in the metrics
+// plane (the LLM-fleet section).
+type FleetNodeStat struct {
+	Node          int           `json:"node"` // 1-based position in the configured fleet
+	URL           string        `json:"url"`
+	Requests      int64         `json:"requests"`
+	Successes     int64         `json:"successes"`
+	Failures      int64         `json:"failures"`
+	AvgLatency    time.Duration `json:"avgLatency"` // over successes; zero when none
+	MaxLatency    time.Duration `json:"maxLatency"`
+	Tokens        int64         `json:"tokens"`
+	LastError     string        `json:"lastError,omitempty"`
+	LastErrorAt   *time.Time    `json:"lastErrorAt,omitempty"`
+	LastSuccessAt *time.Time    `json:"lastSuccessAt,omitempty"`
+}
+
+// fleetView snapshots the registry in configuration order (nodes the
+// fleet has not yet seen come back as zero rows — a dead node is a row
+// of zeros, which is exactly what a human needs to see).
+func (c *llmClient) fleetView() []FleetNodeStat {
+	c.statsMu.Lock()
+	defer c.statsMu.Unlock()
+	out := make([]FleetNodeStat, 0, len(c.urls))
+	for i, u := range c.urls {
+		n := FleetNodeStat{Node: i + 1, URL: u}
+		if s, ok := c.stats[u]; ok {
+			n.Requests = s.Requests
+			n.Successes = s.Successes
+			n.Failures = s.Failures
+			if s.Successes > 0 {
+				n.AvgLatency = s.LatencySum / time.Duration(s.Successes)
+			}
+			n.MaxLatency = s.LatencyMax
+			n.Tokens = s.Tokens
+			n.LastError = s.LastError
+			n.LastErrorAt = s.LastErrorAt
+			n.LastSuccessAt = s.LastSuccessAt
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 // endpointFor picks the fleet member for one decision: a stable hash
@@ -150,6 +259,18 @@ func (c *llmClient) decide(ctx context.Context, in ActionInput) (string, int, er
 	if url == "" {
 		return "", 0, errLLMNotConfigured
 	}
+	start := time.Now()
+	content, tokens, err := c.decideOnce(ctx, in, url)
+	// The proxy's per-node row: routed, timing, outcome, spend. Every
+	// exit path of decideOnce funnels through this one record call.
+	c.record(url, time.Since(start), err == nil, tokens, err)
+	return content, tokens, err
+}
+
+// decideOnce makes the one model call to a known endpoint. The
+// availability story is unchanged: any failure is an error the
+// fallbackPolicy absorbs.
+func (c *llmClient) decideOnce(ctx context.Context, in ActionInput, url string) (string, int, error) {
 	body, err := json.Marshal(map[string]any{
 		"model":       c.model,
 		"messages":    []map[string]string{{"role": "user", "content": llmDecisionPrompt(in)}},
