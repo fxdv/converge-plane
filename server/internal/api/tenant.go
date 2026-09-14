@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"converge/internal/auth"
@@ -22,9 +24,21 @@ import (
 	"log/slog"
 )
 
+// db is the database surface the API drives. pgxpool.Pool satisfies it
+// in production; the tests swap in an in-memory fake (the same seam as
+// queryer: the code depends on the interface, the tests pin the
+// behavior). Pool-specific methods (Stat for the metrics gauges) stay
+// on the concrete type via a type assertion.
+type db interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 // API bundles the application dependencies.
 type API struct {
-	pool *pgxpool.Pool
+	pool db
 	cfg  config.Config
 	log  *slog.Logger
 	auth *auth.Service

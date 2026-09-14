@@ -554,8 +554,13 @@ func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("policy: %w", err)
 	}
+	// The model call happened: count it from here on — a decision that
+	// lands, goes stale, or fails to apply all spent the call (a
+	// deterministic policy reports 0 and RecordSpend ignores it). Counted
+	// here, once, so every apply path is accounted for the same way.
+	w.rt.RecordSpend(w.agentID, tokens)
 
-	return w.applyTx(ctx, issueID, in, version, action, tokens)
+	return w.applyTx(ctx, issueID, in, version, action)
 }
 
 // hasLLMPolicy reports whether the active policy makes model calls.
@@ -626,9 +631,17 @@ func (w *agentWorker) snapshotTx(ctx context.Context, issueID string) (in Action
 // applyTx is the work cycle's third phase: one short transaction under
 // the same team lock that applies the decision. The row is re-read
 // under the lock and must still be the one the decision was made on;
-// a stale decision is discarded (its tokens are counted as spend — the
-// model call happened) and the worker re-picks.
-func (w *agentWorker) applyTx(ctx context.Context, issueID string, in ActionInput, version int, action Action, tokens int) (bool, error) {
+// a stale decision is discarded and the worker re-picks. Two checks the
+// decision itself cannot make: the roster is re-verified before any
+// write (a suspension that landed during the model call must not act —
+// the worker exits rather than commits), and the commit is re-verified
+// when its ack is lost (the apply bumps the row's version, so a changed
+// version means the decision landed — treated as success, the outbox
+// record re-delivers through the sync delta; a true rollback fails the
+// cycle, the worker retires, and the dispatcher re-derives from fresh
+// state on the next tick). Spend was already counted in workOne — the
+// model call happened in every path below.
+func (w *agentWorker) applyTx(ctx context.Context, issueID string, in ActionInput, version int, action Action) (bool, error) {
 	a := w.rt.a
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
@@ -656,41 +669,84 @@ func (w *agentWorker) applyTx(ctx context.Context, issueID string, in ActionInpu
 		// The row changed while the decision was being made (a human
 		// mutation bumped the version): the decision is stale. Commit
 		// nothing; the worker re-picks and re-decides from fresh facts.
-		w.rt.RecordSpend(w.agentID, tokens)
 		w.rt.log.Debug("runtime: stale decision discarded", "issue", issueID,
-			"agent", w.name, "workspace", w.workspaceID, "tokens", tokens)
+			"agent", w.name, "workspace", w.workspaceID)
 		_ = tx.Commit(ctx)
 		return true, nil
 	}
+	// The roster re-check the decision cannot make: the run loop checked
+	// liveness before the model call, but a suspension can land during
+	// the call. A retired account must not write — the decision is
+	// discarded (its spend was already counted) and the worker exits;
+	// the dispatcher's roster read excludes it, so no worker respawns.
+	if !w.rt.agentActive(ctx, w.workspaceID, w.agentID) {
+		w.rt.log.Warn("runtime: agent retired during decision; discarding", "agent", w.name,
+			"issue", issueID, "workspace", w.workspaceID)
+		_ = tx.Commit(ctx)
+		return false, nil
+	}
 	recs, tripped, reason, err := a.applyActionTx(ctx, tx, w, row, in, action)
 	if err != nil {
+		// The deferred rollback unwinds every partial write: the issue
+		// is exactly as the decision found it. The cycle fails; the
+		// worker retires and the dispatcher's next tick re-derives.
 		return false, err
 	}
-	if tripped {
-		// The issue paused (a quiet guard, or the decision IS the pause —
-		// the Human Review protocol committed it): the worker moves on;
-		// the paused issue is no longer actionable.
-		if err := tx.Commit(ctx); err != nil {
-			return false, err
-		}
-		for i := range recs {
-			a.broadcastRecord(recs[i])
-		}
-		w.rt.RecordSpend(w.agentID, tokens)
-		w.rt.log.Warn("issue paused for human review (escalation)", "issue", row.ID,
-			"workspace", w.workspaceID, "agent", w.name, "reason", reason)
-		return true, nil
-	}
 	if err := tx.Commit(ctx); err != nil {
+		// A failed commit is indeterminate: the transaction may have
+		// landed and only its ack been lost. Re-verify under the lock
+		// before deciding what happened.
+		if a.decisionLanded(ctx, in.TeamID, issueID, version) {
+			w.rt.log.Warn("runtime: commit ack lost but the decision landed", "agent", w.name,
+				"issue", row.ID, "workspace", w.workspaceID)
+			// The outbox record landed with it and the sync delta will
+			// re-deliver it (the client's dedupe guard absorbs the
+			// double), so no realtime broadcast here; the row moved, so
+			// the worker continues with the queue as it is now.
+			return true, nil
+		}
+		w.rt.log.Warn("runtime: apply commit failed; the decision rolled back", "agent", w.name,
+			"issue", row.ID, "workspace", w.workspaceID, "error", err)
 		return false, err
 	}
 	for i := range recs {
 		a.broadcastRecord(recs[i])
 	}
-	w.rt.RecordSpend(w.agentID, tokens)
-	w.rt.log.Info("agent action", "agent", w.name, "issue", row.ID,
-		"workspace", w.workspaceID, "action", string(action.Kind))
+	if tripped {
+		// The issue paused (a quiet guard, or the decision IS the pause —
+		// the Human Review protocol committed it): the worker moves on;
+		// the paused issue is no longer actionable.
+		w.rt.log.Warn("issue paused for human review (escalation)", "issue", row.ID,
+			"workspace", w.workspaceID, "agent", w.name, "reason", reason)
+	} else {
+		w.rt.log.Info("agent action", "agent", w.name, "issue", row.ID,
+			"workspace", w.workspaceID, "action", string(action.Kind))
+	}
 	return true, nil
+}
+
+// decisionLanded re-verifies an apply whose commit ack was lost: the
+// apply bumps the issue's version, so a changed version under the team
+// lock means the decision committed even though the client saw an error.
+// Any failure — pool down, row deleted, read error — reads as
+// not-landed: the worker retires and the dispatcher's next tick
+// re-derives from fresh state. That is the fail-safe direction: a
+// missed apply re-decides next tick (the model call again); a double
+// apply is the hazard this check closes.
+func (a *API) decisionLanded(ctx context.Context, teamID, issueID string, version int) bool {
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_issue_"+teamID); err != nil {
+		return false
+	}
+	var row issueRow
+	if err := a.loadIssueRowTx(ctx, tx, issueID, &row); err != nil {
+		return false
+	}
+	return row.Version != version
 }
 
 // decideStillValid reports whether the row re-read under the lock in the

@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"converge/internal/broadcast"
 	"converge/internal/config"
 )
 
@@ -609,6 +611,12 @@ func fakeAssign(values []any, dest ...any) error {
 				return fmt.Errorf("fakeAssign: want int, got %T", values[i])
 			}
 			*p = n
+		case **int:
+			n, ok := values[i].(int)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want int, got %T", values[i])
+			}
+			*p = &n
 		case *int64:
 			n, ok := values[i].(int64)
 			if !ok {
@@ -670,21 +678,34 @@ type fakeTx struct {
 	rules []fakeRule
 	execs []fakeExecCall
 	rows  []fakeExecCall // the QueryRow calls
+	// commitErr simulates a lost commit ack (the indeterminate-commit
+	// path the runtime re-verifies); commitCount records the attempts.
+	commitErr   error
+	commitCount int
 }
 
-func (f *fakeTx) ruleFor(sql string) *fakeRule {
-	for i := range f.rules {
-		if strings.Contains(sql, f.rules[i].frag) {
-			return &f.rules[i]
+// matchRule finds the first canned rule whose fragment is a substring of
+// the SQL, failing loudly on anything unmatched (a query added to a
+// cycle surfaces as a test error, not a silent regression). Shared by
+// the transaction and pool fakes.
+func matchRule(t *testing.T, rules []fakeRule, sql string) *fakeRule {
+	for i := range rules {
+		if strings.Contains(sql, rules[i].frag) {
+			return &rules[i]
 		}
 	}
-	f.t.Errorf("fakeTx: no canned result for query %q", sql)
+	t.Errorf("fake: no canned result for query %q", sql)
 	return &fakeRule{rowErr: fmt.Errorf("unmatched query %q", sql)}
 }
 
+func (f *fakeTx) ruleFor(sql string) *fakeRule { return matchRule(f.t, f.rules, sql) }
+
 func (f *fakeTx) Begin(ctx context.Context) (pgx.Tx, error) { return f, nil }
-func (f *fakeTx) Commit(ctx context.Context) error          { return nil }
-func (f *fakeTx) Rollback(ctx context.Context) error        { return nil }
+func (f *fakeTx) Commit(ctx context.Context) error {
+	f.commitCount++
+	return f.commitErr
+}
+func (f *fakeTx) Rollback(ctx context.Context) error { return nil }
 func (f *fakeTx) CopyFrom(ctx context.Context, tableName pgx.Identifier, columnNames []string, rowSrc pgx.CopyFromSource) (int64, error) {
 	return 0, nil
 }
@@ -821,5 +842,264 @@ func TestForemanOfDesignation(t *testing.T) {
 	}
 	if got := foremanOf(fleet, "ghost"); got == nil || got.AccountID != "alpha" {
 		t.Fatalf("missing designation = %v, want the auto fallback", got)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Work-cycle lifecycle (SWR-50): the pool-level fakes.
+//
+// applyTx (unlike runtimeInputTx) drives the pool — Begin — rather than
+// a passed-in tx, so the pool gets the same in-memory treatment: a fake
+// db (the tenant.go seam) hands out canned transactions in order, one
+// per phase. Same philosophy as the tx fakes above: the SQL surface is
+// pinned without a database, and a query added to a cycle fails loudly.
+
+// fakePool is an in-memory db over a sequence of canned transactions.
+// Begin returns them in order; past the end of the sequence the last
+// one repeats (an under-provisioned test still fails on its rules).
+type fakePool struct {
+	t      *testing.T
+	txs    []*fakeTx
+	rules  []fakeRule // pool-level Query / QueryRow (no open tx)
+	begins int
+}
+
+func (f *fakePool) Begin(ctx context.Context) (pgx.Tx, error) {
+	i := f.begins
+	if i >= len(f.txs) {
+		i = len(f.txs) - 1
+	}
+	f.begins++
+	return f.txs[i], nil
+}
+func (f *fakePool) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, nil
+}
+func (f *fakePool) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	return &fakeRows{values: matchRule(f.t, f.rules, sql).rows}, nil
+}
+func (f *fakePool) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	r := matchRule(f.t, f.rules, sql)
+	return fakeRow{values: r.rowVals, err: r.rowErr}
+}
+
+// scriptedPolicy is a test brain: one canned decision with a token
+// cost, standing in for the LLM call the work cycle spends.
+type scriptedPolicy struct {
+	action Action
+	tokens int
+	err    error
+	calls  int
+}
+
+func (p *scriptedPolicy) Act(ctx context.Context, in ActionInput) (Action, int, error) {
+	p.calls++
+	return p.action, p.tokens, p.err
+}
+
+// issueRowVals is the canned loadIssueRowTx row: one active issue
+// assigned to ag1. version is the concurrency anchor the decision was
+// made on; the values follow issueColumns' order exactly (a scan drift
+// surfaces in fakeAssign).
+func issueRowVals(version int, statusID string) []any {
+	now := time.Now()
+	return []any{
+		"iss1", "team1", 7, 2, 3, "Test issue", "{}", "active",
+		now, now, "u1", "ag1", nil, statusID, false,
+		[]string{}, []string{}, []string{}, json.RawMessage("[]"),
+		version,
+	}
+}
+
+// workCycleOptions varies the cycle's tail per test. The zero value is
+// the happy path: live roster, clean commit.
+type workCycleOptions struct {
+	retired   bool  // the apply phase's roster re-check: suspended mid-decision
+	commitErr error // the apply tx's commit fails (a lost ack)
+	landed    bool  // decisionLanded's re-read: the version moved or not
+}
+
+// workCycleFixture wires workOne over the fakes: one active issue in
+// To Do, a scripted brain, the roster per opts. The cycle's Begin
+// order: snapshot, the swarm-activity signal, apply, and (only on a
+// failed commit) decisionLanded's re-read.
+type workCycleFixture struct {
+	t         *testing.T
+	rt        *AgentRuntime
+	a         *API
+	stub      *scriptedPolicy
+	snapTx    *fakeTx
+	sigTx     *fakeTx
+	applyTx   *fakeTx
+	recheckTx *fakeTx
+}
+
+func newWorkCycleFixture(t *testing.T, opts workCycleOptions) *workCycleFixture {
+	t.Helper()
+	if opts.landed && opts.commitErr == nil {
+		t.Fatal("newWorkCycleFixture: the version re-read only runs after a failed commit")
+	}
+	recheckVersion, recheckStatus := 5, "st2"
+	if opts.landed {
+		recheckVersion, recheckStatus = 6, "st3"
+	}
+	fx := &workCycleFixture{
+		t:    t,
+		rt:   runtimeForTests(true),
+		stub: &scriptedPolicy{action: Action{Kind: ActionAdvance, StateID: "st3"}, tokens: 123},
+		snapTx: &fakeTx{t: t, rules: append([]fakeRule{
+			{frag: ", i.version from issues", rowVals: issueRowVals(5, "st2")},
+		}, inputFixture(pgx.ErrNoRows, "", nil).rules...)},
+		sigTx: &fakeTx{t: t, rules: []fakeRule{
+			{frag: "sync_sequences", rowVals: []any{int64(101)}},
+		}},
+		applyTx: &fakeTx{t: t, commitErr: opts.commitErr, rules: []fakeRule{
+			{frag: ", i.version from issues", rowVals: issueRowVals(5, "st2")},
+			{frag: "lower(name)", rowVals: []any{false}},
+			{frag: "insert into issue_history", rowVals: []any{"h1"}},
+			{frag: "created_at from issue_history", rowVals: []any{time.Now()}},
+			{frag: "sync_sequences", rowVals: []any{int64(102)}},
+			{frag: "from issues i where i.id", rowVals: issueRowVals(6, "st3")[:19]},
+		}},
+		recheckTx: &fakeTx{t: t, rules: []fakeRule{
+			{frag: ", i.version from issues", rowVals: issueRowVals(recheckVersion, recheckStatus)},
+		}},
+	}
+	fx.a = fx.rt.a
+	fx.a.bcast = broadcast.New()
+	fx.a.pool = &fakePool{
+		t:   t,
+		txs: []*fakeTx{fx.snapTx, fx.sigTx, fx.applyTx, fx.recheckTx},
+		rules: []fakeRule{
+			{frag: "order by i.created_at, i.number", rowVals: []any{"iss1"}},
+			{frag: "wm.account_id = $2", rowVals: []any{!opts.retired}},
+		},
+	}
+	fx.rt.policy = fx.stub
+	return fx
+}
+
+func (fx *workCycleFixture) worker() *agentWorker {
+	w := &agentWorker{rt: fx.rt, workspaceID: "w1", agentID: "ag1", name: "vega"}
+	w.ctx, w.cancelFn = context.WithCancel(context.Background())
+	return w
+}
+
+// (a) SWR-50: the roster is re-verified after the decision. An account
+// suspended during the model call must not write: the decision is
+// discarded, the worker exits, the spend is counted (the call
+// happened), and the apply transaction never writes the issue.
+func TestWorkCycleRetiredDuringDecision(t *testing.T) {
+	fx := newWorkCycleFixture(t, workCycleOptions{retired: true})
+	w := fx.worker()
+	acted, err := w.workOne(context.Background())
+	if err != nil {
+		t.Fatalf("workOne for a retired agent: %v", err)
+	}
+	if acted {
+		t.Fatal("a retired agent reported an action")
+	}
+	for _, e := range fx.applyTx.execs {
+		if strings.Contains(e.sql, "update issues") {
+			t.Fatalf("the apply wrote the issue for a retired agent: %s", e.sql)
+		}
+	}
+	if got := fx.rt.SpendCount("ag1"); got != 123 {
+		t.Fatalf("spend = %d, want 123 (the model call happened before the retirement)", got)
+	}
+}
+
+// (d) SWR-50: a lost commit ack is indeterminate, not a failure. The
+// row's version moved under the lock — the decision landed: the cycle
+// succeeds, the decision was made exactly once, and nothing is
+// re-broadcast (the outbox record re-delivers through the sync delta;
+// the client's dedupe guard absorbs the double).
+func TestWorkCycleCommitLandedAfterLostAck(t *testing.T) {
+	fx := newWorkCycleFixture(t, workCycleOptions{commitErr: errors.New("network reset after commit"), landed: true})
+	w := fx.worker()
+	acted, err := w.workOne(context.Background())
+	if err != nil {
+		t.Fatalf("workOne after a lost ack (decision landed): %v", err)
+	}
+	if !acted {
+		t.Fatal("a landed decision must count as an action (the queue moved on)")
+	}
+	if fx.stub.calls != 1 {
+		t.Fatalf("the policy decided %d times, want 1 (the cycle must not re-decide within the apply)", fx.stub.calls)
+	}
+	if got := fx.rt.SpendCount("ag1"); got != 123 {
+		t.Fatalf("spend = %d, want 123", got)
+	}
+	ch, cancel := fx.a.bcast.Subscribe("w1")
+	defer cancel()
+	select {
+	case raw := <-ch:
+		t.Fatalf("a landed-after-lost-ack decision broadcast in realtime: %s", raw)
+	default:
+	}
+}
+
+// (d) SWR-50: a true rollback fails the cycle. The worker reports the
+// error (it retires; the dispatcher re-derives from fresh state on the
+// next tick) and the decision was applied exactly once — never twice.
+func TestWorkCycleCommitRolledBack(t *testing.T) {
+	fx := newWorkCycleFixture(t, workCycleOptions{commitErr: errors.New("pool exhausted")})
+	w := fx.worker()
+	acted, err := w.workOne(context.Background())
+	if err == nil {
+		t.Fatal("a rolled-back apply must fail the cycle")
+	}
+	if acted {
+		t.Fatal("a rolled-back apply must not count as an action")
+	}
+	if fx.stub.calls != 1 {
+		t.Fatalf("the policy decided %d times, want 1", fx.stub.calls)
+	}
+	if got := fx.rt.SpendCount("ag1"); got != 123 {
+		t.Fatalf("spend = %d, want 123 (the model call happened even though the apply rolled back)", got)
+	}
+}
+
+// The full cycle: snapshot, decide, apply, commit, broadcast. One
+// action on the issue, one decision, the spend counted, the issue's
+// UPDATE record out in realtime exactly once.
+func TestWorkCycleHappyPath(t *testing.T) {
+	fx := newWorkCycleFixture(t, workCycleOptions{})
+	ch, cancel := fx.a.bcast.Subscribe("w1")
+	defer cancel()
+	w := fx.worker()
+	acted, err := w.workOne(context.Background())
+	if err != nil || !acted {
+		t.Fatalf("workOne = %v, %v; want the action applied", acted, err)
+	}
+	if fx.stub.calls != 1 {
+		t.Fatalf("the policy decided %d times, want 1", fx.stub.calls)
+	}
+	if got := fx.rt.SpendCount("ag1"); got != 123 {
+		t.Fatalf("spend = %d, want 123", got)
+	}
+	seen := 0
+	for {
+		select {
+		case raw := <-ch:
+			var rec struct {
+				ModelName, ModelID, Action string
+			}
+			if err := json.Unmarshal(raw, &rec); err != nil {
+				t.Fatalf("bad realtime payload: %v", err)
+			}
+			// "U" is the wire action (wireAction compresses UPDATE;
+			// the client's delta contract speaks the single letters).
+			if rec.ModelName == "Issue" && rec.ModelID == "iss1" && rec.Action == "U" {
+				seen++
+			}
+		default:
+		}
+		if seen > 0 || len(ch) == 0 {
+			break
+		}
+	}
+	if seen != 1 {
+		t.Fatalf("the issue UPDATE broadcast %d times, want exactly 1", seen)
 	}
 }
