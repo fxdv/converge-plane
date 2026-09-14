@@ -35,6 +35,70 @@ const SAVE_HANDLERS: Record<string, Function> = {
   [MODELS.SwarmActivity]: saveSwarmActivityData,
 };
 
+// ---------------------------------------------------------------------------
+// Per-tab realtime cursor (SWR-51)
+//
+// The sync watermark in localStorage is shared by every tab of the same
+// browser (localStorage is per-origin). Two tabs writing the same key can
+// roll it backwards, and a tab that re-seeds from it can skip records its
+// own cache never applied — the desync the audit flagged. The shared key
+// stays as the cross-tab floor (the bootstrap-skip seed), but each tab
+// additionally tracks its own applied high-water in memory: it never
+// advances below what this tab has applied, and it never fetches from a
+// cursor another tab moved. Writes to the shared key are max-only.
+// ---------------------------------------------------------------------------
+
+// The module's one tab-scoped state: the highest outbox sequence this
+// tab has applied for its workspace (0 = nothing yet).
+let appliedSeq = 0;
+
+// Seeds (or raises, never lowers) the tab's cursor from the shared
+// watermark. Called at wrapper mount and after every full bootstrap.
+export function seedTabHighWater(stored: string | null): number {
+  const n = stored ? Number(stored) : 0;
+  if (Number.isFinite(n) && n > appliedSeq) {
+    appliedSeq = n;
+  }
+  return appliedSeq;
+}
+
+export function tabHighWater(): number {
+  return appliedSeq;
+}
+
+// The live-record idempotency guard (SWR-51): an SSE record and the
+// reconnection delta can both deliver the same record (the stream drops
+// between delivery and the watermark write), and a shared watermark
+// rolled back by another tab can re-deliver an old window over newer
+// state — re-applying a stale CREATE resurrects a row a newer DELETE
+// removed. The server's sequence is monotonic per workspace, so "newer
+// than everything this tab applied" is the dedupe condition. Only live
+// records (SSE/delta — real outbox sequences) pass through this; the
+// bootstrap snapshot carries a local 1..N counter, not the watermark, so
+// it applies unconditionally.
+export function dedupeLiveRecords(
+  data: SyncActionRecord[],
+): SyncActionRecord[] {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+  const fresh: SyncActionRecord[] = [];
+  for (const record of data) {
+    const seq = Number(record.sequenceId);
+    if (!Number.isFinite(seq) || seq <= 0) {
+      fresh.push(record); // synthetic or unknown sequence: apply
+      continue;
+    }
+    if (seq > appliedSeq) {
+      appliedSeq = seq;
+      fresh.push(record);
+    }
+    // else: this tab already applied newer state for this workspace;
+    // the record is a duplicate or a rewind — drop it.
+  }
+  return fresh;
+}
+
 // Saves the data from the socket and call explicitly functions from individual models
 export async function saveSocketData(
   data: SyncActionRecord[],
@@ -79,6 +143,18 @@ export async function saveSocketData(
         .filter(Boolean),
     );
   });
+}
+
+// Live records only (SSE message, reconnection delta): the idempotency
+// guard runs before the same apply path. Bootstrap never uses this — its
+// snapshot sequences are a local counter, and the snapshot upsert is the
+// full-state reconciliation the prune that follows depends on.
+export async function saveLiveSocketData(
+  data: SyncActionRecord[],
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  MODEL_STORE_MAP: Record<string, any>,
+): Promise<void> {
+  await saveSocketData(dedupeLiveRecords(data), MODEL_STORE_MAP);
 }
 
 // ---------------------------------------------------------------------------

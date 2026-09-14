@@ -14,7 +14,11 @@ import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
 
-import { saveSocketData } from './socket-data-util';
+import {
+  saveLiveSocketData,
+  seedTabHighWater,
+  tabHighWater,
+} from './socket-data-util';
 
 interface Props {
   children: React.ReactElement;
@@ -67,9 +71,27 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       if (!base || !workspaceStore.workspace?.id) {
         return;
       }
+      // This tab's applied high-water, seeded from the shared watermark
+      // (SWR-51): from here on the tab fetches and dedupes against its
+      // own cursor, never against what another tab wrote to the shared
+      // key. The shared key remains the cross-tab floor.
+      seedTabHighWater(
+        localStorage.getItem(`lastSequenceId_${hash(hashKey)}`),
+      );
       const url = `${base}/api/v1/sync_actions/stream?workspaceId=${workspaceStore.workspace.id}&userId=${user.id}`;
       const socket = new EventSource(url, { withCredentials: true });
       setSocket(socket);
+
+      // The shared watermark is max-only: another tab may have advanced
+      // it, and this tab may have applied past it — a backwards write
+      // would let a third tab skip records (SWR-51).
+      const advanceShared = (seq: number) => {
+        const stored =
+          Number(localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0');
+        if (seq > stored) {
+          localStorage.setItem(`lastSequenceId_${hash(hashKey)}`, `${seq}`);
+        }
+      };
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const MODEL_STORE_MAP = {
@@ -89,11 +111,10 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       socket.onmessage = async (event: MessageEvent) => {
         const data = JSON.parse(event.data);
 
-        await saveSocketData([data], MODEL_STORE_MAP);
-        localStorage.setItem(
-          `lastSequenceId_${hash(hashKey)}`,
-          `${data.sequenceId}`,
-        );
+        // The live-record path: the idempotency guard drops a record this
+        // tab already applied (stream/delta double delivery, SWR-51).
+        await saveLiveSocketData([data], MODEL_STORE_MAP);
+        advanceShared(Number(data.sequenceId) || 0);
       };
 
       // Realtime is a hint, the delta endpoint is authoritative. The
@@ -106,8 +127,10 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
           if (!workspaceStore.workspace?.id) {
             return;
           }
-          const last =
-            localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0';
+          // Fetch from this tab's own cursor (SWR-51): whatever another
+          // tab wrote to the shared key cannot make this tab skip or
+          // rewind; the guard below dedupes the overlap either way.
+          const last = String(Math.max(tabHighWater(), 0)) || '0';
           try {
             const resp: BootstrapResponse = await getDeltaRecords(
               workspaceStore.workspace.id,
@@ -115,18 +138,17 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
               last,
               user.id,
             );
-            await saveSocketData(resp.syncActions, MODEL_STORE_MAP);
+            await saveLiveSocketData(resp.syncActions, MODEL_STORE_MAP);
             if (resp.stale) {
               // The delta is incomplete: the server's change feed was
               // trimmed past our cursor. Forget the watermark so the next
-              // load takes a full snapshot; don't advance past the gap.
+              // load takes a full snapshot (which re-seeds the tab cursor
+              // from the new watermark); don't advance past the gap.
               localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
               return;
             }
-            localStorage.setItem(
-              `lastSequenceId_${hash(hashKey)}`,
-              `${resp.lastSequenceId}`,
-            );
+            seedTabHighWater(resp.lastSequenceId);
+            advanceShared(Number(resp.lastSequenceId) || 0);
           } catch {
             // Reconciliation failed (session expired mid-flight, etc.).
             // The next successful reconnect retries; a page reload always
