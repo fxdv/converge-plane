@@ -19,9 +19,12 @@ import type { SyncActionRecord } from 'common/types';
 import { safePriorityIndex } from 'common/priority';
 
 import {
+  dedupeLiveRecords,
   liveIdsByModel,
   pruneStaleLocalRecords,
+  seedTabHighWater,
   staleIdsForModel,
+  tabHighWater,
   type PruneDomain,
   type PruneRow,
 } from 'common/wrappers/socket-data-util';
@@ -622,6 +625,7 @@ const rec = (
   modelName: string,
   id: string,
   action: 'I' | 'U' | 'D',
+  sequenceId = '1',
 ): SyncActionRecord =>
   ({
     data: { id },
@@ -629,7 +633,7 @@ const rec = (
     modelId: id,
     action,
     workspaceId: 'w1',
-    sequenceId: '1',
+    sequenceId,
   }) as SyncActionRecord;
 
 const pruneRow = (id: string, over: Partial<PruneRow> = {}): PruneRow => ({
@@ -775,5 +779,65 @@ describe('pruneStaleLocalRecords (the reconciliation pass)', () => {
       {} as never,
     );
     await pruneStaleLocalRecords(null as never, '', {} as never);
+  });
+
+  it('cannot reach an in-flight mutation: deletions derive from cache rows only (SWR-51 audit, item 3)', () => {
+    // The audit claimed the prune could delete in-flight user mutations.
+    // Adjudicated against the code: no store writes the cache on a user
+    // mutation (optimistic updates are store-only; the cache is written
+    // by the sync apply path exclusively), and the prune derives its
+    // deletions exclusively from CACHE rows. A row the snapshot lacks
+    // and the cache lacks is nothing to the pass — the optimistic node
+    // in the store is invisible to it by construction.
+    const live = liveIdsByModel([]); // the snapshot lists no issues
+    // localRows is what the pass reads from the cache: the in-flight
+    // issue was never written there, so it is absent from the scan.
+    const stale = staleIdsForModel('Issue', domain(), [], live);
+    assert.deepEqual(stale, []);
+  });
+});
+
+describe('dedupeLiveRecords (the SWR-51 idempotency guard)', () => {
+  // The guard keeps a per-tab high-water (module state); the tests run
+  // in order and each seeds its own baseline.
+  it('applies records newer than the tab high-water and advances it', () => {
+    seedTabHighWater('100');
+    const kept = dedupeLiveRecords([
+      rec('Issue', 'i1', 'I', '101'),
+      rec('Issue', 'i2', 'I', '105'),
+    ] as unknown as SyncActionRecord[]);
+    assert.equal(kept.length, 2);
+    assert.equal(tabHighWater(), 105);
+  });
+
+  it('drops a duplicate and a rewind below the high-water', () => {
+    seedTabHighWater('105');
+    // Same record re-delivered by the reconnection delta, and an older
+    // window re-fetched after another tab rolled the shared key back.
+    const kept = dedupeLiveRecords([
+      rec('Issue', 'i1', 'I', '101'),
+      rec('Issue', 'i2', 'D', '105'),
+      rec('Issue', 'i3', 'I', '106'),
+    ] as unknown as SyncActionRecord[]);
+    assert.deepEqual(kept.map((r) => r.sequenceId), ['106']);
+  });
+
+  it('applies synthetic records (no real sequence) unconditionally', () => {
+    // The prune's synthetic D records carry an empty sequence and never
+    // pass through the guard — but any other sequence-less live record
+    // must apply rather than vanish.
+    seedTabHighWater('999');
+    const synthetic = { ...rec('Issue', 'i1', 'I'), sequenceId: '' };
+    const kept = dedupeLiveRecords([synthetic]);
+    assert.equal(kept.length, 1);
+  });
+
+  it('never lowers the tab high-water (seed is max-only)', () => {
+    // Order-independent: the earlier cases in this suite raise the shared
+    // module state, so pin the invariant against the current value — a
+    // lower seed must be a no-op and the seed must report the cursor it kept.
+    const before = tabHighWater();
+    assert.equal(seedTabHighWater(String(Math.max(0, before - 1))), before);
+    assert.equal(tabHighWater(), before);
   });
 });

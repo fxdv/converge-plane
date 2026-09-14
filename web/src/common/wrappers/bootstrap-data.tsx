@@ -15,7 +15,12 @@ import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
 
-import { pruneStaleLocalRecords, saveSocketData } from './socket-data-util';
+import {
+  pruneStaleLocalRecords,
+  saveLiveSocketData,
+  saveSocketData,
+  seedTabHighWater,
+} from './socket-data-util';
 
 interface Props {
   children: React.ReactElement;
@@ -28,6 +33,14 @@ export function BootstrapWrapper({ children }: Props) {
   const hashKey = `${workspace.id}__${user.id}`;
   const lastSequenceId =
     localStorage && localStorage.getItem(`lastSequenceId_${hash(hashKey)}`);
+
+  // This tab's applied high-water (SWR-51): the shared key seeds it at
+  // mount; live paths from here on dedupe and fetch against the tab's own
+  // cursor, and every write to the shared key is max-only.
+  React.useEffect(() => {
+    seedTabHighWater(lastSequenceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.id]);
 
   const {
     commentsStore,
@@ -86,6 +99,11 @@ export function BootstrapWrapper({ children }: Props) {
     onSuccess: async (data: BootstrapResponse) => {
       await saveSocketData(data.syncActions, MODEL_STORE_MAP);
 
+      // The snapshot subsumes every record up to its watermark (its own
+      // per-record sequences are a local counter — never the watermark),
+      // so the tab cursor advances to the watermark in one step.
+      seedTabHighWater(`${data.lastSequenceId}`);
+
       // The snapshot is the server's full tenant set, but the upsert-only
       // apply above can never remove rows: anything deleted server-side
       // without a DELETE record reaching this client (an operator's SQL
@@ -97,10 +115,17 @@ export function BootstrapWrapper({ children }: Props) {
         MODEL_STORE_MAP,
       );
 
-      localStorage.setItem(
-        `lastSequenceId_${hash(hashKey)}`,
-        `${data.lastSequenceId}`,
+      // Max-only (SWR-51): another tab may have advanced the shared key
+      // past this snapshot's watermark — never write it backwards.
+      const stored = Number(
+        localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
       );
+      if (Number(data.lastSequenceId) > stored) {
+        localStorage.setItem(
+          `lastSequenceId_${hash(hashKey)}`,
+          `${data.lastSequenceId}`,
+        );
+      }
     },
   });
 
@@ -110,19 +135,29 @@ export function BootstrapWrapper({ children }: Props) {
     lastSequenceId,
     userId: user.id,
     onSuccess: async (data: BootstrapResponse) => {
-      await saveSocketData(data.syncActions, MODEL_STORE_MAP);
+      // Live records: the idempotency guard (SWR-51) drops anything this
+      // tab already applied.
+      await saveLiveSocketData(data.syncActions, MODEL_STORE_MAP);
       if (data.stale) {
         // The server's change feed was trimmed past our cursor: the delta
-        // is incomplete, so forget the watermark and take a full snapshot.
+        // is incomplete, so forget the watermark and take a full snapshot
+        // (which re-seeds the tab cursor from the new watermark).
         localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
         setLoading(true);
         await bootstrapRecords();
         return;
       }
-      localStorage.setItem(
-        `lastSequenceId_${hash(hashKey)}`,
-        `${data.lastSequenceId}`,
+      seedTabHighWater(`${data.lastSequenceId}`);
+      // Max-only, as in the bootstrap handler above.
+      const stored = Number(
+        localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
       );
+      if (Number(data.lastSequenceId) > stored) {
+        localStorage.setItem(
+          `lastSequenceId_${hash(hashKey)}`,
+          `${data.lastSequenceId}`,
+        );
+      }
     },
   });
 
