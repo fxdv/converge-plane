@@ -68,7 +68,8 @@ import (
 type AgentRuntime struct {
 	a      *API
 	log    *slog.Logger
-	policy Policy // the decision layer (DeterministicPolicy ships; an LLM policy plugs in here)
+	policy Policy     // the decision layer (DeterministicPolicy ships; an LLM policy plugs in here)
+	llm    *llmClient // the fleet router when an LLM policy is attached (nil otherwise); the metrics plane reads its per-node telemetry
 
 	mu      sync.Mutex
 	workers map[string]*agentWorker // "workspaceID/agentID" -> live worker
@@ -107,9 +108,12 @@ func newAgentRuntime(a *API) *AgentRuntime {
 		done:    make(chan struct{}),
 	}
 	rt.policy = selectPolicy(a, rt.recordDecision)
-	switch rt.policy.(type) {
+	switch fp := rt.policy.(type) {
 	case fallbackPolicy:
 		rt.brainMode = "llm"
+		if lp, ok := fp.primary.(LLMPolicy); ok {
+			rt.llm = lp.client
+		}
 	default:
 		rt.brainMode = "floor"
 		rt.brainNote = "llm disabled"
