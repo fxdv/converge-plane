@@ -251,7 +251,7 @@ func Load() (Config, error) {
 	cfg.SMTPHost = os.Getenv("CONVERGE_SMTP_HOST")
 	cfg.SMTPUser = os.Getenv("CONVERGE_SMTP_USER")
 	cfg.SMTPPass = os.Getenv("CONVERGE_SMTP_PASS")
-	cfg.SMTPFrom = os.Getenv("CONVERGE_SMTP_FROM")
+	cfg.SMTPFrom = env("CONVERGE_SMTP_FROM", "no-reply@converge.local")
 	if v := os.Getenv("CONVERGE_SMTP_PORT"); v != "" {
 		port, err := strconv.Atoi(v)
 		if err != nil || port < 1 || port > 65535 {
