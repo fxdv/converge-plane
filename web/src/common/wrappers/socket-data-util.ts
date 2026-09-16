@@ -130,7 +130,11 @@ export async function saveSocketData(
       }
     }
 
-    // Process records using the handler map
+    // Process records using the handler map. One bad record must not
+    // reject the whole batch (both callers await this): a row that no
+    // longer matches its model fails that model only — the rest of the
+    // batch applies, and the next full bootstrap re-applies the row.
+    // The prune pass logs failures the same way.
     return Promise.all(
       Object.entries(groupedRecords)
         .map(([modelName, records]) => {
@@ -138,7 +142,15 @@ export async function saveSocketData(
             return null;
           }
           const handler = SAVE_HANDLERS[modelName];
-          return handler ? handler(records, MODEL_STORE_MAP[modelName]) : null;
+          if (!handler) {
+            return null;
+          }
+          return handler(records, MODEL_STORE_MAP[modelName]).catch(
+            (err: unknown): null => {
+              console.warn(`[converge] sync: ${modelName} apply failed`, err);
+              return null;
+            },
+          );
         })
         .filter(Boolean),
     );
