@@ -113,7 +113,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		}
 	}
 
-	// ---- workspace + memberships --------------------------------------
+	// ---- workspace + teams ----------------------------------------------
 	wsID := mk("workspace")
 	if err := exec("seed workspace", `
 		insert into workspaces (id, name, slug, created_by)
@@ -121,6 +121,22 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		wsID, demoSlug, ids["acc:"+demoEmail]); err != nil {
 		return "", err
 	}
+
+	// Teams must exist before any team-membership row (the FK check runs first).
+	teams := []struct{ label, name, identifier string }{
+		{"team-eng", "Engineering", "ENG"},
+		{"team-plat", "Platform", "PLAT"},
+	}
+	for i, t := range teams {
+		if err := exec("seed team "+t.name, `
+			insert into teams (id, workspace_id, name, identifier, position)
+			values ($1, $2, $3, $4, $5)`,
+			mk(t.label), wsID, t.name, t.identifier, i); err != nil {
+			return "", err
+		}
+	}
+
+	// ---- memberships ----------------------------------------------------
 	for _, u := range users {
 		if err := exec("seed membership "+u.email, `
 			insert into workspace_members (id, workspace_id, account_id, role, status, joined_at)
@@ -139,25 +155,13 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		// eng team membership: the demo swarm works the engineering board.
 		if err := exec("seed agent team "+name, `
 			insert into team_members (id, team_id, account_id, role)
-			values ($1, $2, 'member')`,
+			values ($1, $2, $3, 'member')`,
 			mk("team-eng:acc:agent:"+name), ids["team-eng"], ids["acc:agent:"+name]); err != nil {
 			return "", err
 		}
 	}
 
-	// ---- teams ---------------------------------------------------------
-	teams := []struct{ label, name, identifier string }{
-		{"team-eng", "Engineering", "ENG"},
-		{"team-plat", "Platform", "PLAT"},
-	}
-	for i, t := range teams {
-		if err := exec("seed team "+t.name, `
-			insert into teams (id, workspace_id, name, identifier, position)
-			values ($1, $2, $3, $4, $5)`,
-			mk(t.label), wsID, t.name, t.identifier, i); err != nil {
-			return "", err
-		}
-	}
+	// Human team memberships: managers and members per team.
 	memberRoles := map[string]map[string]string{
 		"team-eng":  {"acc:" + demoEmail: "manager", "acc:maya@converge.dev": "member", "acc:leo@converge.dev": "member"},
 		"team-plat": {"acc:" + demoEmail: "manager", "acc:leo@converge.dev": "member"},
