@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
-# Wire-contract check (client side) — see
-# src/store/__tests__/wire-contract.test.ts.
+# Wire-contract check (client side) — see the *.test.ts files under src/.
 #
-# Compiles the test harness plus the real MST model sources with the
-# project's TypeScript, then executes them under node's built-in test
-# runner. Zero extra dependencies: runs in CI with Node >= 18 and the
-# existing typescript devDep.
+# Compiles every test file with the project's TypeScript, then executes
+# each under node's built-in test runner. Zero extra dependencies: runs in
+# CI with Node >= 18 and the existing typescript devDep.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 
-pnpm exec tsc src/store/__tests__/wire-contract.test.ts \
+TESTS="$(find src -name '*.test.ts' | sort)"
+if [ -z "$TESTS" ]; then
+  echo "wire-contract: no *.test.ts files found under src/" >&2
+  exit 1
+fi
+
+# --rootDir pins the compiled tree at $OUT/src/... no matter how many
+# test files exist, so the alias shim below maps app aliases onto it.
+pnpm exec tsc $TESTS \
   --outDir "$OUT" \
+  --rootDir src \
   --module commonjs --target es2020 \
   --esModuleInterop --skipLibCheck \
   --baseUrl src
@@ -37,5 +44,15 @@ Module._resolveFilename = function (request, ...args) {
 };
 EOF
 
-CONTRACT_OUT="$OUT" NODE_PATH="$(pwd)/node_modules" \
-  node -r "$OUT/alias-shim.js" "$OUT/store/__tests__/wire-contract.test.js"
+FAIL=0
+for t in $TESTS; do
+  rel="${t#src/}"
+  echo "--- $t"
+  CONTRACT_OUT="$OUT" NODE_PATH="$(pwd)/node_modules" \
+    node -r "$OUT/alias-shim.js" "$OUT/${rel%.ts}.js" || FAIL=1
+done
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "wire-contract: one or more suites failed" >&2
+  exit 1
+fi
