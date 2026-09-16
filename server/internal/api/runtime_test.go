@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -641,6 +642,24 @@ func fakeAssign(values []any, dest ...any) error {
 				return fmt.Errorf("fakeAssign: want []string, got %T", values[i])
 			}
 			*p = sl
+		case *[]byte:
+			b, ok := values[i].([]byte)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want []byte, got %T", values[i])
+			}
+			*p = b
+		case **int64:
+			n, ok := values[i].(int64)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want int64, got %T", values[i])
+			}
+			*p = &n
+		case **time.Time:
+			ts, ok := values[i].(time.Time)
+			if !ok {
+				return fmt.Errorf("fakeAssign: want time, got %T", values[i])
+			}
+			*p = &ts
 		case *json.RawMessage:
 			jm, ok := values[i].(json.RawMessage)
 			if !ok {
@@ -716,6 +735,14 @@ func (f *fakeTx) Prepare(ctx context.Context, name, sql string) (*pgconn.Stateme
 }
 func (f *fakeTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	f.execs = append(f.execs, fakeExecCall{sql: sql, args: args})
+	// A matching rule may carry a rowErr (a constraint violation the
+	// caller maps); an unmatched Exec succeeds, as before — the loud
+	// failure is the QueryRow channel's.
+	for i := range f.rules {
+		if strings.Contains(sql, f.rules[i].frag) {
+			return pgconn.CommandTag{}, f.rules[i].rowErr
+		}
+	}
 	return pgconn.CommandTag{}, nil
 }
 func (f *fakeTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
@@ -857,11 +884,15 @@ func TestForemanOfDesignation(t *testing.T) {
 // fakePool is an in-memory db over a sequence of canned transactions.
 // Begin returns them in order; past the end of the sequence the last
 // one repeats (an under-provisioned test still fails on its rules).
+// rows records the pool-level QueryRow calls (assert the seam's reads);
+// the mutex keeps the recording race-free when handlers fan out.
 type fakePool struct {
 	t      *testing.T
 	txs    []*fakeTx
 	rules  []fakeRule // pool-level Query / QueryRow (no open tx)
 	begins int
+	mu     sync.Mutex
+	rows   []fakeExecCall
 }
 
 func (f *fakePool) Begin(ctx context.Context) (pgx.Tx, error) {
@@ -880,7 +911,17 @@ func (f *fakePool) Query(ctx context.Context, sql string, args ...any) (pgx.Rows
 }
 func (f *fakePool) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	r := matchRule(f.t, f.rules, sql)
+	f.mu.Lock()
+	f.rows = append(f.rows, fakeExecCall{sql: sql, args: args})
+	f.mu.Unlock()
 	return fakeRow{values: r.rowVals, err: r.rowErr}
+}
+
+// poolQueries returns the recorded pool-level QueryRow calls in order.
+func (f *fakePool) poolQueries() []fakeExecCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeExecCall(nil), f.rows...)
 }
 
 // scriptedPolicy is a test brain: one canned decision with a token
