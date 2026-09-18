@@ -63,6 +63,10 @@ func requestFor(t *testing.T, principal *Principal, method, path, rawBody string
 		rc := chi.NewRouteContext()
 		for i := 0; i < len(urlParams); i += 2 {
 			rc.URLParams.Add(urlParams[i], urlParams[i+1])
+			// chi populates r.PathValue after route matching; the direct
+			// seam call skips the router, so set the standard value too
+			// (the swarm/metrics/agent routes read it, not chi's params).
+			req.SetPathValue(urlParams[i], urlParams[i+1])
 		}
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rc))
 	}
