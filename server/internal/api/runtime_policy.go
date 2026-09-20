@@ -52,6 +52,13 @@ const (
 	// pause reason humans see in the timeline and the swarm panel;
 	// Note carries the task-level "where things stand" the human reads.
 	ActionPause ActionKind = "pause"
+	// ActionArtifact posts a fenced document to the issue (SWR-56):
+	// the swarm's channel for long output (audits, plans, manifests).
+	// It persists the document plus a timeline breadcrumb; it never
+	// moves the issue or sets a flag — a document is a deliverable,
+	// not a transition — and the worker keeps working on the next
+	// cycle.
+	ActionArtifact ActionKind = "artifact"
 )
 
 // Action is one decision: a single atomic step on the issue.
@@ -62,6 +69,10 @@ type Action struct {
 	Comment     string // the human-visible step text; for pause, the reason
 	Summary     string // the handoff summary ("" unless handing off)
 	Note        string // pause only: the task-level "where things stand" the human handoff comment shows
+	// Artifact (SWR-56) only: the document's short name and its fenced
+	// body ("" for every other kind).
+	ArtifactTitle string
+	ArtifactBody  string
 }
 
 // StateRef is one workflow status as the policy sees it.

@@ -5,7 +5,9 @@
 // The runtime is what the handoff protocol is for: an in-process swarm
 // engine that makes agents with work act. It runs inside the API
 // process (the arch:shape contract: one artifact, in-process workers)
-// and leans on the existing seams — no new tables, no new dependencies:
+// and leans on the existing seams — the one table it owns is
+// issue_artifacts (SWR-56, the document channel); it adds no
+// dependencies:
 //
 //   - The inbox is the database. An agent's work is "issues assigned to
 //     it that are open, not paused, and not terminal" (issue rows) plus
@@ -1072,6 +1074,29 @@ func (a *API) applyActionTx(ctx context.Context, tx pgx.Tx, w *agentWorker, row 
 		}
 		return recs, false, "", nil
 
+	case ActionArtifact:
+		// SWR-56: the document is a deliverable, not a transition — no
+		// state move, no flag, no handoff guard. The breadcrumb keeps
+		// the timeline readable; the document renders in the issue's
+		// Documents section. tripped stays false: the worker keeps
+		// working the issue on the next cycle.
+		if action.ArtifactBody == "" {
+			return nil, false, "", fmt.Errorf("artifact without a body")
+		}
+		artRec, histRec, err := a.applyArtifactTx(ctx, tx, w.workspaceID, in.TeamID, row.ID, w.agentID, action.ArtifactTitle, action.ArtifactBody)
+		if err != nil {
+			return nil, false, "", err
+		}
+		recs = append(recs, artRec, histRec)
+		if action.Comment != "" {
+			crec, err := a.applyCommentTx(ctx, tx, w.workspaceID, row.ID, w.agentID, action.Comment)
+			if err != nil {
+				return nil, false, "", err
+			}
+			recs = append(recs, crec)
+		}
+		return recs, false, "", nil
+
 	case ActionHandoff:
 		if action.ToAccountID == "" {
 			return nil, false, "", fmt.Errorf("handoff without a target")
@@ -1161,4 +1186,43 @@ func (a *API) applyCommentTx(ctx context.Context, tx pgx.Tx, workspaceID, issueI
 		return syncActionRecord{}, err
 	}
 	return rec, a.refreshOutboxTx(ctx, tx, workspaceID, &rec, a.commentData(fresh, createdAt, updatedAt))
+}
+
+// applyArtifactTx posts the swarm's document (SWR-56): the artifact
+// row, the timeline breadcrumb (the history row the activity feed
+// renders), and the IssueArtifact outbox record with its payload. The
+// caller holds the team lock.
+func (a *API) applyArtifactTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID, issueID, authorID, title, body string) (artRec, histRec syncActionRecord, err error) {
+	var id string
+	if err = tx.QueryRow(ctx, `
+		insert into issue_artifacts (issue_id, author_id, title, body)
+		values ($1, $2, $3, $4)
+		returning id`, issueID, authorID, title, body).Scan(&id); err != nil {
+		return syncActionRecord{}, syncActionRecord{}, err
+	}
+	var (
+		createdAt, updatedAt      time.Time
+		freshTitle, freshBody     string
+		freshAuthor, freshIssueID string
+	)
+	if err = tx.QueryRow(ctx, `
+		select title, body, author_id, issue_id, created_at, updated_at
+		from issue_artifacts where id = $1`, id).
+		Scan(&freshTitle, &freshBody, &freshAuthor, &freshIssueID, &createdAt, &updatedAt); err != nil {
+		return syncActionRecord{}, syncActionRecord{}, err
+	}
+	// The breadcrumb: the document's title, not its body — the timeline
+	// stays step-text density; the body renders in the Documents
+	// section, not the feed.
+	histRec, err = a.writeHistoryTx(ctx, tx, workspaceID, teamID, issueID, authorID,
+		"artifact", "artifact", "", "", "posted a document: "+title)
+	if err != nil {
+		return syncActionRecord{}, syncActionRecord{}, err
+	}
+	artRec, err = a.emitChange(ctx, tx, workspaceID, "IssueArtifact", id, "CREATE", nil)
+	if err != nil {
+		return syncActionRecord{}, syncActionRecord{}, err
+	}
+	return artRec, histRec, a.refreshOutboxTx(ctx, tx, workspaceID, &artRec,
+		artifactData(id, freshTitle, freshBody, freshAuthor, freshIssueID, createdAt, updatedAt))
 }

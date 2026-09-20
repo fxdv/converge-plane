@@ -46,6 +46,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // commentCap bounds the human-visible step text the model may write
@@ -67,6 +68,59 @@ func capNote(s string) string {
 	s = fenceSummary(s)
 	if r := []rune(s); len(r) > noteCap {
 		return string(r[:noteCap]) + "…"
+	}
+	return s
+}
+
+// artifactCap bounds the document the model may post (SWR-56): the
+// swarm's channel for long output (audits, plans, manifests). It sits
+// above the fleet's 2048-token output budget, so well-formed output is
+// never truncated — the silent truncation that motivated the channel.
+// The cap is a hard bound (a storage/display budget), not a target: the
+// prompt asks for less, the server allows up to this.
+const artifactCap = 8192
+
+// artifactTitleCap bounds a document's name: a title, not a summary.
+const artifactTitleCap = 200
+
+// fenceDocument sanitizes a model-authored document on the way in:
+// unlike the summary/comment fence it preserves newlines and tabs (a
+// markdown or JSON document is meaningless flattened); every other
+// control character becomes a space, the ends are trimmed, and the cap
+// is re-asserted as a hard byte budget — the truncation marker counts
+// toward it and the cut lands on a rune boundary, so the result always
+// satisfies the table's octet_length check. The document is display
+// data: in v1 it is never fed back into a prompt, so the injection
+// budget stays the handoff summary's 4 KB.
+func fenceDocument(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, s)
+	s = strings.TrimSpace(s)
+	if len(s) > artifactCap {
+		cut := artifactCap - len("…")
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		s = s[:cut] + "…"
+	}
+	return s
+}
+
+// capArtifactTitle bounds a model-authored document title: fenced at
+// the injection floor, trimmed, rune-capped at artifactTitleCap — the
+// marker counts toward the cap so the result always fits the table's
+// char_length check.
+func capArtifactTitle(s string) string {
+	s = strings.TrimSpace(fenceSummary(s))
+	if r := []rune(s); len(r) > artifactTitleCap {
+		return string(r[:artifactTitleCap-1]) + "…"
 	}
 	return s
 }
@@ -512,6 +566,8 @@ func llmDecisionPrompt(in ActionInput) string {
 	b.WriteString("\n- handoff: another agent must continue; use only when nothing here can progress\n")
 	b.WriteString(`{"kind":"pause","comment":"<one short sentence: why no agent can proceed>","note":"where things stand, written for a human with zero context: what was done, what was found, what is blocked, what the human must decide or do"}`)
 	b.WriteString("\n- pause: no agent can make progress; a human must act. Park for a human only when a human decision, approval, or input is genuinely required; the card then waits in Human Review until a human resumes it. The note is the human's briefing: they have read nothing else about this issue, so cover the task scope, your findings, and the exact decision or input you need\n")
+	b.WriteString(`{"kind":"artifact","title":"<short name of the document>","body":"<the full document: markdown or JSON, newlines preserved>","comment":"<one short sentence: what you posted and why>"}`)
+	b.WriteString("\n- artifact: post a long deliverable (an audit, a plan, a manifest) as a document on the issue. Use it whenever your finding is longer than one sentence — do not compress a long finding into the 500-rune comment; the document carries the detail, the comment points at it. The body is capped at about 6000 characters: if the finding is longer, keep the most decision-relevant part and say in the comment what was left out\n")
 	b.WriteString("Rules: copy state and agent names exactly from the lists above; invent nothing. One step only.\n")
 	b.WriteString("A human is never a handoff target: to wait for a human, use pause. A proposed state must be forward of the current state, or omitted for a handoff.\n")
 	b.WriteString("A pause may be your last word on this card: cards that park repeatedly are escalated to the human foreman, and your pause reason and note become the full briefing they get. Make them precise and self-contained.\n")
@@ -527,6 +583,9 @@ type llmDecision struct {
 	Comment *string `json:"comment"`
 	Summary *string `json:"summary"`
 	Note    *string `json:"note"`
+	// Artifact (SWR-56) only: the document's name and fenced body.
+	ArtifactTitle *string `json:"title"`
+	ArtifactBody  *string `json:"body"`
 }
 
 // extractDecision pulls one JSON object out of the model's content.
@@ -612,8 +671,23 @@ func parseLLMAction(in ActionInput, content string) (Action, error) {
 			Comment: capComment(dec.Comment, in.ActorName+" paused the issue for a human"),
 			Note:    capNote(strval(dec.Note)),
 		}, nil
+	case "artifact":
+		body := fenceDocument(strval(dec.ArtifactBody))
+		if body == "" {
+			return Action{}, errors.New("artifact: the document body is empty (a finding shorter than a document belongs in a comment or a handoff summary)")
+		}
+		title := capArtifactTitle(strval(dec.ArtifactTitle))
+		if title == "" {
+			title = "Document"
+		}
+		return Action{
+			Kind:          ActionArtifact,
+			ArtifactTitle: title,
+			ArtifactBody:  body,
+			Comment:       capComment(dec.Comment, in.ActorName+" posted a document"),
+		}, nil
 	default:
-		return Action{}, fmt.Errorf("unknown kind %q (want advance, handoff, or pause)", strings.TrimSpace(dec.Kind))
+		return Action{}, fmt.Errorf("unknown kind %q (want advance, handoff, pause, or artifact)", strings.TrimSpace(dec.Kind))
 	}
 }
 
