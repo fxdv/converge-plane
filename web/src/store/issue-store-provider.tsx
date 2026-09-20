@@ -17,7 +17,8 @@ export const IssueStoreInit = ({
   sideView: boolean;
 }) => {
   const [loading, setLoading] = React.useState(true);
-  const { issuesHistoryStore, commentsStore } = useContextStore();
+  const { issuesHistoryStore, commentsStore, issueArtifactsStore } =
+    useContextStore();
 
   const { issueId: paramIssueId } = useParams();
   const { issueId: viewIssueId } = React.useContext(IssueViewContext);
@@ -48,6 +49,8 @@ export const IssueStoreInit = ({
 
     await issuesHistoryStore.load(issueData.id);
     await commentsStore.load(issueData.id);
+    // SWR-56: the swarm's documents (audits, plans, manifests).
+    await issueArtifactsStore.load(issueData.id);
 
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

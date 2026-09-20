@@ -4,6 +4,7 @@ import * as React from 'react';
 import type { IssueType, User } from 'common/types';
 import type { IssueHistoryType } from 'common/types';
 
+import { ArtifactActivity } from './artifact-activity';
 import { HandoffActivity } from './handoff-activity';
 import { LabelActivity } from './label-activity';
 import { PausedActivity } from './paused-activity';
@@ -49,6 +50,19 @@ export const ActivityItem = observer(
       } else if (issueHistory.action === 'paused') {
         localItems.push(
           <PausedActivity
+            fullname={user.fullname}
+            issueHistory={issueHistory}
+            showTime={setShowTime}
+            key={index}
+          />,
+        );
+        index = index + 1;
+        setShowTime = false;
+      } else if (issueHistory.action === 'artifact') {
+        // SWR-56: a posted document is a deliverable breadcrumb (the
+        // body renders in the Documents section, not the feed).
+        localItems.push(
+          <ArtifactActivity
             fullname={user.fullname}
             issueHistory={issueHistory}
             showTime={setShowTime}

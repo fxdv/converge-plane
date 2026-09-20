@@ -11,13 +11,11 @@
 // this file plus the real model sources with the project's TypeScript
 // and executes them under node's built-in test runner, so it runs in CI
 // with zero extra dependencies.
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-
-import type { SyncActionRecord } from 'common/types';
+import { describe, it } from 'node:test';
 
 import { safePriorityIndex } from 'common/priority';
-
+import type { SyncActionRecord } from 'common/types';
 import {
   dedupeLiveRecords,
   liveIdsByModel,
@@ -30,21 +28,26 @@ import {
 } from 'common/wrappers/socket-data-util';
 
 import { Comment } from 'store/comments/models';
-import { Issue } from 'store/issues/models';
-import { IssuesStore } from 'store/issues/store';
+import { IssueArtifact } from 'store/issue-artifacts/models';
+import { IssueArtifactsStore } from 'store/issue-artifacts/store';
 import { IssueHistory } from 'store/issue-history/models';
 import { IssueHistoryStore } from 'store/issue-history/store';
+import { Issue } from 'store/issues/models';
+import { IssuesStore } from 'store/issues/store';
 import { Label } from 'store/labels/models';
 import { LabelsStore } from 'store/labels/store';
 import { Project } from 'store/projects/models';
 import { ProjectsStore } from 'store/projects/store';
+import { SwarmActivity } from 'store/swarm-activity/models';
+import { saveSwarmActivityData } from 'store/swarm-activity/save-data';
+import {
+  SwarmActivityStore,
+  swarmActivityTTL,
+} from 'store/swarm-activity/store';
 import { Team } from 'store/teams/models';
 import { TeamsStore } from 'store/teams/store';
-import { ViewsStore } from 'store/views/store';
-import { saveSwarmActivityData } from 'store/swarm-activity/save-data';
-import { SwarmActivity } from 'store/swarm-activity/models';
-import { SwarmActivityStore, swarmActivityTTL } from 'store/swarm-activity/store';
 import { View } from 'store/views/models';
+import { ViewsStore } from 'store/views/store';
 import { Workflow } from 'store/workflows/models';
 import { UsersOnWorkspace, Workspace } from 'store/workspace/models';
 import { WorkspaceStore } from 'store/workspace/store';
@@ -116,12 +119,19 @@ describe('UsersOnWorkspace model', () => {
     }
   });
   it('accepts every status the server can emit (plus undefined)', () => {
-    for (const status of ['INVITED', 'ACTIVE', 'SUSPENDED', undefined] as never[]) {
+    for (const status of [
+      'INVITED',
+      'ACTIVE',
+      'SUSPENDED',
+      undefined,
+    ] as never[]) {
       UsersOnWorkspace.create(member({ status }) as never);
     }
   });
   it('rejects out-of-vocabulary roles (the server must map via clientRole)', () => {
-    assert.throws(() => UsersOnWorkspace.create(member({ role: 'OWNER' }) as never));
+    assert.throws(() =>
+      UsersOnWorkspace.create(member({ role: 'OWNER' }) as never),
+    );
   });
   it('rejects a degraded payload (the crash class fixed in the save handler)', () => {
     assert.throws(() => UsersOnWorkspace.create({ id: 'm1' } as never));
@@ -165,11 +175,8 @@ describe('Issue model', () => {
     assert.equal(Issue.create(issue({ priority: -1 }) as never).priority, -1);
   });
   it('requires its non-nullable fields (no defaults exist)', () => {
-    assert.throws(
-      () =>
-        Issue.create(
-          { ...issue(), stateId: null, teamId: null } as never,
-        ),
+    assert.throws(() =>
+      Issue.create({ ...issue(), stateId: null, teamId: null } as never),
     );
     assert.throws(() => Issue.create({ ...issue(), labelIds: null } as never));
   });
@@ -357,9 +364,12 @@ describe('IssueHistory model', () => {
     } as never);
   });
   it('rejects a degraded payload (required label arrays missing)', () => {
-    assert.throws(
-      () =>
-        IssueHistory.create({ id: 'h3', createdAt: stamp, updatedAt: stamp } as never),
+    assert.throws(() =>
+      IssueHistory.create({
+        id: 'h3',
+        createdAt: stamp,
+        updatedAt: stamp,
+      } as never),
     );
   });
 });
@@ -379,19 +389,55 @@ describe('Comment model', () => {
     assert.equal(node.body, '');
   });
   it('rejects a null body (the client union is string|undefined)', () => {
-    assert.throws(
-      () =>
-        Comment.create({
-          id: 'c2',
-          createdAt: stamp,
-          updatedAt: stamp,
-          body: null,
-          userId: 'u1',
-          issueId: 'i1',
-          parentId: null,
-          sourceMetadata: null,
-        } as never),
+    assert.throws(() =>
+      Comment.create({
+        id: 'c2',
+        createdAt: stamp,
+        updatedAt: stamp,
+        body: null,
+        userId: 'u1',
+        issueId: 'i1',
+        parentId: null,
+        sourceMetadata: null,
+      } as never),
     );
+  });
+});
+
+describe('IssueArtifact model (the SWR-56 wire shape)', () => {
+  // The exact payload the server's artifactData emits (pinned on that
+  // side by server/internal/api/artifact_test.go): 8 keys, present-null
+  // sourceMetadata, the plain-text body with newlines intact.
+  const artifact = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'a1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    userId: 'ag1',
+    issueId: 'i1',
+    title: 'Audit',
+    body: 'line1\nline2',
+    sourceMetadata: null,
+    ...over,
+  });
+
+  it('accepts the full wire shape with a present-null sourceMetadata', () => {
+    const node = IssueArtifact.create(artifact() as never);
+    assert.equal(node.sourceMetadata, null);
+    assert.equal(node.body, 'line1\nline2'); // the document keeps its lines
+  });
+
+  it('rejects a payload missing the body key (the key is the contract)', () => {
+    const payload = artifact();
+    delete payload.body;
+    assert.throws(() => IssueArtifact.create(payload as never));
+  });
+
+  it('rejects a missing sourceMetadata key (present-null, never absent)', () => {
+    const payload = artifact();
+    delete payload.sourceMetadata;
+    assert.throws(() => IssueArtifact.create(payload as never));
   });
 });
 
@@ -409,18 +455,17 @@ describe('Team model', () => {
     } as never);
   });
   it('rejects a null preferences object', () => {
-    assert.throws(
-      () =>
-        Team.create({
-          id: 't2',
-          createdAt: stamp,
-          updatedAt: stamp,
-          name: 'Engineering',
-          identifier: 'ENG',
-          workspaceId: 'w1',
-          currentCycle: null,
-          preferences: null,
-        } as never),
+    assert.throws(() =>
+      Team.create({
+        id: 't2',
+        createdAt: stamp,
+        updatedAt: stamp,
+        name: 'Engineering',
+        identifier: 'ENG',
+        workspaceId: 'w1',
+        currentCycle: null,
+        preferences: null,
+      } as never),
     );
   });
 });
@@ -449,19 +494,18 @@ describe('Workflow model', () => {
     }
   });
   it('rejects legacy lowercase categories (the server normalizes)', () => {
-    assert.throws(
-      () =>
-        Workflow.create({
-          id: 'wf2',
-          createdAt: stamp,
-          updatedAt: stamp,
-          name: 'N',
-          description: null,
-          position: 0,
-          color: '#8884d8',
-          category: 'todo',
-          teamId: 't1',
-        } as never),
+    assert.throws(() =>
+      Workflow.create({
+        id: 'wf2',
+        createdAt: stamp,
+        updatedAt: stamp,
+        name: 'N',
+        description: null,
+        position: 0,
+        color: '#8884d8',
+        category: 'todo',
+        teamId: 't1',
+      } as never),
     );
   });
 });
@@ -479,19 +523,18 @@ describe('Label model', () => {
       teamId: null,
       groupId: null,
     } as never);
-    assert.throws(
-      () =>
-        Label.create({
-          id: 'l2',
-          createdAt: stamp,
-          updatedAt: stamp,
-          name: 'Bug',
-          color: null,
-          description: null,
-          workspaceId: 'w1',
-          teamId: null,
-          groupId: null,
-        } as never),
+    assert.throws(() =>
+      Label.create({
+        id: 'l2',
+        createdAt: stamp,
+        updatedAt: stamp,
+        name: 'Bug',
+        color: null,
+        description: null,
+        workspaceId: 'w1',
+        teamId: null,
+        groupId: null,
+      } as never),
     );
   });
 });
@@ -530,7 +573,9 @@ describe('Workspace model', () => {
 // --- SwarmActivity: the in-flight work signal (spec cs:swarm:activity)
 // Payloads mirror server/internal/api/swarm_activity_test.go exactly —
 // keep the two files in step.
-const signal = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+const signal = (
+  over: Record<string, unknown> = {},
+): Record<string, unknown> => ({
   id: 'a1',
   agentId: 'a1',
   agentName: 'scout',
@@ -693,10 +738,9 @@ describe('staleIdsForModel (the deletion policy)', () => {
 
   it('prunes in-domain rows missing from the snapshot and nothing else', () => {
     const live = liveIdsByModel([rec('Project', 'p1', 'I')]);
-    assert.deepEqual(
-      staleIdsForModel('Project', domain(), projectRows, live),
-      ['p2'],
-    );
+    assert.deepEqual(staleIdsForModel('Project', domain(), projectRows, live), [
+      'p2',
+    ]);
   });
 
   it('prunes the whole in-domain set when the snapshot has zero rows', () => {
@@ -704,10 +748,10 @@ describe('staleIdsForModel (the deletion policy)', () => {
     // every in-domain row (p1 and p2) is residue; the foreign-workspace
     // row (p9) is still untouched.
     const live = liveIdsByModel([]);
-    assert.deepEqual(
-      staleIdsForModel('Project', domain(), projectRows, live),
-      ['p1', 'p2'],
-    );
+    assert.deepEqual(staleIdsForModel('Project', domain(), projectRows, live), [
+      'p1',
+      'p2',
+    ]);
   });
 
   it('scopes issues through their team (other workspaces stay untouched)', () => {
@@ -717,16 +761,14 @@ describe('staleIdsForModel (the deletion policy)', () => {
       pruneRow('i2', { teamId: 't1' }), // residue
       pruneRow('i9', { teamId: 'tX' }), // outside this workspace
     ];
-    assert.deepEqual(
-      staleIdsForModel('Issue', domain(), rows, live),
-      ['i2'],
-    );
+    assert.deepEqual(staleIdsForModel('Issue', domain(), rows, live), ['i2']);
   });
 
-  it('scopes comments and history through their issue', () => {
+  it('scopes comments, history, and artifacts through their issue', () => {
     const live = liveIdsByModel([
       rec('IssueComment', 'c1', 'I'),
       rec('IssueHistory', 'h1', 'I'),
+      rec('IssueArtifact', 'a1', 'I'),
     ]);
     const comments: PruneRow[] = [
       pruneRow('c1', { issueId: 'i1' }),
@@ -746,6 +788,15 @@ describe('staleIdsForModel (the deletion policy)', () => {
       staleIdsForModel('IssueHistory', domain(), history, live),
       ['h2'],
     );
+    const artifacts: PruneRow[] = [
+      pruneRow('a1', { issueId: 'i1' }),
+      pruneRow('a2', { issueId: 'i1' }), // residue
+      pruneRow('a9', { issueId: 'iX' }),
+    ];
+    assert.deepEqual(
+      staleIdsForModel('IssueArtifact', domain(), artifacts, live),
+      ['a2'],
+    );
   });
 
   it('scopes workflows through their team', () => {
@@ -755,28 +806,23 @@ describe('staleIdsForModel (the deletion policy)', () => {
       pruneRow('s2', { teamId: 't1' }), // residue
       pruneRow('s9', { teamId: 'tX' }),
     ];
-    assert.deepEqual(
-      staleIdsForModel('Workflow', domain(), rows, live),
-      ['s2'],
-    );
+    assert.deepEqual(staleIdsForModel('Workflow', domain(), rows, live), [
+      's2',
+    ]);
   });
 
   it('never prunes workspace rows (the picker relies on the union cache)', () => {
     const live = liveIdsByModel([rec('Workspace', 'w1', 'I')]);
     const rows: PruneRow[] = [pruneRow('w1'), pruneRow('w2')];
-    assert.deepEqual(
-      staleIdsForModel('Workspace', domain(), rows, live),
-      [],
-    );
+    assert.deepEqual(staleIdsForModel('Workspace', domain(), rows, live), []);
   });
 
   it('prunes swarm signals the snapshot no longer reports (crashed workers)', () => {
     const live = liveIdsByModel([rec('SwarmActivity', 'a1', 'I')]);
     const rows: PruneRow[] = [pruneRow('a1'), pruneRow('a2')];
-    assert.deepEqual(
-      staleIdsForModel('SwarmActivity', domain(), rows, live),
-      ['a2'],
-    );
+    assert.deepEqual(staleIdsForModel('SwarmActivity', domain(), rows, live), [
+      'a2',
+    ]);
   });
 });
 
@@ -830,7 +876,10 @@ describe('dedupeLiveRecords (the SWR-51 idempotency guard)', () => {
       rec('Issue', 'i2', 'D', '105'),
       rec('Issue', 'i3', 'I', '106'),
     ] as unknown as SyncActionRecord[]);
-    assert.deepEqual(kept.map((r) => r.sequenceId), ['106']);
+    assert.deepEqual(
+      kept.map((r) => r.sequenceId),
+      ['106'],
+    );
   });
 
   it('applies synthetic records (no real sequence) unconditionally', () => {
@@ -927,6 +976,19 @@ describe('store update merges (the SWR-49 wire->model seams)', () => {
     groupId: null,
     ...over,
   });
+  const artifact = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'a1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    userId: 'ag1',
+    issueId: 'i1',
+    title: 'Audit',
+    body: 'line1\nline2',
+    sourceMetadata: null,
+    ...over,
+  });
   const hist = (
     over: Record<string, unknown> = {},
   ): Record<string, unknown> => ({
@@ -996,14 +1058,13 @@ describe('store update merges (the SWR-49 wire->model seams)', () => {
       views: [view() as never],
       workspaceId: 'w1',
     });
-    assert.throws(
-      () =>
-        store.update(
-          view({
-            filters: { priority: { value: [1], filterType: 'isAnyOf' } },
-          }) as never,
-          'v1',
-        ),
+    assert.throws(() =>
+      store.update(
+        view({
+          filters: { priority: { value: [1], filterType: 'isAnyOf' } },
+        }) as never,
+        'v1',
+      ),
     );
   });
 
@@ -1012,18 +1073,26 @@ describe('store update merges (the SWR-49 wire->model seams)', () => {
       projects: [project() as never],
       workspaceId: 'w1',
     });
-    store.update(project({ name: 'Rail 2', teams: ['t1', 't2'] }) as never, 'p1');
+    store.update(
+      project({ name: 'Rail 2', teams: ['t1', 't2'] }) as never,
+      'p1',
+    );
     assert.equal(store.projects[0].name, 'Rail 2');
     assert.deepEqual(store.projects[0].teams, ['t1', 't2']);
   });
 
-  it('workspace: a member\'s teamIds array and settings merge through create()', () => {
+  it("workspace: a member's teamIds array and settings merge through create()", () => {
     const store = WorkspaceStore.create({
       workspace: undefined,
       usersOnWorkspaces: [member() as never],
     });
     store.updateUsers(
-      { ...member(), role: 'AGENT', teamIds: ['t1'], settings: { ai: true } } as never,
+      {
+        ...member(),
+        role: 'AGENT',
+        teamIds: ['t1'],
+        settings: { ai: true },
+      } as never,
       'm1',
     );
     assert.equal(store.usersOnWorkspaces[0].role, 'AGENT');
@@ -1051,6 +1120,20 @@ describe('store update merges (the SWR-49 wire->model seams)', () => {
     const entry = store.issueHistories.get('i1')?.[0];
     assert.equal(entry?.toStateId, 's3');
     assert.equal(entry?.userId, 'u1'); // untouched survives
+  });
+
+  it('issue-artifacts: the document merges through create() and deletes by id', () => {
+    const store = IssueArtifactsStore.create({
+      issueArtifacts: { i1: [artifact() as never] },
+    });
+    store.update(
+      artifact({ title: 'Audit v2', body: 'rewritten' }) as never,
+      'a1',
+    );
+    assert.equal(store.issueArtifacts.get('i1')?.[0].title, 'Audit v2');
+    assert.equal(store.issueArtifacts.get('i1')?.[0].userId, 'ag1'); // untouched survives
+    store.deleteById('a1');
+    assert.equal(store.issueArtifacts.has('i1'), false); // the key's absence is the deletion
   });
 
   it('labels: the flat merge (the cosmetic class) still validates', () => {

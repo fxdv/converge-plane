@@ -2,13 +2,14 @@ import { runInAction } from 'mobx';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { convergeDatabase } from 'store/database';
 import { saveCommentsData } from 'store/comments';
+import { convergeDatabase } from 'store/database';
+import { saveIssueArtifactsData } from 'store/issue-artifacts';
 import { saveIssueHistoryData } from 'store/issue-history';
 import { saveIssuesData } from 'store/issues';
 import { saveLabelData } from 'store/labels';
-import { saveProjectData } from 'store/projects';
 import { MODELS } from 'store/models';
+import { saveProjectData } from 'store/projects';
 import { saveSwarmActivityData } from 'store/swarm-activity';
 import { saveTeamData } from 'store/teams';
 import { saveViewData } from 'store/views';
@@ -30,6 +31,7 @@ const SAVE_HANDLERS: Record<string, Function> = {
   [MODELS.Issue]: saveIssuesData,
   [MODELS.IssueHistory]: saveIssueHistoryData,
   [MODELS.IssueComment]: saveCommentsData,
+  [MODELS.IssueArtifact]: saveIssueArtifactsData,
   [MODELS.View]: saveViewData,
   [MODELS.Project]: saveProjectData,
   [MODELS.SwarmActivity]: saveSwarmActivityData,
@@ -255,11 +257,16 @@ function inDomain(
       return row.workspaceId === domain.workspaceId;
     case MODELS.Workflow:
     case MODELS.Issue:
-      // Scoped to the workspace through their team.
-      return row.teamId != null && domain.teamIds.has(row.teamId);
+      // Scoped to the workspace through their team. (typeof, not != null:
+      // the eqeqeq rule forbids the loose comparison; for
+      // string | null | undefined the two predicates are equivalent.)
+      return typeof row.teamId === 'string' && domain.teamIds.has(row.teamId);
     case MODELS.IssueComment:
     case MODELS.IssueHistory:
-      return row.issueId != null && domain.issueIds.has(row.issueId);
+    case MODELS.IssueArtifact:
+      // Same typeof predicate as the team case above.
+      return typeof row.issueId === 'string' &&
+        domain.issueIds.has(row.issueId);
     case MODELS.SwarmActivity:
       // In-memory session store: the snapshot replays the runtime's live
       // signal set in full; anything else is a ghost (a crashed worker).
@@ -275,7 +282,7 @@ function inDomain(
 export function staleIdsForModel(
   modelName: string,
   domain: PruneDomain,
-  localRows: ReadonlyArray<PruneRow>,
+  localRows: readonly PruneRow[],
   live: ReadonlyMap<string, ReadonlySet<string>>,
 ): string[] {
   const liveSet = live.get(modelName);
@@ -309,10 +316,7 @@ async function localRowsForModel(
         .equals(domain.workspaceId)
         .toArray();
     case MODELS.Team:
-      return db.teams
-        .where('workspaceId')
-        .equals(domain.workspaceId)
-        .toArray();
+      return db.teams.where('workspaceId').equals(domain.workspaceId).toArray();
     case MODELS.Label:
       return db.labels
         .where('workspaceId')
@@ -324,25 +328,38 @@ async function localRowsForModel(
         .equals(domain.workspaceId)
         .toArray();
     case MODELS.View:
-      return db.views
-        .where('workspaceId')
-        .equals(domain.workspaceId)
-        .toArray();
+      return db.views.where('workspaceId').equals(domain.workspaceId).toArray();
     case MODELS.Workflow:
       return domain.teamIds.size
-        ? db.workflows.where('teamId').anyOf([...domain.teamIds]).toArray()
+        ? db.workflows
+            .where('teamId')
+            .anyOf([...domain.teamIds])
+            .toArray()
         : [];
     case MODELS.Issue:
       return domain.teamIds.size
-        ? db.issues.where('teamId').anyOf([...domain.teamIds]).toArray()
+        ? db.issues
+            .where('teamId')
+            .anyOf([...domain.teamIds])
+            .toArray()
         : [];
     case MODELS.IssueComment:
       return domain.issueIds.size
-        ? db.comments.where('issueId').anyOf([...domain.issueIds]).toArray()
+        ? db.comments
+            .where('issueId')
+            .anyOf([...domain.issueIds])
+            .toArray()
         : [];
     case MODELS.IssueHistory:
       return domain.issueIds.size
         ? db.issueHistory
+            .where('issueId')
+            .anyOf([...domain.issueIds])
+            .toArray()
+        : [];
+    case MODELS.IssueArtifact:
+      return domain.issueIds.size
+        ? db.issueArtifacts
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()
@@ -435,12 +452,14 @@ export async function pruneStaleLocalRecords(
         if (!handler) {
           return null;
         }
-        return handler(records, MODEL_STORE_MAP[modelName]).catch((
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          err: any,
-        ) => {
-          console.warn(`[converge] prune: ${modelName} delete failed`, err);
-        });
+        return handler(records, MODEL_STORE_MAP[modelName]).catch(
+          (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            err: any,
+          ) => {
+            console.warn(`[converge] prune: ${modelName} delete failed`, err);
+          },
+        );
       }),
     );
   } catch (err) {

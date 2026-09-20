@@ -3,6 +3,7 @@
 import Dexie from 'dexie';
 
 import type {
+  IssueArtifactType,
   IssueCommentType,
   IssueHistoryType,
   IssueType,
@@ -29,6 +30,7 @@ export class ConvergeDatabase extends Dexie {
   issues: Dexie.Table<IssueType, string>;
   issueHistory: Dexie.Table<IssueHistoryType, string>;
   comments: Dexie.Table<IssueCommentType, string>;
+  issueArtifacts: Dexie.Table<IssueArtifactType, string>;
   usersOnWorkspaces: Dexie.Table<UsersOnWorkspaceType, string>;
   views: Dexie.Table<ViewType, string>;
   projects: Dexie.Table<ProjectType, string>;
@@ -36,7 +38,7 @@ export class ConvergeDatabase extends Dexie {
   constructor(databaseName: string) {
     super(databaseName);
 
-    this.version(20).stores({
+    this.version(21).stores({
       [MODELS.Workspace]: 'id,createdAt,updatedAt,name,slug,preferences',
       [MODELS.Label]:
         'id,createdAt,updatedAt,name,color,description,workspaceId,groupId,teamId',
@@ -52,6 +54,10 @@ export class ConvergeDatabase extends Dexie {
         'id,createdAt,updatedAt,userId,issueId,assedLabelIds,removedLabelIds,fromPriority,toPriority,fromStateId,toStateId,fromEstimate,toEstimate,fromAssigneeId,toAssigneeId,fromParentId,toParentId,sourceMetadata',
       [MODELS.IssueComment]:
         'id,createdAt,updatedAt,userId,issueId,body,parentId,sourceMetadata',
+      // SWR-56: the document channel. body is deliberately unindexed (up
+      // to 8 KB of display text per row; the load path queries issueId).
+      [MODELS.IssueArtifact]:
+        'id,createdAt,updatedAt,userId,issueId,title,sourceMetadata',
       [MODELS.View]:
         'id,createdAt,updatedAt,workspaceId,name,description,filters,isBookmarked,teamId',
       [MODELS.Project]:
@@ -66,6 +72,7 @@ export class ConvergeDatabase extends Dexie {
     this.usersOnWorkspaces = this.table(MODELS.UsersOnWorkspaces);
     this.issueHistory = this.table(MODELS.IssueHistory);
     this.comments = this.table(MODELS.IssueComment);
+    this.issueArtifacts = this.table(MODELS.IssueArtifact);
     this.views = this.table(MODELS.View);
     this.projects = this.table(MODELS.Project);
   }

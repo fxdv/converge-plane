@@ -1,7 +1,7 @@
-import { RiFileTransferLine } from '@remixicon/react';
 import { TimelineItem } from '@converge/ui/components/timeline';
 import { BlockedFill, BlocksFill, DuplicateLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
+import { RiFileTransferLine } from '@remixicon/react';
 import { useRouter } from 'next/router';
 
 import { IssueRelationEnum } from 'common/types';
@@ -56,8 +56,7 @@ export function RelatedActivity({
 }: StatusActivityProps) {
   const relatedChanges = issueHistory.relationChanges;
   const Icon =
-    ICON_MAP[relatedChanges.type] ??
-    ICON_MAP[IssueRelationEnum.RELATED];
+    ICON_MAP[relatedChanges.type] ?? ICON_MAP[IssueRelationEnum.RELATED];
   const {
     query: { workspaceSlug },
   } = useRouter();
@@ -75,9 +74,7 @@ export function RelatedActivity({
       {team?.identifier ?? ''}-{relatedIssue.number}
     </a>
   ) : (
-    <span className="text-muted-foreground mx-1 italic">
-      a removed issue
-    </span>
+    <span className="text-muted-foreground mx-1 italic">a removed issue</span>
   );
 
   const getText = () => {

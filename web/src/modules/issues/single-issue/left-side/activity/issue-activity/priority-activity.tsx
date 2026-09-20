@@ -3,10 +3,9 @@ import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
-import { safePriorityIndex } from 'common/priority';
-
 import { PriorityIcons } from 'modules/issues/components';
 
+import { safePriorityIndex } from 'common/priority';
 import { type IssueHistoryType } from 'common/types';
 
 import { usePriorities } from 'hooks/priorities';

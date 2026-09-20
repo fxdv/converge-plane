@@ -17,6 +17,7 @@ export enum MODELS {
   Issue = 'Issue',
   IssueHistory = 'IssueHistory',
   IssueComment = 'IssueComment',
+  IssueArtifact = 'IssueArtifact',
 
   // Swarm: the in-flight work signal (one record per agent; the
   // board's live chip and the swarm panel's real-time state).
