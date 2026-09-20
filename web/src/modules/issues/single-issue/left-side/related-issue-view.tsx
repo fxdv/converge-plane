@@ -73,14 +73,16 @@ interface RelatedRowProps {
 }
 
 const RelatedRow = observer(
-  function RelatedRowInner({ relation, onDelete, deleting }: RelatedRowProps) {
+  ({ relation, onDelete, deleting }: RelatedRowProps) => {
     const meta = RELATION_META[relation.type] ?? {
       icon: RelatedIssueLine,
       color: 'text-muted-foreground',
       verb: 'Linked to',
     };
     const Icon = meta.icon;
-    const { query: { workspaceSlug } } = useRouter();
+    const {
+      query: { workspaceSlug },
+    } = useRouter();
     const { issuesStore } = useContextStore();
     const relatedIssue = issuesStore.getIssueById(relation.relatedIssueId);
     const team = useTeamWithId(relatedIssue ? relatedIssue.teamId : '');
@@ -128,38 +130,36 @@ interface RelatedIssueViewProps {
   issue: IssueType;
 }
 
-export const RelatedIssueView = observer(
-  function RelatedIssueViewInner({ issue }: RelatedIssueViewProps) {
-    const { toast } = useToast();
-    const { mutate: deleteRelation, isLoading: deleting } =
-      useDeleteIssueRelationMutation({
-        onError: (message) => {
-          toast({
-            title: 'Could not remove the relation',
-            description: message,
-          });
-        },
-      });
+export const RelatedIssueView = observer(({ issue }: RelatedIssueViewProps) => {
+  const { toast } = useToast();
+  const { mutate: deleteRelation, isLoading: deleting } =
+    useDeleteIssueRelationMutation({
+      onError: (message) => {
+        toast({
+          title: 'Could not remove the relation',
+          description: message,
+        });
+      },
+    });
 
-    const relations: IssueRelationType[] = issue.relations ?? [];
-    if (relations.length === 0) {
-      return null;
-    }
+  const relations: IssueRelationType[] = issue.relations ?? [];
+  if (relations.length === 0) {
+    return null;
+  }
 
-    return (
-      <div className="py-2">
-        <div className="px-6 py-1 text-md text-foreground">Related</div>
-        {relations.map((relation) => (
-          <RelatedRow
-            key={relation.id}
-            relation={relation}
-            deleting={deleting}
-            onDelete={(relationId) =>
-              deleteRelation({ issueId: issue.id, relationId })
-            }
-          />
-        ))}
-      </div>
-    );
-  },
-);
+  return (
+    <div className="py-2">
+      <div className="px-6 py-1 text-md text-foreground">Related</div>
+      {relations.map((relation) => (
+        <RelatedRow
+          key={relation.id}
+          relation={relation}
+          deleting={deleting}
+          onDelete={(relationId) =>
+            deleteRelation({ issueId: issue.id, relationId })
+          }
+        />
+      ))}
+    </div>
+  );
+});

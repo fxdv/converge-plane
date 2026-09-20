@@ -16,6 +16,7 @@ import { useEditorPasteHandler } from 'hooks/use-editor-paste-handler';
 import { useUpdateIssueMutation } from 'services/issues';
 
 import { Activity } from './activity';
+import { ArtifactListView } from './artifact-list-view';
 import { FileUpload } from './file-upload';
 import { IssueSubIssueSelector } from './issue-sub-issue-selector';
 import { IssueTitle } from './issue-title';
@@ -78,6 +79,8 @@ export const LeftSide = observer(() => {
             <SubIssueView childIssues={issue.children} issueId={issue.id} />
 
             <RelatedIssueView issue={issue} />
+
+            <ArtifactListView />
 
             <Activity />
           </div>

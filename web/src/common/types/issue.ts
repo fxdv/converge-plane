@@ -1,4 +1,7 @@
-import { IssueRelationEnumType, type IssueRelationType } from './issue-relation';
+import {
+  IssueRelationEnumType,
+  type IssueRelationType,
+} from './issue-relation';
 
 export interface IssueSourceMetadataType {
   type: string;
@@ -91,6 +94,22 @@ export interface IssueCommentType {
 
   issueId: string;
   parentId: string;
+  sourceMetadata?: string;
+}
+
+// SWR-56: a document the swarm posts to an issue (an audit, a plan, a
+// manifest). The body is plain text (the fenced document the client
+// renders preformatted); sourceMetadata is present (null in v1).
+export interface IssueArtifactType {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+
+  title: string;
+  body: string;
+  userId: string;
+
+  issueId: string;
   sourceMetadata?: string;
 }
 

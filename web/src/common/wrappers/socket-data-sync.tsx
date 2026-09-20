@@ -32,6 +32,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
 
     const {
       commentsStore,
+      issueArtifactsStore,
       issuesHistoryStore,
       issuesStore,
       workflowsStore,
@@ -75,9 +76,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       // (SWR-51): from here on the tab fetches and dedupes against its
       // own cursor, never against what another tab wrote to the shared
       // key. The shared key remains the cross-tab floor.
-      seedTabHighWater(
-        localStorage.getItem(`lastSequenceId_${hash(hashKey)}`),
-      );
+      seedTabHighWater(localStorage.getItem(`lastSequenceId_${hash(hashKey)}`));
       const url = `${base}/api/v1/sync_actions/stream?workspaceId=${workspaceStore.workspace.id}&userId=${user.id}`;
       const socket = new EventSource(url, { withCredentials: true });
       setSocket(socket);
@@ -86,8 +85,9 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       // it, and this tab may have applied past it — a backwards write
       // would let a third tab skip records (SWR-51).
       const advanceShared = (seq: number) => {
-        const stored =
-          Number(localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0');
+        const stored = Number(
+          localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
+        );
         if (seq > stored) {
           localStorage.setItem(`lastSequenceId_${hash(hashKey)}`, `${seq}`);
         }
@@ -104,6 +104,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         [MODELS.Issue]: issuesStore,
         [MODELS.IssueHistory]: issuesHistoryStore,
         [MODELS.IssueComment]: commentsStore,
+        [MODELS.IssueArtifact]: issueArtifactsStore,
         [MODELS.View]: viewsStore,
         [MODELS.SwarmActivity]: swarmActivityStore,
       };

@@ -4,11 +4,12 @@ import React from 'react';
 import { ApplicationStore, defaultApplicationStoreValue } from './application';
 import { CommentsStore } from './comments';
 import { CommonStore, defaultCommonStoreValue } from './common';
+import { IssueArtifactsStore } from './issue-artifacts';
 import { IssueHistoryStore } from './issue-history';
-import { SwarmActivityStore } from './swarm-activity';
 import { IssuesStore } from './issues';
 import { LabelsStore } from './labels';
 import { ProjectsStore } from './projects';
+import { SwarmActivityStore } from './swarm-activity';
 import { TeamsStore } from './teams';
 import { ViewsStore } from './views';
 import { WorkflowsStore } from './workflows';
@@ -21,6 +22,7 @@ import { WorkspaceStore } from './workspace';
 // pass.
 const StoreContextModel = types.model({
   commentsStore: CommentsStore,
+  issueArtifactsStore: IssueArtifactsStore,
   issuesHistoryStore: IssueHistoryStore,
   swarmActivityStore: SwarmActivityStore,
   issuesStore: IssuesStore,
@@ -37,6 +39,9 @@ const StoreContextModel = types.model({
 export const storeContextStore = StoreContextModel.create({
   commentsStore: {
     comments: {},
+  },
+  issueArtifactsStore: {
+    issueArtifacts: {},
   },
   issuesHistoryStore: {
     issueHistories: {},

@@ -15,30 +15,29 @@
 // declaration order, the same pattern as the dedupe tests in
 // wire-contract.test.ts.
 
-import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { before, describe, it } from 'node:test';
 
 import type { SyncActionRecord } from 'common/types';
-
-import * as database from 'store/database';
-import { MODELS } from 'store/models';
+import {
+  saveLiveSocketData,
+  saveSocketData,
+  seedTabHighWater,
+} from 'common/wrappers/socket-data-util';
 
 import { CommentsStore } from 'store/comments/store';
+import * as database from 'store/database';
+import { IssueArtifactsStore } from 'store/issue-artifacts/store';
 import { IssueHistoryStore } from 'store/issue-history/store';
 import { IssuesStore } from 'store/issues/store';
 import { LabelsStore } from 'store/labels/store';
+import { MODELS } from 'store/models';
 import { ProjectsStore } from 'store/projects/store';
 import { SwarmActivityStore } from 'store/swarm-activity/store';
 import { TeamsStore } from 'store/teams/store';
 import { ViewsStore } from 'store/views/store';
 import { WorkflowsStore } from 'store/workflows/store';
 import { WorkspaceStore } from 'store/workspace/store';
-
-import {
-  saveLiveSocketData,
-  saveSocketData,
-  seedTabHighWater,
-} from 'common/wrappers/socket-data-util';
 
 const stamp = '2026-09-02T12:00:00.000Z';
 
@@ -69,9 +68,7 @@ const label = (
   groupId: null,
   ...over,
 });
-const team = (
-  over: Record<string, unknown> = {},
-): Record<string, unknown> => ({
+const team = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: 't1',
   createdAt: stamp,
   updatedAt: stamp,
@@ -136,9 +133,7 @@ const member = (
   settings: {},
   ...over,
 });
-const view = (
-  over: Record<string, unknown> = {},
-): Record<string, unknown> => ({
+const view = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
   id: 'v1',
   createdAt: stamp,
   updatedAt: stamp,
@@ -205,6 +200,19 @@ const comment = (
   sourceMetadata: null,
   ...over,
 });
+const artifact = (
+  over: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  id: 'a1',
+  createdAt: stamp,
+  updatedAt: stamp,
+  userId: 'ag1',
+  issueId: 'i1',
+  title: 'Audit',
+  body: 'line1\nline2',
+  sourceMetadata: null,
+  ...over,
+});
 const signal = (
   over: Record<string, unknown> = {},
 ): Record<string, unknown> => ({
@@ -247,12 +255,13 @@ const TABLE_PROPS: Record<string, string> = {
   [MODELS.UsersOnWorkspaces]: 'usersOnWorkspaces',
   [MODELS.IssueHistory]: 'issueHistory',
   [MODELS.IssueComment]: 'comments',
+  [MODELS.IssueArtifact]: 'issueArtifacts',
   [MODELS.View]: 'views',
   [MODELS.Project]: 'projects',
 };
 
 interface TableStub {
-  puts: Record<string, unknown>[];
+  puts: Array<Record<string, unknown>>;
   dels: string[];
 }
 const tableStubs = new Map<string, TableStub>();
@@ -305,8 +314,14 @@ function storeMap(): Record<string, any> {
     [MODELS.Workspace]: workspaceStore,
     [MODELS.UsersOnWorkspaces]: workspaceStore,
     [MODELS.Team]: TeamsStore.create({ teams: [], workspaceId: 'w1' } as never),
-    [MODELS.Label]: LabelsStore.create({ labels: [], workspaceId: 'w1' } as never),
-    [MODELS.Project]: ProjectsStore.create({ projects: [], workspaceId: 'w1' } as never),
+    [MODELS.Label]: LabelsStore.create({
+      labels: [],
+      workspaceId: 'w1',
+    } as never),
+    [MODELS.Project]: ProjectsStore.create({
+      projects: [],
+      workspaceId: 'w1',
+    } as never),
     [MODELS.Workflow]: WorkflowsStore.create({
       workflows: {},
       workflowsByTeamId: {},
@@ -319,8 +334,13 @@ function storeMap(): Record<string, any> {
       issueHistories: {},
     } as never),
     [MODELS.IssueComment]: CommentsStore.create({ comments: {} } as never),
+    [MODELS.IssueArtifact]: IssueArtifactsStore.create({
+      issueArtifacts: {},
+    } as never),
     [MODELS.View]: ViewsStore.create({ views: [], workspaceId: 'w1' } as never),
-    [MODELS.SwarmActivity]: SwarmActivityStore.create({ activities: {} } as never),
+    [MODELS.SwarmActivity]: SwarmActivityStore.create({
+      activities: {},
+    } as never),
   };
 }
 
@@ -359,6 +379,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
         rec(MODELS.IssueComment, 'c1', 'I', comment(), '9'),
         rec(MODELS.View, 'v1', 'I', view(), '10'),
         rec(MODELS.SwarmActivity, 'a1', 'I', signal(), '11'),
+        rec(MODELS.IssueArtifact, 'ar1', 'I', artifact(), '12'),
       ],
       map,
     );
@@ -381,8 +402,18 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.equal(map[MODELS.Issue].issuesMap.get('i1')?.title, 'T');
     assert.equal(map[MODELS.IssueHistory].issueHistories.get('i1')?.length, 1);
     assert.equal(map[MODELS.IssueComment].comments.get('i1')?.length, 1);
+    // Materialize to a plain array before comparing (the node harness
+    // must never be left to inspect a mobx Proxy on a failure).
+    const docs = [
+      ...(map[MODELS.IssueArtifact].issueArtifacts.get('i1') ?? []),
+    ];
+    assert.equal(docs.length, 1);
+    assert.equal(docs[0].title, 'Audit');
     assert.equal(map[MODELS.View].views[0].name, 'My view');
-    assert.equal(map[MODELS.SwarmActivity].activities.get('a1')?.phase, 'deciding');
+    assert.equal(
+      map[MODELS.SwarmActivity].activities.get('a1')?.phase,
+      'deciding',
+    );
 
     // Every table-backed model got its cache row; swarm is in-memory.
     for (const model of Object.keys(TABLE_PROPS)) {
@@ -405,6 +436,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
         rec(MODELS.UsersOnWorkspaces, 'm1', 'I', member(), '3'),
         rec(MODELS.IssueHistory, 'h1', 'I', history(), '4'),
         rec(MODELS.IssueComment, 'c1', 'I', comment(), '5'),
+        rec(MODELS.IssueArtifact, 'a1', 'I', artifact(), '11'),
       ],
       map,
     );
@@ -416,6 +448,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
         rec(MODELS.UsersOnWorkspaces, 'm1', 'D', { id: 'm1' }, '8'),
         rec(MODELS.IssueHistory, 'h1', 'D', { id: 'h1' }, '9'),
         rec(MODELS.IssueComment, 'c1', 'D', { id: 'c1' }, '10'),
+        rec(MODELS.IssueArtifact, 'a1', 'D', { id: 'a1' }, '12'),
       ],
       map,
     );
@@ -429,11 +462,13 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     // never be left to inspect the mobx Proxy.
     assert.equal(map[MODELS.IssueHistory].issueHistories.has('i1'), false);
     assert.equal(map[MODELS.IssueComment].comments.size, 0);
+    assert.equal(map[MODELS.IssueArtifact].issueArtifacts.size, 0);
     assert.deepEqual(tableStubs.get(MODELS.Label)!.dels, ['l1']);
     assert.deepEqual(tableStubs.get(MODELS.Issue)!.dels, ['i1']);
     assert.deepEqual(tableStubs.get(MODELS.UsersOnWorkspaces)!.dels, ['m1']);
     assert.deepEqual(tableStubs.get(MODELS.IssueHistory)!.dels, ['h1']);
     assert.deepEqual(tableStubs.get(MODELS.IssueComment)!.dels, ['c1']);
+    assert.deepEqual(tableStubs.get(MODELS.IssueArtifact)!.dels, ['a1']);
   });
 
   it('a degraded record fails its own model only (the batch survives)', async () => {
@@ -464,9 +499,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.equal(map[MODELS.Team].teams.length, 1);
     assert.equal(map[MODELS.Label].labels.length, 0);
     assert.ok(
-      warnings.some((args) =>
-        String(args[0]).includes('Label apply failed'),
-      ),
+      warnings.some((args) => String(args[0]).includes('Label apply failed')),
       'the failed model must be reported',
     );
   });
@@ -480,7 +513,10 @@ describe('saveSocketData (the sync apply pipeline)', () => {
           MODELS.Team,
           't1',
           'U',
-          team({ name: 'Eng', preferences: { cyclesEnabled: true, teamType: 'engineering' } }),
+          team({
+            name: 'Eng',
+            preferences: { cyclesEnabled: true, teamType: 'engineering' },
+          }),
           '2',
         ),
       ],
@@ -498,7 +534,10 @@ describe('saveLiveSocketData (the dedupe guard composed with the apply)', () => 
   it('a re-delivered stale CREATE cannot resurrect a deleted row', async () => {
     seedTabHighWater('1000');
     const map = storeMap();
-    await saveLiveSocketData([rec(MODELS.Issue, 'i1', 'I', issue(), '1001')], map);
+    await saveLiveSocketData(
+      [rec(MODELS.Issue, 'i1', 'I', issue(), '1001')],
+      map,
+    );
     assert.equal(map[MODELS.Issue].issuesMap.size, 1);
     await saveLiveSocketData(
       [rec(MODELS.Issue, 'i1', 'D', { id: 'i1' }, '1002')],
@@ -509,7 +548,10 @@ describe('saveLiveSocketData (the dedupe guard composed with the apply)', () => 
     // re-delivers the old CREATE over the newer DELETE: it must be deduped
     // before the apply, never reaching the handler.
     const putsBefore = tableStubs.get(MODELS.Issue)!.puts.length;
-    await saveLiveSocketData([rec(MODELS.Issue, 'i1', 'I', issue(), '1001')], map);
+    await saveLiveSocketData(
+      [rec(MODELS.Issue, 'i1', 'I', issue(), '1001')],
+      map,
+    );
     assert.equal(map[MODELS.Issue].issuesMap.size, 0); // no resurrection
     assert.equal(tableStubs.get(MODELS.Issue)!.puts.length, putsBefore);
   });
@@ -525,10 +567,10 @@ describe('saveLiveSocketData (the dedupe guard composed with the apply)', () => 
       ],
       map,
     );
-    assert.deepEqual(
-      [...map[MODELS.Issue].issuesMap.keys()].sort(),
-      ['i2', 'i3'],
-    );
+    assert.deepEqual([...map[MODELS.Issue].issuesMap.keys()].sort(), [
+      'i2',
+      'i3',
+    ]);
     assert.equal(map[MODELS.Label].labels[0].name, 'Perf');
   });
 

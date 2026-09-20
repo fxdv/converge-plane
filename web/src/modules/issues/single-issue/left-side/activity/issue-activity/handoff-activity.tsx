@@ -24,8 +24,9 @@ export const HandoffActivity = observer(
     const target = React.useMemo(
       () =>
         issueHistory.toAssigneeId
-          ? (users.find((user: User) => user.id === issueHistory.toAssigneeId) ??
-            undefined)
+          ? (users.find(
+              (user: User) => user.id === issueHistory.toAssigneeId,
+            ) ?? undefined)
           : undefined,
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [issueHistory.toAssigneeId, users],
