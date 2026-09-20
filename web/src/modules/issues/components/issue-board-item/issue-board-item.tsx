@@ -1,5 +1,20 @@
 import type { DraggableProvided } from '@hello-pangea/dnd';
 
+import { HUMAN_REVIEW_STATE_NAME } from '@converge/services';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@converge/ui/components/dropdown-menu';
+import {
+  ArrowForwardLine,
+  BlockedFill,
+  BlocksFill,
+  ChevronDown,
+  Warning,
+} from '@converge/ui/icons';
+import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import React, { type CSSProperties } from 'react';
 
@@ -11,15 +26,14 @@ import {
   IssueStatusDropdown,
   IssueStatusDropdownVariant,
 } from 'modules/issues/components';
-
-import { HUMAN_REVIEW_STATE_NAME } from '@converge/services';
-
-import { ArrowForwardLine, BlockedFill, BlocksFill, Warning } from '@converge/ui/icons';
+import { projectFocusKind } from 'modules/issues/project-rail/project-focus';
+import { ProjectFocusContext } from 'modules/issues/project-rail/project-focus-context';
 
 import {
   IssueRelationEnum,
   type IssueHistoryType,
   type IssueRelationType,
+  type ProjectType,
 } from 'common/types';
 
 import { IssueViewContext } from 'components/side-issue-view';
@@ -130,10 +144,29 @@ export const BoardIssueItem = observer(
       (r: IssueRelationType) => r.type === IssueRelationEnum.BLOCKED,
     ).length;
 
+    // The board's project-focus lens (spec cs:ui:projects-rail).
+    // `null` is every board without a rail and the no-lens default,
+    // so those cards render byte-identical to before.
+    const focus = React.useContext(ProjectFocusContext);
+    const focusKind = projectFocusKind(
+      issue.projectIds,
+      focus ? focus.projectId : null,
+    );
+
+    // match → a 2px ring in the project's color, full opacity;
+    // dim → faded, so the matched cards stand out. Never while this
+    // card is the drag image (a half-opacity drag image reads as a
+    // glitch).
+    const focusStyle: CSSProperties =
+      focusKind === 'match' && focus
+        ? { boxShadow: `0 0 0 2px ${focus.color || '#9ca3af'}` }
+        : focusKind === 'dim' && !isDragging
+          ? { opacity: 0.45 }
+          : {};
+
     const statusChange = (stateId: string) => {
       updateIssue({ id: issue.id, stateId, teamId: issue.teamId });
     };
-
     const assigneeChange = (assigneeId: string) => {
       updateIssue({ id: issue.id, assigneeId, teamId: issue.teamId });
     };
@@ -163,7 +196,7 @@ export const BoardIssueItem = observer(
         key={key}
         {...provided.draggableProps}
         {...provided.dragHandleProps}
-        style={getStyle(provided, style)}
+        style={getStyle(provided, { ...focusStyle, ...style })}
         data-is-dragging={isDragging}
         onMouseOver={() => {
           const { selectedIssues } = applicationStore;
@@ -209,8 +242,12 @@ export const BoardIssueItem = observer(
 
         <IssueLabels labelIds={issue.labelIds} />
 
-        {/* v1.1: the project the card belongs to (spec cs:ui:projects-rail)
-            — a dot + name so the card can be found in its rail stack. */}
+        {/* v1.2: the project picker (spec cs:ui:projects-rail) — the
+            dot + name row opens the team's projects plus "No project".
+            It is the membership path in both directions: the rail
+            chip assigns by drop, this row assigns, reassigns, and
+            removes (a card renders only in its state column, so the
+            row is how it leaves a project). */}
         {(() => {
           const project = issue.projectIds?.length
             ? projectsStore.getProjectById(issue.projectIds[0])
@@ -218,14 +255,63 @@ export const BoardIssueItem = observer(
           if (!project) {
             return null;
           }
+          const teamProjects: ProjectType[] = team
+            ? projectsStore.getProjectsForTeam(team.id)
+            : [];
           return (
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span
-                className="size-2 rounded-full shrink-0"
-                style={{ backgroundColor: project.color || '#888888' }}
-              />
-              <span className="truncate">{project.name}</span>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 max-w-full text-[11px] text-muted-foreground hover:text-foreground"
+                  // The card's anchor opens the issue view on click;
+                  // the picker must not let that ride along.
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span
+                    className="size-2 rounded-full shrink-0"
+                    style={{ backgroundColor: project.color || '#888888' }}
+                  />
+                  <span className="truncate">{project.name}</span>
+                  <ChevronDown size={11} className="shrink-0 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem
+                  onSelect={() =>
+                    updateIssue({
+                      id: issue.id,
+                      projectIds: [],
+                      teamId: issue.teamId,
+                    })
+                  }
+                >
+                  <span className="size-2 rounded-full bg-grayAlpha-400/60 shrink-0" />
+                  No project
+                </DropdownMenuItem>
+                {teamProjects.map((p: ProjectType) => (
+                  <DropdownMenuItem
+                    key={p.id}
+                    className={cn(
+                      issue.projectIds?.[0] === p.id && 'font-medium',
+                    )}
+                    onSelect={() =>
+                      updateIssue({
+                        id: issue.id,
+                        projectIds: [p.id],
+                        teamId: issue.teamId,
+                      })
+                    }
+                  >
+                    <span
+                      className="size-2 rounded-full shrink-0"
+                      style={{ backgroundColor: p.color || '#888888' }}
+                    />
+                    <span className="truncate">{p.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           );
         })()}
 

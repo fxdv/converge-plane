@@ -595,8 +595,9 @@ A project is a workspace-scoped \textbf{meaning label}, not a workflow:
 it groups issues on the board without touching their state machine. An
 issue belongs to at most one project (\texttt{issues.project\_ids}, at
 most one element in v1 --- the array shape keeps the multi-project door
-open for v2) and moves between the project rail and its column by
-membership change on the issue patch.
+open for v2). Membership changes ride the issue patch; the board's
+project rail is a client-side lens on that membership, with no wire
+change.
 
 \begin{itemize}
 \item \textbf{Model}: \{name (unique per workspace, case-insensitive),
@@ -612,42 +613,52 @@ membership change on the issue patch.
   refreshed on every membership change, so the rail renders with zero
   extra fetches. Deleting a project soft-deletes it and clears its
   members' \texttt{project\_ids} in the same transaction.
-\item \textbf{Board}: projects render as a filter rail --- a stack per
-  project on the team's board; the done/total rollup is derived from
-  the issues' workflow categories (a read-only view, not a stored
-  state). A brand-new empty project renders as a compact drop target
-  (a created project must appear at once, to be filled); a stack is
-  hidden only when the project has issues but the current view filters
-  every one of them out. A card shows in its project stack
-  \emph{and} its state column; the card is never ``in'' a project in
-  the state machine.
-\item \textbf{Rail mechanics}: the drag registry keeps one draggable per
-  id, so a card that belongs to a project is mirrored in its stack under
-  a \emph{proxy} id (\texttt{project:<issueId>}); the column keeps the
-  real id. Drop on a stack assigns the project
-  (\texttt{projectIds = [p]}, state untouched); a card dragged out of
-  the stack clears it (\texttt{projectIds = []}); a card moving between
-  columns keeps it. The card carries a dot + name so it can be found in
-  its stack.
-\item \textbf{Sizing}: a stack sizes to its content (measured rows,
-  capped --- a large stack then scrolls like a column), and the rail
-  itself scrolls across stacks; the New project row stays pinned at the
-  top of the rail.
-\item \textbf{Visual language}: the rail speaks the columns' language ---
-  square stacks on a transparent body (cards carry their own chrome and
-  float on the board background), the project color as a full-height 3px
-  spine, the header the only loud element with its rename/delete actions
-  on hover only, an empty project a single quiet dashed drop line, and
-  the create row a dashed ghost that warms on hover. The rail's content
-  width matches the columns' (a 12px gutter separates rail from board);
-  a drag-over tint on a stack is color-only, so nothing shifts mid-drag.
+\item \textbf{Board}: the rail renders a compact color chip per project
+  on the team's board (v1.2). The v1.1 per-project card stack is
+  dead --- a card rendered twice, in its stack under a proxy id, under
+  its own second scroll --- and with it went the double render and the
+  nested scrolls. A card renders exactly once, in its state column;
+  the chip is a color index into the board (its color, its name, the
+  done/total rollup derived from the issues' workflow categories, a
+  read-only view not a stored state). A brand-new empty project renders
+  at once as a quiet dashed drop chip; a project is hidden only when it
+  has issues but the current view filters every one of them out.
+\item \textbf{Focus lens}: clicking a chip focuses the board on that
+  project: its cards take a 2px ring in the project's color at full
+  opacity, every other card dims, and the unfocused chips dim with
+  them. The focus is ephemeral client state --- it mutates nothing,
+  syncs nothing, persists nothing --- and releases on the chip's
+  re-click, on \texttt{Esc}, or on a click of the rail's background.
+  If the focused project is deleted under a lens, the lens resolves to
+  no-lens and the board returns to normal on its own.
+\item \textbf{Rail mechanics}: the chip stays a droppable: dropping a
+  column card on it assigns the project (\texttt{projectIds = [p]},
+  state untouched; a card moving between columns keeps it). The card's
+  dot + name row is a picker --- the team's projects plus ``No
+  project'' --- and is the membership path for both directions:
+  assign, reassign, remove. Both mutations ride the issue patch and
+  broadcast like any other.
+\item \textbf{Sizing}: a chip is a fixed-height single row; the rail's
+  one scroll container is the only scroll on the board (v1.1 carried
+  two: the rail and every tall stack). The New project row stays
+  pinned at the top of the rail.
+\item \textbf{Visual language}: the chip speaks the columns' language ---
+  a quiet tinted body, the project color as a 3px left spine and a
+  dot, the mono done/total, rename/delete on hover only (keyboard-
+  reachable), the focused chip wearing the project's color as a ring
+  plus tint, a drag-over a tint of the project's own color so nothing
+  shifts mid-drag, an empty project a dashed ghost, and the create row
+  a dashed ghost that warms on hover. Under a lens the matched cards
+  ring and the rest dim; the drag image never dims. The rail's content
+  width matches the columns' (a 12px gutter separates rail from board).
 \item \textbf{CRUD surface}: owners and admins create (a row on the
   rail, colored, team-scoped to the board they are on), rename, and
-  delete from the stack header; delete clears member membership in the
-  server transaction and the stacks converge via the feed.
+  delete from the chip; delete clears member membership in the server
+  transaction and the chips converge via the feed.
 \item \textbf{Scope}: the rail ships on the category board (the default
   board view); the other groupings (assignee / priority / label / team)
-  take the same rail in v2.
+  take the same rail in v2. The shared card reads the lens context,
+  which defaults to no-lens, so those boards are visually unchanged.
 \end{itemize}
 
 % ============================================================
