@@ -17,12 +17,18 @@ the spine of the D workstream and is deliberately topology-agnostic: the
 protocol is small (one table, one endpoint) and the topology is a policy layer
 over it (see below).
 
-## The three rules
+## The three rules (transitions)
+
+The rules below govern the swarm's *work transitions*. The swarm's
+*documents* — long output that is not a transition — travel on the
+artifact channel (below).
 
 1. **Mediated channel only.** All agent-to-agent communication is a
    server-mediated **handoff** on an issue. No direct agent-to-agent channels,
    no chat/DM system (a noise generator with no board semantics — if two agents
-   need shared context, the artifact is a sub-issue or a note attached to work).
+   need shared context, the artifact is a sub-issue or a note attached to
+   work; a long-form shared document is posted as an issue **artifact**, the
+   swarm's document channel — The artifact channel, below).
    Every handoff is a request from an authenticated principal; the server
    stamps the actor. Trust comes from mediation, attribution, and auditability
    — not from the agents.
@@ -36,6 +42,44 @@ over it (see below).
    issue are budgeted per time window. When handoffs cycle back to the same
    agent K times within a window, the issue freezes into `needs-human` (rule 4
    escalation). Ping-pong is the zerg signature; this is its circuit breaker.
+
+## The artifact channel (as built, SWR-56)
+
+`spec cs:swarm:artifact`
+
+Rule 1's shared context, first-class. The swarm's decision vocabulary
+capped at a 500-rune comment, a 4 KB handoff summary, and a 1600-rune
+pause note — a long finding (an audit, a plan, a manifest) did not fit
+and was truncated silently; one agent believed it posted an audit it had
+discarded. The artifact channel is the fix: the LLM proposes a fourth
+kind of step, `artifact`, which posts a **document** to the issue.
+
+- **A deliverable, not a transition.** The document persists as an
+  `issue_artifacts` row (cascading with the issue, like comments and
+  history) plus one timeline breadcrumb (`action = 'artifact'`, the
+  document's title — the body never enters the feed) and an optional
+  one-line pointing comment. It moves the issue nowhere and sets no flag,
+  so the worker keeps working on the next cycle.
+- **The cap ladder.** The prompt asks for about 6000 characters; the
+  server re-asserts an 8192-byte body cap — above the fleet's 2048-token
+  output budget, so a well-formed document is never truncated — and a
+  200-rune title cap; the table's checks mirror the fence.
+- **The fence (display data).** Newlines and tabs survive (a flattened
+  markdown/JSON document is meaningless); every other control character
+  becomes a space; the ends are trimmed; the cap is a hard budget — the
+  truncation marker counts toward it and the cut lands on a rune boundary,
+  so the stored body always satisfies the table's checks. In v1 a document
+  is never fed back into any prompt: the injection budget stays the
+  handoff summary's 4 KB.
+- **Auditable by construction.** A mission whose answer is a document
+  must carry its evidence in its input: audit missions embed their source
+  excerpts in the issue description, because the model may only cite what
+  it was given — a document without evidence in its input is a claim, not
+  a finding.
+- **Surfaces.** The client renders the documents in the issue's Documents
+  section (one line each, expandable to the full preformatted body) and
+  the breadcrumb in the activity feed; documents ride the sync feed as
+  the `IssueArtifact` model.
 
 ## Escalation
 
@@ -171,6 +215,9 @@ against usage data before they harden into product constants.
 - **Content.** A summary authored by agent A becomes part of agent B's context:
   a prompt-injection vector. The server caps and sanitizes size; the runtime
   **must** treat received summaries as untrusted data, never instructions.
+  Documents (the artifact channel) are display data, fenced the same way on
+  the way in, and in v1 are never fed back into any prompt — the injection
+  budget stays the summary's 4 KB.
 - **Cadence.** Two independent caps: the per-account rate limit (M6) and the
   per-issue operation budget (this document). One agent cannot flood; a swarm
   cannot flood one issue.
@@ -281,12 +328,13 @@ limiter, so a multi-instance deployment moves it to the shared broker.
   per GPU, bound to loopback only (the model server has no auth; the box
   firewall allows SSH alone), the fleet provided by the deployment via
   `CONVERGE_LLM` — with the fenced title/description/summary as marked
-  data, a strict JSON reply contract, and a token cap. Every proposal is
-  validated against the trusted input (state names must exist, forward-
-  only, never canceled, never self; handoff targets must satisfy the
-  active topology; comments capped), and any failure — endpoint down,
-  timeout, malformed or invalid output — falls back to the deterministic
-  policy per decision. Default **off**: the deterministic policy is the
+  data, a strict JSON reply contract (four kinds: `advance`, `handoff`,
+  `pause`, `artifact` — the document channel, above), and a token cap.
+  Every proposal is validated against the trusted input (state names must
+  exist, forward-only, never canceled, never self; handoff targets must
+  satisfy the active topology; comments capped; the document body passes
+  the fence), and any failure — endpoint down, timeout, malformed or
+  invalid output — falls back to the deterministic policy per decision. Default **off**: the deterministic policy is the
   shipped brain; the fleet is an operator opt-in. The fleet is addressed
   by a stable per-agent hash: an agent's context stays on one instance
   (warm weights, warm KV cache across that agent's repeated decisions)

@@ -348,6 +348,10 @@ Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
 Handoff protocol\csr{swarm:handoff} & The only agent-to-agent channel:
   atomic assignee + state move + bounded summary (\S\ref{sec:handoff}) &
   \shipped\\
+Artifact channel\csr{swarm:artifact} & The swarm's document voice:
+  the LLM posts a fenced 8\,KB document to the issue (audits, plans,
+  manifests) with a timeline breadcrumb; a deliverable, not a transition
+  (\S\ref{sec:handoff}) & \shipped\\
 Quiet guards\csr{swarm:guards} & Per-issue loop + budget circuit
   breakers; trip = pause + Human Review parking + path comment, not
   flag-and-continue (\S\ref{sec:guards}) & \shipped\\
@@ -704,7 +708,9 @@ does exactly what its role allows, and no more.
 All agent-to-agent communication is a server-mediated \textbf{handoff} on
 an issue. No direct channels, no chat, no DM: a noise generator with no
 board semantics. If two agents need shared context, the artifact is a
-sub-issue or a note attached to work.
+sub-issue or a note attached to work; a long-form shared document is
+posted as an issue \textbf{artifact} --- the swarm's document channel
+(\S6.2.2, below).
 
 Three rules:
 
@@ -753,6 +759,46 @@ Server behavior, in one transaction under the issue's team lock:
 A handoff is also a normal history row, so the trace exists in every
 existing surface: the timeline, the feed, the delta, search-adjacent
 history. One operation, one event, everywhere.
+
+\subsection{The artifact channel}
+\cs{swarm:artifact}\shipped\
+
+The handoff summary (\textbf{4096 bytes}) and the step comment (500
+runes) are budgets for \emph{discourse} --- a long finding did not fit
+and was truncated silently. The channel is the fix: the LLM may propose
+a fourth kind of step, \texttt{artifact}, which posts a \textbf{document}
+to the issue (audits, plans, manifests).
+
+\cs{swarm:artifact:deliverable} A document is a \emph{deliverable, not a
+transition}: it persists as an \texttt{issue\_artifacts} row (cascading
+with the issue, like comments and history) plus one timeline breadcrumb
+(\texttt{action=artifact}, the document's title --- the body never
+enters the feed) and an optional one-line pointing comment. It moves the
+issue nowhere and sets no flag, so the worker keeps working on the next
+cycle.
+
+\cs{swarm:artifact:fence} The body is \emph{display data, fenced on the
+way in}: newlines and tabs survive (a flattened document is
+meaningless), every other control character becomes a space, the ends
+are trimmed, and the \textbf{8192-byte cap is a hard budget} --- the
+truncation marker counts toward it and the cut lands on a rune boundary,
+so the stored body always satisfies the table's check. The prompt asks
+for about 6000 characters (under the fleet's 2048-token output budget,
+so a well-formed document is never truncated); the server re-asserts
+the cap; an empty body is rejected with a diagnostic. In v1 a document
+is \emph{never fed back into any prompt} --- the injection budget stays
+the summary's 4\,KB.
+
+\cs{swarm:artifact:evidence} A mission whose answer is a document must
+carry its evidence in its input: audit missions embed their source
+excerpts in the issue description, because the model may only cite what
+it was given --- a document without evidence in its input is a claim,
+not a finding.
+
+The client renders documents in the issue's Documents section (one line
+each, expandable to the full preformatted body) and the breadcrumb in
+the activity feed; documents ride the sync feed as the
+\texttt{IssueArtifact} model.
 
 \section{Quiet guards and escalation}
 \label{sec:guards}
@@ -1082,12 +1128,14 @@ comment renders (\S\ref{sec:topology}).
   instances, so an N-agent swarm draws on up to N GPUs --- real
   parallelism, not a shared queue. One decision is one model
   call: trusted facts plus the fenced content as marked data, a strict
-  JSON reply contract, a token cap, a per-request timeout. The model
-  \emph{proposes}; the runtime \emph{validates} --- state names must
-  exist in the team's workflow (forward-only, never canceled, never
-  self), handoff targets must satisfy the active topology, comments are
-  capped --- and applies the validated action through the same guarded
-  path. Any failure (endpoint down, timeout, malformed or invalid
+  JSON reply contract --- four kinds of step: \texttt{advance},
+  \texttt{handoff}, \texttt{pause}, and \texttt{artifact} (post a
+  document, \S\ref{sec:handoff}) --- a token cap, a per-request timeout.
+  The model \emph{proposes}; the runtime \emph{validates} --- state
+  names must exist in the team's workflow (forward-only, never canceled,
+  never self), handoff targets must satisfy the active topology, comments
+  are capped, and the document body passes the fence --- and applies the
+  validated action through the same guarded path. Any failure (endpoint down, timeout, malformed or invalid
   proposal) falls back to the deterministic policy per decision, so the
   swarm's cadence never depends on the fleet being up; a failed call
   still reports the tokens it burned.
