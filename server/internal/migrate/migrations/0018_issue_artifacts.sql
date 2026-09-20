@@ -1,5 +1,5 @@
 -- 0018_issue_artifacts.sql — SWR-56: the swarm's artifact channel.
--- spec cs:swarm:handoff
+-- spec cs:swarm:artifact
 --
 -- A document the swarm posts to an issue (audits, plans, manifests):
 -- long-form by definition, so it is its own record, never a comment

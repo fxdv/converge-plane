@@ -83,6 +83,7 @@ const artifactCap = 8192
 // artifactTitleCap bounds a document's name: a title, not a summary.
 const artifactTitleCap = 200
 
+// spec cs:swarm:artifact
 // fenceDocument sanitizes a model-authored document on the way in:
 // unlike the summary/comment fence it preserves newlines and tabs (a
 // markdown or JSON document is meaningless flattened); every other

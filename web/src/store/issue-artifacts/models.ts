@@ -1,5 +1,6 @@
 import { types } from 'mobx-state-tree';
 
+// spec cs:swarm:artifact
 // SWR-56: the swarm's artifact channel (a document posted to an issue:
 // an audit, a plan, a manifest). The wire shape is pinned by
 // server/internal/api/artifact_test.go (the artifactData builder) and by
