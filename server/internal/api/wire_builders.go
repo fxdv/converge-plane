@@ -72,6 +72,25 @@ func nullOrEmpty(v string) any {
 	return v
 }
 
+// artifactData serializes a swarm document (SWR-56) in the exact shape
+// of the client's IssueArtifact model. The body is plain text (a fenced
+// markdown/JSON document the client renders preformatted — never as
+// rich text), so there is no jsonb envelope; sourceMetadata is present
+// (null) because the client field is union(string, null) without
+// undefined.
+func artifactData(id, title, body, authorID, issueID string, createdAt, updatedAt time.Time) map[string]any {
+	return map[string]any{
+		"id":             id,
+		"createdAt":      createdAt.Format(iso),
+		"updatedAt":      updatedAt.Format(iso),
+		"userId":         authorID,
+		"issueId":        issueID,
+		"title":          title,
+		"body":           body,
+		"sourceMetadata": nil,
+	}
+}
+
 // historyData maps a generic activity/audit row to the client's
 // IssueHistory shape (pure, so the wire contract is unit-testable;
 // collectHistory feeds it the issue_history columns). Only

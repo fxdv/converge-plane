@@ -193,6 +193,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]sy
 		return a.collectProjects(ctx, workspaceID, emit)
 	case "IssueComment":
 		return a.collectComments(ctx, workspaceID, emit)
+	case "IssueArtifact":
+		return a.collectArtifacts(ctx, workspaceID, emit)
 	case "IssueRelation":
 		return a.collectIssueRelations(ctx, workspaceID, emit)
 	case "IssueHistory":

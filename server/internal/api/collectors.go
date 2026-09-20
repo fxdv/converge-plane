@@ -296,6 +296,41 @@ func (a *API) collectComments(ctx context.Context, workspaceID string, emit emit
 	return out, rows.Err()
 }
 
+// collectArtifacts maps the workspace's live documents (SWR-56, the
+// swarm's artifact channel) to the client's IssueArtifact shape. Like
+// comments: active rows only — a deleted document reconciles away on
+// the client (the live-set prune), it is never replayed.
+func (a *API) collectArtifacts(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
+	rows, err := a.pool.Query(ctx, `
+		select a.id, a.created_at, a.updated_at, a.title, a.body, a.author_id, a.issue_id
+		from issue_artifacts a
+		join issues i on i.id = a.issue_id
+		join teams t on t.id = i.team_id
+		where t.workspace_id = $1 and a.status = 'active'
+		order by a.created_at`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []syncActionRecord
+	for rows.Next() {
+		var (
+			id, title, body, authorID, issueID string
+			createdAt, updatedAt               time.Time
+		)
+		if err := rows.Scan(&id, &createdAt, &updatedAt, &title, &body, &authorID, &issueID); err != nil {
+			return nil, err
+		}
+		rec, err := emit(id, artifactData(id, title, body, authorID, issueID, createdAt, updatedAt))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
 // collectHistory maps the activity/audit rows to the client's
 // IssueHistory shape (see historyData).
 func (a *API) collectHistory(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
