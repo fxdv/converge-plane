@@ -1024,7 +1024,16 @@ with four sections:
   so the panel and the plane cannot diverge) plus swarm-level rates:
   token spend, operations, handoffs, pause rate (pauses against all
   terminal-ish outcomes in the window --- a swarm that neither pauses
-  nor completes reads as zero), mean time-to-human-resume, and the
+  nor completes reads as zero), median and mean time-to-human-resume
+  (the median is the approved statistic; the mean is kept --- the two
+  diverge when a few long parks skew the distribution), cost per
+  completed issue (the per-issue model tokens for the issues that
+  completed in the window, median and mean, with the count of issues
+  that had spend data --- the spend attribution is in-memory, so a
+  restart starts it fresh and \emph{no data} reads as \emph{no data},
+  never as \emph{free}), the fallback rate (the floor's share of the
+  runtime's decisions in the window), the longest handoff chain
+  (the most-chased issue's hops --- the crowding signal), and the
   agent share of completed work over 7d.
 \item \textbf{Proxy} --- the LLM fleet router: per-node requests,
   success / failure, average and worst latency, tokens, last event (a
@@ -1049,11 +1058,13 @@ history is the runtime's spend slot, not this registry. Cost: a handful
 of bounded indexed reads per poll --- the plane scales with the roster,
 not with the work.
 
-\textbf{Future} (D3 and beyond) \owner{ratify the list; these are the
-  candidates from the runtime work}:
-cost per completed issue $\cdot$ handoff-graph volume and
-longest chain $\cdot$ budget consumption curves per agent/team $\cdot$
-loop-detection hit rate per topology.
+Shipped from the D3 candidate list: cost per completed issue,
+the fallback decision rate, median time-to-resume, and the longest
+handoff chain (all above). \textbf{Future} \owner{ratify what remains}:
+budget consumption curves per agent/team $\cdot$
+loop-detection hit rate per topology $\cdot$ the handoff graph as a
+rendered graph (the plane serves its volume and chain; the edges
+themselves are the issue's trace).
 
 \section{Agent runtime}
 \label{sec:runtime}
