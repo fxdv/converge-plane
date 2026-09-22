@@ -52,7 +52,10 @@ func TestMetricsWireContract(t *testing.T) {
 			OpenIssues: 9, PausedIssues: 2,
 			Tokens24h: 10000, Ops24h: 34, Handoffs24h: 6,
 			Pauses24h: 2, PauseRate24h: 0.1, MeanResumeMs: 1234,
+			MedianResumeMs:      987,
 			Completions24h:      18,
+			CostMedianTokens24h: 2200, CostMeanTokens24h: 3100, CostedIssues24h: 9,
+			FallbackRate24h: 0.05, LongestHandoffChain24h: 3,
 			CompletedByAgents7d: 11, CompletedByHumans7d: 3, AgentShare7d: 0.79,
 			Roster: []swarmAgent{{
 				ID: "a1", Name: "bravo-1", Status: "ACTIVE", Busy: true,
@@ -89,7 +92,9 @@ func TestMetricsWireContract(t *testing.T) {
 	equalStrings(t, swarmKeys(t, resp.Swarm),
 		[]string{"activeAgents", "agentShare7d", "agents", "busy",
 			"completedByAgents7d", "completedByHumans7d", "completions24h",
-			"handoffs24h", "meanResumeMs", "openIssues", "ops24h",
+			"costMeanTokens24h", "costMedianTokens24h", "costedIssues24h",
+			"fallbackRate24h", "handoffs24h", "longestHandoffChain24h",
+			"meanResumeMs", "medianResumeMs", "openIssues", "ops24h",
 			"pauseRate24h", "pausedIssues", "pauses24h", "roster", "tokens24h"})
 	equalStrings(t, swarmKeys(t, resp.Proxy),
 		[]string{"agentBurn", "mode", "model", "nodes", "rateBurst", "rateRps", "timeout"})

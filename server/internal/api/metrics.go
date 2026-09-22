@@ -29,6 +29,7 @@ import (
 	"context"
 	"net/http"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -128,22 +129,42 @@ type codebaseMetrics struct {
 // swarmMetrics is the fleet: the roster (identical to the panel's) plus
 // the swarm-level rates over the guard windows.
 type swarmMetrics struct {
-	Agents              int          `json:"agents"` // agent members, any status
-	ActiveAgents        int          `json:"activeAgents"`
-	Busy                int          `json:"busy"`
-	OpenIssues          int          `json:"openIssues"` // open, not paused (all assignees)
-	PausedIssues        int          `json:"pausedIssues"`
-	Tokens24h           int64        `json:"tokens24h"`
-	Ops24h              int          `json:"ops24h"`
-	Handoffs24h         int          `json:"handoffs24h"`
-	Pauses24h           int          `json:"pauses24h"`
-	PauseRate24h        float64      `json:"pauseRate24h"` // pauses / (pauses + completions), 24h
-	MeanResumeMs        int64        `json:"meanResumeMs"` // 0 when nothing resumed in the window
-	Completions24h      int          `json:"completions24h"`
-	CompletedByAgents7d int          `json:"completedByAgents7d"`
-	CompletedByHumans7d int          `json:"completedByHumans7d"`
-	AgentShare7d        float64      `json:"agentShare7d"` // agent completions / all completions, 7d
-	Roster              []swarmAgent `json:"roster"`
+	Agents       int     `json:"agents"` // agent members, any status
+	ActiveAgents int     `json:"activeAgents"`
+	Busy         int     `json:"busy"`
+	OpenIssues   int     `json:"openIssues"` // open, not paused (all assignees)
+	PausedIssues int     `json:"pausedIssues"`
+	Tokens24h    int64   `json:"tokens24h"`
+	Ops24h       int     `json:"ops24h"`
+	Handoffs24h  int     `json:"handoffs24h"`
+	Pauses24h    int     `json:"pauses24h"`
+	PauseRate24h float64 `json:"pauseRate24h"` // pauses / (pauses + completions), 24h
+	MeanResumeMs int64   `json:"meanResumeMs"` // 0 when nothing resumed in the window
+	// The approved statistic (the mean is kept alongside): 0 when nothing
+	// resumed in the window; the two diverge when a few long parks skew
+	// the distribution.
+	MedianResumeMs int64 `json:"medianResumeMs"`
+	Completions24h int   `json:"completions24h"`
+	// Cost per completed issue over the guard window: the per-issue model
+	// tokens for the issues that reached a completed state, with spend.
+	// In-memory attribution (a restart starts fresh; a spend that crossed
+	// the window boundary counts what the window holds).
+	CostMedianTokens24h int64 `json:"costMedianTokens24h"`
+	CostMeanTokens24h   int64 `json:"costMeanTokens24h"`
+	// Completed issues that had spend data in the window (the sample the
+	// two medians above are over; 0 makes them "no data", not "free").
+	CostedIssues24h int `json:"costedIssues24h"`
+	// The floor's share of the runtime's decisions in the window (the
+	// fallback rate): 1.0 means the model never decided, 0 means it
+	// never fell back. 0 also when nothing reported (a floor-only fleet).
+	FallbackRate24h float64 `json:"fallbackRate24h"`
+	// The deepest handoff chain on the board in the window (hops of the
+	// most-chased issue) — the crowding signal the handoff graph asks for.
+	LongestHandoffChain24h int          `json:"longestHandoffChain24h"`
+	CompletedByAgents7d    int          `json:"completedByAgents7d"`
+	CompletedByHumans7d    int          `json:"completedByHumans7d"`
+	AgentShare7d           float64      `json:"agentShare7d"` // agent completions / all completions, 7d
+	Roster                 []swarmAgent `json:"roster"`
 }
 
 // agentBurnRow is one account's rate-limiter usage (the D2 burn proxy,
@@ -408,6 +429,35 @@ func (a *API) feedSection(ctx context.Context, ws string, m *codebaseMetrics) er
 	return nil
 }
 
+// medianDuration is the median of a window's samples (even count: the
+// mean of the two middle values). The plane's statistics are gauges,
+// and a median keeps one long park from dominating the read.
+func medianDuration(ds []time.Duration) time.Duration {
+	sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
+	n := len(ds)
+	if n == 0 {
+		return 0
+	}
+	if n%2 == 1 {
+		return ds[n/2]
+	}
+	return (ds[n/2-1] + ds[n/2]) / 2
+}
+
+// medianInt64 is the same statistic for the cost samples (tokens per
+// completed issue).
+func medianInt64(vs []int64) int64 {
+	sort.Slice(vs, func(i, j int) bool { return vs[i] < vs[j] })
+	n := len(vs)
+	if n == 0 {
+		return 0
+	}
+	if n%2 == 1 {
+		return vs[n/2]
+	}
+	return (vs[n/2-1] + vs[n/2]) / 2
+}
+
 // swarmSection fills the fleet section: the panel's roster (the shared
 // swarmRoster — the panel and the plane never diverge) plus the
 // swarm-level rates.
@@ -482,6 +532,7 @@ func (a *API) swarmSection(ctx context.Context, ws string, m *swarmMetrics) erro
 	}
 	openPark := map[string]time.Time{}
 	var total time.Duration
+	var resumes []time.Duration
 	var paired int
 	for erows.Next() {
 		var ev parkRow
@@ -494,7 +545,9 @@ func (a *API) swarmSection(ctx context.Context, ws string, m *swarmMetrics) erro
 			openPark[ev.issue] = ev.at
 		case "resumed":
 			if started, ok := openPark[ev.issue]; ok {
-				total += ev.at.Sub(started)
+				d := ev.at.Sub(started)
+				total += d
+				resumes = append(resumes, d)
 				paired++
 				delete(openPark, ev.issue)
 			}
@@ -507,6 +560,68 @@ func (a *API) swarmSection(ctx context.Context, ws string, m *swarmMetrics) erro
 	erows.Close()
 	if paired > 0 {
 		m.MeanResumeMs = int64(total / time.Duration(paired) / time.Millisecond)
+		m.MedianResumeMs = int64(medianDuration(resumes) / time.Millisecond)
+	}
+
+	// Cost per completed issue: the issues that reached a completed state
+	// in the window, then their per-issue spend from the runtime's
+	// attribution. In-memory: a completed issue the process did not watch
+	// spend has no row here (the plane's sample says so — 0 spend reads
+	// as "no data" through CostedIssues24h, not as "free").
+	cids, err := a.pool.Query(ctx, `
+		select distinct h.issue_id
+		from issue_history h
+		where h.workspace_id = $1 and h.action = 'updated' and h.field = 'status'
+		  and h.created_at > now() - `+guardWindowLiteral+`
+		  and lower(h.to_value) in (`+completedStatusIDsSQL+`)
+	`, ws)
+	if err != nil {
+		return err
+	}
+	var spends []int64
+	for cids.Next() {
+		var id string
+		if err = cids.Scan(&id); err != nil {
+			cids.Close()
+			return err
+		}
+		if tok := a.runtime.IssueSpendCount(ws, id); tok > 0 {
+			spends = append(spends, tok)
+		}
+	}
+	if err = cids.Err(); err != nil {
+		cids.Close()
+		return err
+	}
+	cids.Close()
+	if n := len(spends); n > 0 {
+		m.CostedIssues24h = n
+		m.CostMedianTokens24h = medianInt64(spends)
+		var sum int64
+		for _, s := range spends {
+			sum += s
+		}
+		m.CostMeanTokens24h = sum / int64(n)
+	}
+
+	// Fallback rate: the floor's share of the runtime's decisions in the
+	// window (the in-memory decision counter; 0 when nothing reported).
+	if decisions, fallbacks := a.runtime.DecisionStats24h(); decisions > 0 {
+		m.FallbackRate24h = float64(fallbacks) / float64(decisions)
+	}
+
+	// Longest handoff chain in the window: the most-chased issue's hop
+	// count (the crowding signal behind the handoff graph). One bounded
+	// aggregate over the tenant-indexed trace table.
+	err = a.pool.QueryRow(ctx, `
+		select coalesce(max(cnt), 0) from (
+			select count(*) cnt
+			from issue_handoffs
+			where workspace_id = $1 and created_at > now() - `+guardWindowLiteral+`
+			group by issue_id
+		) chains`, ws).Scan(&m.LongestHandoffChain24h)
+	if err != nil {
+		return err
 	}
 
 	// Agent share of completed work, 7d: the actor's kind on the
