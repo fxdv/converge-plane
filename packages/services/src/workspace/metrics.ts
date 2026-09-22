@@ -80,7 +80,19 @@ export interface SwarmMetrics {
   pauseRate24h: number;
   /** 0 when nothing resumed in the window */
   meanResumeMs: number;
+  /** median time-to-human-resume (the approved statistic); 0 when nothing resumed */
+  medianResumeMs: number;
   completions24h: number;
+  /** model tokens of the completed issues in the window — median (0 = no spend data) */
+  costMedianTokens24h: number;
+  /** model tokens of the completed issues in the window — mean */
+  costMeanTokens24h: number;
+  /** completed issues in the window that had spend data (0 = the medians read "no data", not "free") */
+  costedIssues24h: number;
+  /** the floor's share of the runtime's decisions in the window (0 = no fallbacks, or none reported) */
+  fallbackRate24h: number;
+  /** the deepest handoff chain on the board in the window (the most-chased issue's hops) */
+  longestHandoffChain24h: number;
   completedByAgents7d: number;
   completedByHumans7d: number;
   /** agent completions / all completions, 7d */
