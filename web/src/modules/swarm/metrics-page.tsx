@@ -1,3 +1,11 @@
+import {
+  type CodebaseMetrics,
+  type FleetNodeStat,
+  type ProductMetrics,
+  type ProxyMetrics,
+  type SwarmMetrics,
+  type WorkspaceMetrics,
+} from '@converge/services';
 import { cn } from '@converge/ui/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import * as React from 'react';
@@ -10,14 +18,6 @@ import { withApplicationStore } from 'common/wrappers/with-application-store';
 import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { useMetricsQuery } from 'services/workspace';
-import {
-  type CodebaseMetrics,
-  type FleetNodeStat,
-  type ProductMetrics,
-  type ProxyMetrics,
-  type SwarmMetrics,
-  type WorkspaceMetrics,
-} from '@converge/services';
 
 // spec cs:swarm:metrics
 /** The metrics plane (docs/spec ch. 6, §Metrics): one screen for
@@ -139,11 +139,12 @@ const Td = ({
 
 // The vitals strip: eight small multiples, one glance.
 const Vitals = ({ data }: { data: WorkspaceMetrics }) => {
-  const fleetErrors = data.proxy.nodes.reduce(
-    (sum, n) => sum + n.failures,
-    0,
-  );
-  const vitals: { label: string; value: string; tone?: 'amber' | 'red' }[] = [
+  const fleetErrors = data.proxy.nodes.reduce((sum, n) => sum + n.failures, 0);
+  const vitals: Array<{
+    label: string;
+    value: string;
+    tone?: 'amber' | 'red';
+  }> = [
     { label: 'Open issues', value: String(data.swarm.openIssues) },
     { label: 'Done 7d', value: String(data.product.issuesDone7d) },
     {
@@ -175,8 +176,7 @@ const Vitals = ({ data }: { data: WorkspaceMetrics }) => {
             className={cn(
               'mt-1 text-xl font-mono tabular-nums',
               v.tone === 'red' && 'text-red-600 dark:text-red-400',
-              v.tone === 'amber' &&
-                'text-amber-600 dark:text-amber-400',
+              v.tone === 'amber' && 'text-amber-600 dark:text-amber-400',
             )}
           >
             {v.value}
@@ -190,7 +190,9 @@ const Vitals = ({ data }: { data: WorkspaceMetrics }) => {
 // ---- the four sections ----
 
 const SwarmSection = ({ swarm }: { swarm: SwarmMetrics }) => (
-  <Section title={`Fleet — ${swarm.agents} agents, ${swarm.activeAgents} active`}>
+  <Section
+    title={`Fleet — ${swarm.agents} agents, ${swarm.activeAgents} active`}
+  >
     {swarm.roster.length === 0 ? (
       <div className="p-4 text-sm text-muted-foreground">
         No agents in this workspace yet.
@@ -258,9 +260,35 @@ const SwarmSection = ({ swarm }: { swarm: SwarmMetrics }) => (
         </span>
       </span>
       <span>
+        Median time-to-resume{' '}
+        <span className="font-mono tabular-nums">
+          {swarm.medianResumeMs > 0 ? formatMs(swarm.medianResumeMs) : '—'}
+        </span>
+      </span>
+      <span>
         Mean time-to-resume{' '}
         <span className="font-mono tabular-nums">
           {swarm.meanResumeMs > 0 ? formatMs(swarm.meanResumeMs) : '—'}
+        </span>
+      </span>
+      <span>
+        Cost per done 24h{' '}
+        <span className="font-mono tabular-nums">
+          {swarm.costedIssues24h > 0
+            ? `${formatCount(swarm.costMedianTokens24h)} median · ${swarm.costedIssues24h} issues`
+            : 'no data'}
+        </span>
+      </span>
+      <span>
+        Fallback rate 24h{' '}
+        <span className="font-mono tabular-nums">
+          {formatPct(swarm.fallbackRate24h)}
+        </span>
+      </span>
+      <span>
+        Longest handoff chain 24h{' '}
+        <span className="font-mono tabular-nums">
+          {String(swarm.longestHandoffChain24h)}
         </span>
       </span>
       <span>
@@ -325,8 +353,7 @@ const ProxySection = ({ proxy }: { proxy: ProxyMetrics }) => {
         </table>
       ) : (
         <div className="px-4 py-3 text-sm text-muted-foreground">
-          No fleet configured — every decision runs on the deterministic
-          floor.
+          No fleet configured — every decision runs on the deterministic floor.
         </div>
       )}
       {proxy.agentBurn.length > 0 && (
@@ -376,9 +403,7 @@ const NodeRow = ({ node }: { node: FleetNodeStat }) => {
       <Td
         right
         className={
-          node.failures > 0
-            ? 'text-red-600 dark:text-red-400'
-            : undefined
+          node.failures > 0 ? 'text-red-600 dark:text-red-400' : undefined
         }
       >
         {node.failures}
@@ -409,7 +434,9 @@ const ProductSection = ({ product }: { product: ProductMetrics }) => {
     .join(' · ');
   const rest = Math.max(0, product.states.length - 5);
   return (
-    <Section title={`Product — ${product.issues} issues, ${product.membersActive}/${product.members} members active`}>
+    <Section
+      title={`Product — ${product.issues} issues, ${product.membersActive}/${product.members} members active`}
+    >
       <table className="w-full">
         <thead>
           <tr>
@@ -490,11 +517,8 @@ const ProductSection = ({ product }: { product: ProductMetrics }) => {
 };
 
 const CodebaseSection = ({ codebase }: { codebase: CodebaseMetrics }) => {
-  const rows: [string, string][] = [
-    [
-      'Build',
-      `${codebase.version} (${codebase.gitSha})`,
-    ],
+  const rows: Array<[string, string]> = [
+    ['Build', `${codebase.version} (${codebase.gitSha})`],
     ['Built', codebase.buildTime],
     ['Platform', codebase.platform],
     ['Uptime', formatUptime(codebase.uptime)],
@@ -515,12 +539,8 @@ const CodebaseSection = ({ codebase }: { codebase: CodebaseMetrics }) => {
             key={k}
             className="px-4 py-1.5 border-t border-grayAlpha-100 dark:border-grayAlpha-300 first:border-t-0 flex items-baseline gap-2"
           >
-            <dt className="text-xs text-muted-foreground w-40 shrink-0">
-              {k}
-            </dt>
-            <dd className="text-sm font-mono tabular-nums truncate">
-              {v}
-            </dd>
+            <dt className="text-xs text-muted-foreground w-40 shrink-0">{k}</dt>
+            <dd className="text-sm font-mono tabular-nums truncate">{v}</dd>
           </div>
         ))}
       </dl>
@@ -530,7 +550,7 @@ const CodebaseSection = ({ codebase }: { codebase: CodebaseMetrics }) => {
 
 // ---- the advanced registry (client-side flattening + sort) ----
 
-type RegistryRow = {
+interface RegistryRow {
   domain: 'product' | 'codebase' | 'swarm' | 'proxy';
   metric: string;
   value: string;
@@ -539,7 +559,7 @@ type RegistryRow = {
   source: string;
   // numeric for the value column's sort (0 for non-numeric)
   numeric: number;
-};
+}
 
 const DOMAIN_ORDER: Record<RegistryRow['domain'], number> = {
   product: 0,
@@ -592,7 +612,14 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
     p.projects,
   );
   add('product', 'saved views', String(p.views), 'count', 'all time', p.views);
-  add('product', 'live issues', String(p.issues), 'count', 'all time', p.issues);
+  add(
+    'product',
+    'live issues',
+    String(p.issues),
+    'count',
+    'all time',
+    p.issues,
+  );
   add(
     'product',
     'comments',
@@ -617,19 +644,61 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
     '24h',
     p.issuesCreated24h,
   );
-  add('product', 'issues created', String(p.issuesCreated7d), 'count', '7d', p.issuesCreated7d);
-  add('product', 'issues done', String(p.issuesDone24h), 'count', '24h', p.issuesDone24h);
-  add('product', 'issues done', String(p.issuesDone7d), 'count', '7d', p.issuesDone7d);
-  add('product', 'comments', String(p.comments24h), 'count', '24h', p.comments24h);
+  add(
+    'product',
+    'issues created',
+    String(p.issuesCreated7d),
+    'count',
+    '7d',
+    p.issuesCreated7d,
+  );
+  add(
+    'product',
+    'issues done',
+    String(p.issuesDone24h),
+    'count',
+    '24h',
+    p.issuesDone24h,
+  );
+  add(
+    'product',
+    'issues done',
+    String(p.issuesDone7d),
+    'count',
+    '7d',
+    p.issuesDone7d,
+  );
+  add(
+    'product',
+    'comments',
+    String(p.comments24h),
+    'count',
+    '24h',
+    p.comments24h,
+  );
   add('product', 'comments', String(p.comments7d), 'count', '7d', p.comments7d);
-  add('product', 'handoffs', String(p.handoffs24h), 'count', '24h', p.handoffs24h);
+  add(
+    'product',
+    'handoffs',
+    String(p.handoffs24h),
+    'count',
+    '24h',
+    p.handoffs24h,
+  );
   add('product', 'handoffs', String(p.handoffs7d), 'count', '7d', p.handoffs7d);
 
   add('codebase', 'build', `${c.version} (${c.gitSha})`, '', 'live');
   add('codebase', 'built', c.buildTime, '', 'live');
   add('codebase', 'platform', c.platform, '', 'live');
   add('codebase', 'uptime', formatUptime(c.uptime), '', 'live', c.uptime);
-  add('codebase', 'goroutines', String(c.goroutines), 'count', 'live', c.goroutines);
+  add(
+    'codebase',
+    'goroutines',
+    String(c.goroutines),
+    'count',
+    'live',
+    c.goroutines,
+  );
   add(
     'codebase',
     'db pool',
@@ -666,7 +735,14 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
     s.activeAgents,
   );
   add('swarm', 'busy agents', String(s.busy), 'count', 'live', s.busy);
-  add('swarm', 'open issues', String(s.openIssues), 'count', 'live', s.openIssues);
+  add(
+    'swarm',
+    'open issues',
+    String(s.openIssues),
+    'count',
+    'live',
+    s.openIssues,
+  );
   add(
     'swarm',
     'paused issues',
@@ -675,9 +751,23 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
     'live',
     s.pausedIssues,
   );
-  add('swarm', 'model tokens', formatCount(s.tokens24h), 'tokens', '24h', s.tokens24h);
+  add(
+    'swarm',
+    'model tokens',
+    formatCount(s.tokens24h),
+    'tokens',
+    '24h',
+    s.tokens24h,
+  );
   add('swarm', 'agent ops', String(s.ops24h), 'count', '24h', s.ops24h);
-  add('swarm', 'handoffs', String(s.handoffs24h), 'count', '24h', s.handoffs24h);
+  add(
+    'swarm',
+    'handoffs',
+    String(s.handoffs24h),
+    'count',
+    '24h',
+    s.handoffs24h,
+  );
   add('swarm', 'pauses', String(s.pauses24h), 'count', '24h', s.pauses24h);
   add(
     'swarm',
@@ -694,6 +784,54 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
     '',
     '24h',
     s.meanResumeMs,
+  );
+  add(
+    'swarm',
+    'median time-to-resume',
+    s.medianResumeMs > 0 ? formatMs(s.medianResumeMs) : '—',
+    '',
+    '24h',
+    s.medianResumeMs,
+  );
+  add(
+    'swarm',
+    'cost per done (median)',
+    s.costedIssues24h > 0 ? formatCount(s.costMedianTokens24h) : '—',
+    s.costedIssues24h > 0 ? 'tokens' : '',
+    '24h',
+    s.costMedianTokens24h,
+  );
+  add(
+    'swarm',
+    'cost per done (mean)',
+    s.costedIssues24h > 0 ? formatCount(s.costMeanTokens24h) : '—',
+    s.costedIssues24h > 0 ? 'tokens' : '',
+    '24h',
+    s.costMeanTokens24h,
+  );
+  add(
+    'swarm',
+    'done with spend data',
+    String(s.costedIssues24h),
+    'count',
+    '24h',
+    s.costedIssues24h,
+  );
+  add(
+    'swarm',
+    'fallback rate',
+    formatPct(s.fallbackRate24h),
+    '',
+    '24h',
+    Math.round(s.fallbackRate24h * 1000) / 10,
+  );
+  add(
+    'swarm',
+    'longest handoff chain',
+    String(s.longestHandoffChain24h),
+    'hops',
+    '24h',
+    s.longestHandoffChain24h,
   );
   add(
     'swarm',
@@ -744,15 +882,64 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   pr.nodes.forEach((n) => {
     const prefix = `node ${n.node} `;
-    add('proxy', `${prefix}routed`, String(n.requests), 'count', 'live', n.requests);
-    add('proxy', `${prefix}ok`, String(n.successes), 'count', 'live', n.successes);
-    add('proxy', `${prefix}errors`, String(n.failures), 'count', 'live', n.failures);
-    add('proxy', `${prefix}avg latency`, formatMs(nsToMs(n.avgLatency)), '', 'live', n.avgLatency);
-    add('proxy', `${prefix}max latency`, formatMs(nsToMs(n.maxLatency)), '', 'live', n.maxLatency);
-    add('proxy', `${prefix}tokens`, formatCount(n.tokens), 'tokens', 'live', n.tokens);
+    add(
+      'proxy',
+      `${prefix}routed`,
+      String(n.requests),
+      'count',
+      'live',
+      n.requests,
+    );
+    add(
+      'proxy',
+      `${prefix}ok`,
+      String(n.successes),
+      'count',
+      'live',
+      n.successes,
+    );
+    add(
+      'proxy',
+      `${prefix}errors`,
+      String(n.failures),
+      'count',
+      'live',
+      n.failures,
+    );
+    add(
+      'proxy',
+      `${prefix}avg latency`,
+      formatMs(nsToMs(n.avgLatency)),
+      '',
+      'live',
+      n.avgLatency,
+    );
+    add(
+      'proxy',
+      `${prefix}max latency`,
+      formatMs(nsToMs(n.maxLatency)),
+      '',
+      'live',
+      n.maxLatency,
+    );
+    add(
+      'proxy',
+      `${prefix}tokens`,
+      formatCount(n.tokens),
+      'tokens',
+      'live',
+      n.tokens,
+    );
   });
   pr.agentBurn.forEach((b) => {
-    add('proxy', `${b.name} requests`, formatCount(b.usage24h), 'count', '24h', b.usage24h);
+    add(
+      'proxy',
+      `${b.name} requests`,
+      formatCount(b.usage24h),
+      'count',
+      '24h',
+      b.usage24h,
+    );
   });
   return rows;
 }
@@ -896,10 +1083,12 @@ export const MetricsPage = withApplicationStore(() => {
         </div>
         {data && (
           <div className="mt-2 px-4 text-[11px] text-muted-foreground">
-            Generated {formatDistanceToNow(new Date(data.generatedAt), {
+            Generated{' '}
+            {formatDistanceToNow(new Date(data.generatedAt), {
               addSuffix: true,
-            })} · updates every 30s · the fleet registry is a live
-            instrument since process start, not a ledger
+            })}{' '}
+            · updates every 30s · the fleet registry is a live instrument since
+            process start, not a ledger
           </div>
         )}
       </div>
