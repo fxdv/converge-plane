@@ -435,6 +435,101 @@ func TestSpendWindow(t *testing.T) {
 	}
 }
 
+// The per-issue spend window (cost-per-completed-issue attribution):
+// tenant-scoped keys, the same window economics as the agent's slot,
+// and the same disabled / nil-dep no-ops.
+func TestIssueSpendWindow(t *testing.T) {
+	rt := runtimeForTests(true)
+	rt.RecordIssueSpend("w1", "i1", 100)
+	rt.RecordIssueSpend("w1", "i1", 50)
+	if got := rt.IssueSpendCount("w1", "i1"); got != 150 {
+		t.Fatalf("issue spend = %d, want 150", got)
+	}
+	// The tenant is in the key: the same issue id in another workspace
+	// is a different window.
+	if got := rt.IssueSpendCount("w2", "i1"); got != 0 {
+		t.Fatalf("cross-tenant spend = %d, want 0", got)
+	}
+	// Expired window reads 0; the next record restarts it; pruning drops
+	// it (a long-idle issue must not linger in the map).
+	rt.mu.Lock()
+	rt.issueSpend["w1/i1"].windowStart = time.Now().Add(-guardWindow - time.Second)
+	rt.mu.Unlock()
+	if got := rt.IssueSpendCount("w1", "i1"); got != 0 {
+		t.Fatalf("issue spend after expiry = %d, want 0", got)
+	}
+	rt.RecordIssueSpend("w1", "i1", 7)
+	if got := rt.IssueSpendCount("w1", "i1"); got != 7 {
+		t.Fatalf("issue spend after window restart = %d, want 7", got)
+	}
+	rt.mu.Lock()
+	rt.issueSpend["w1/i1"].windowStart = time.Now().Add(-guardWindow - time.Second)
+	rt.mu.Unlock()
+	rt.pruneIssueSpend()
+	rt.mu.Lock()
+	if len(rt.issueSpend) != 0 {
+		t.Fatalf("issueSpend after prune = %d entries, want 0", len(rt.issueSpend))
+	}
+	rt.mu.Unlock()
+	// Negative / zero / empty-key spends are ignored.
+	rt.RecordIssueSpend("w1", "", 10)
+	rt.RecordIssueSpend("", "i1", 10)
+	rt.RecordIssueSpend("w1", "i1", 0)
+	rt.RecordIssueSpend("w1", "i1", -10)
+	if got := rt.IssueSpendCount("w1", "i1"); got != 0 {
+		t.Fatalf("issue spend after no-ops = %d, want 0", got)
+	}
+	// Disabled runtime and nil receiver: inert.
+	off := runtimeForTests(false)
+	off.RecordIssueSpend("w1", "i1", 999)
+	if got := off.IssueSpendCount("w1", "i1"); got != 0 {
+		t.Fatalf("disabled runtime issue spend = %d, want 0", got)
+	}
+	var nilRT *AgentRuntime
+	nilRT.RecordIssueSpend("w1", "i1", 999)
+	if got := nilRT.IssueSpendCount("w1", "i1"); got != 0 {
+		t.Fatalf("nil runtime issue spend = %d, want 0", got)
+	}
+}
+
+// The decision window (the metrics plane's fallback rate): llm and
+// floor decisions both count toward the total, only the floor toward
+// the numerator; the window resets on expiry; the floor-only policy
+// never reports, so the rate stays empty (the honest 0).
+func TestDecisionStatsWindow(t *testing.T) {
+	rt := runtimeForTests(true)
+	rt.recordDecision("llm", "")
+	rt.recordDecision("floor", "boom")
+	rt.recordDecision("llm", "")
+	rt.recordDecision("floor", "slow")
+	decisions, fallbacks := rt.DecisionStats24h()
+	if decisions != 4 || fallbacks != 2 {
+		t.Fatalf("decisions = %d/%d, want 4/2", decisions, fallbacks)
+	}
+	// Expired window: stats read 0; the next decision restarts it.
+	rt.brainMu.Lock()
+	rt.decWindowStart = time.Now().Add(-guardWindow - time.Second)
+	rt.brainMu.Unlock()
+	if decisions, fallbacks := rt.DecisionStats24h(); decisions != 0 || fallbacks != 0 {
+		t.Fatalf("decisions after expiry = %d/%d, want 0/0", decisions, fallbacks)
+	}
+	rt.recordDecision("floor", "boom")
+	if decisions, fallbacks := rt.DecisionStats24h(); decisions != 1 || fallbacks != 1 {
+		t.Fatalf("decisions after window restart = %d/%d, want 1/1", decisions, fallbacks)
+	}
+	// A disabled runtime never reports through its policies; the seams
+	// stay empty.
+	off := runtimeForTests(false)
+	off.recordDecision("floor", "")
+	if decisions, fallbacks := off.DecisionStats24h(); decisions != 0 || fallbacks != 0 {
+		t.Fatalf("disabled runtime decisions = %d/%d, want 0/0", decisions, fallbacks)
+	}
+	var nilRT *AgentRuntime
+	if decisions, fallbacks := nilRT.DecisionStats24h(); decisions != 0 || fallbacks != 0 {
+		t.Fatalf("nil runtime decisions = %d/%d, want 0/0", decisions, fallbacks)
+	}
+}
+
 // One pending nudge at a time: wakeups coalesce, and a lost one is
 // harmless (the tick backstop is the truth).
 func TestWakeCoalesces(t *testing.T) {

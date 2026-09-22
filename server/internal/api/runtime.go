@@ -76,8 +76,12 @@ type AgentRuntime struct {
 	mu      sync.Mutex
 	workers map[string]*agentWorker // "workspaceID/agentID" -> live worker
 	spend   map[string]*spendWindow // agentID -> rolling 24h model tokens
-	notify  chan struct{}           // coalesced fast-path trigger (buffer 1)
-	done    chan struct{}
+	// issueSpend attributes the same spend to the issue (the metrics
+	// plane's cost-per-completed-issue datum): "workspaceID/issueID" ->
+	// rolling 24h tokens. Pruned on the dispatcher's tick.
+	issueSpend map[string]*spendWindow
+	notify     chan struct{} // coalesced fast-path trigger (buffer 1)
+	done       chan struct{}
 
 	// brain is the swarm plane's decision-brain indicator (D4): the
 	// last decision's source — "llm" (the model) or "floor" (the
@@ -88,6 +92,14 @@ type AgentRuntime struct {
 	brainMode string
 	brainNote string
 	brainAt   time.Time
+	// The decision window under the same lock: how many decisions the
+	// runtime made since the window opened, and how many of them the
+	// model could not make (the floor decided instead). The metrics
+	// plane's fallback rate is the ratio; a pure floor (LLM disabled)
+	// never reports, so the window stays empty and the rate is 0.
+	decWindowStart time.Time
+	decisions      int64
+	fallbacks      int64
 
 	// review is the swarm plane's standing-duty indicator (cs:swarm:
 	// review): the foreman review's last pass — when it ran and what it
@@ -102,12 +114,13 @@ type AgentRuntime struct {
 // newAgentRuntime builds the runtime; it is inert until Start.
 func newAgentRuntime(a *API) *AgentRuntime {
 	rt := &AgentRuntime{
-		a:       a,
-		log:     a.log,
-		workers: make(map[string]*agentWorker),
-		spend:   make(map[string]*spendWindow),
-		notify:  make(chan struct{}, 1),
-		done:    make(chan struct{}),
+		a:          a,
+		log:        a.log,
+		workers:    make(map[string]*agentWorker),
+		spend:      make(map[string]*spendWindow),
+		issueSpend: make(map[string]*spendWindow),
+		notify:     make(chan struct{}, 1),
+		done:       make(chan struct{}),
 	}
 	rt.policy = selectPolicy(a, rt.recordDecision)
 	switch fp := rt.policy.(type) {
@@ -126,8 +139,16 @@ func newAgentRuntime(a *API) *AgentRuntime {
 // recordDecision stores the last decision's brain (the policies call
 // it per decision; concurrent workers are serialized on brainMu).
 func (rt *AgentRuntime) recordDecision(mode, note string) {
+	now := time.Now()
 	rt.brainMu.Lock()
-	rt.brainMode, rt.brainNote, rt.brainAt = mode, note, time.Now()
+	rt.brainMode, rt.brainNote, rt.brainAt = mode, note, now
+	if rt.decWindowStart.IsZero() || now.Sub(rt.decWindowStart) >= guardWindow {
+		rt.decisions, rt.fallbacks, rt.decWindowStart = 0, 0, now
+	}
+	rt.decisions++
+	if mode == "floor" {
+		rt.fallbacks++
+	}
 	rt.brainMu.Unlock()
 }
 
@@ -245,6 +266,78 @@ func (rt *AgentRuntime) SpendCount(agentID string) int64 {
 	return w.tokens
 }
 
+// RecordIssueSpend adds model tokens to the issue's rolling 24h window
+// — the metrics plane's cost-per-completed-issue attribution. Same
+// window economics as the agent's burn slot (one shared window, exact
+// until the reset); the tenant is in the key because the plane is
+// per-workspace. Safe on a nil receiver.
+func (rt *AgentRuntime) RecordIssueSpend(workspaceID, issueID string, tokens int) {
+	if rt == nil || !rt.enabled() || workspaceID == "" || issueID == "" || tokens <= 0 {
+		return
+	}
+	now := time.Now()
+	key := workspaceID + "/" + issueID
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	w, ok := rt.issueSpend[key]
+	if !ok || now.Sub(w.windowStart) >= guardWindow {
+		rt.issueSpend[key] = &spendWindow{tokens: int64(tokens), windowStart: now}
+		return
+	}
+	w.tokens += int64(tokens)
+}
+
+// IssueSpendCount returns one issue's 24h model-token total; 0 outside
+// the window or for an issue the runtime never spent tokens on. Safe on
+// a nil receiver.
+func (rt *AgentRuntime) IssueSpendCount(workspaceID, issueID string) int64 {
+	if rt == nil || !rt.enabled() {
+		return 0
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	w, ok := rt.issueSpend[workspaceID+"/"+issueID]
+	if !ok || time.Since(w.windowStart) >= guardWindow {
+		return 0
+	}
+	return w.tokens
+}
+
+// pruneIssueSpend drops the per-issue spend windows that have expired
+// (an issue's tokens are only meaningful while its window is live); the
+// dispatcher calls it on its tick — a few map deletions per cycle.
+func (rt *AgentRuntime) pruneIssueSpend() {
+	if rt == nil {
+		return
+	}
+	now := time.Now()
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	for k, w := range rt.issueSpend {
+		if now.Sub(w.windowStart) >= guardWindow {
+			delete(rt.issueSpend, k)
+		}
+	}
+}
+
+// DecisionStats24h returns the decision window's totals — total
+// decisions and the floor's share of them, the metrics plane's
+// fallback rate. 0/0 outside the window or when nothing has reported
+// (a pure floor policy never reports; the rate reads 0, which is the
+// honest reading for a fleet that is not thinking). Safe on a nil
+// receiver.
+func (rt *AgentRuntime) DecisionStats24h() (decisions, fallbacks int64) {
+	if rt == nil || !rt.enabled() {
+		return 0, 0
+	}
+	rt.brainMu.Lock()
+	defer rt.brainMu.Unlock()
+	if rt.decWindowStart.IsZero() || time.Since(rt.decWindowStart) >= guardWindow {
+		return 0, 0
+	}
+	return rt.decisions, rt.fallbacks
+}
+
 // spendWindow is one agent's rolling token total over the guard window.
 // The window resets on first use after expiry: a long-idle agent's
 // counter is exact at the cost of at most one window of drift at the
@@ -278,6 +371,7 @@ func (rt *AgentRuntime) dispatch(ctx context.Context) {
 
 // reconcile scans the fleet and starts/stops workers to match it.
 func (rt *AgentRuntime) reconcile(ctx context.Context) {
+	rt.pruneIssueSpend()
 	workspaces, err := rt.workspacesWithAgents(ctx)
 	if err != nil {
 		rt.log.Warn("runtime: workspace scan failed", "error", err)
@@ -561,6 +655,7 @@ func (w *agentWorker) workOne(ctx context.Context) (bool, error) {
 	// deterministic policy reports 0 and RecordSpend ignores it). Counted
 	// here, once, so every apply path is accounted for the same way.
 	w.rt.RecordSpend(w.agentID, tokens)
+	w.rt.RecordIssueSpend(w.workspaceID, issueID, tokens)
 
 	return w.applyTx(ctx, issueID, in, version, action)
 }
