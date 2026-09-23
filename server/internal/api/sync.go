@@ -133,7 +133,7 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 		var g errgroup.Group
 		for i, name := range names {
 			g.Go(func() error {
-				recs, err := a.collectModel(r.Context(), name, workspaceID)
+				recs, err := a.collectModel(r.Context(), name, workspaceID, p.AccountID)
 				if err != nil {
 					return err
 				}
@@ -157,8 +157,12 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// collectModel serializes one model for a tenant-scoped workspace.
-func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]syncActionRecord, error) {
+// collectModel runs one model's bootstrap collector for the tenant.
+// accountID is the requesting principal: every collector ignores it
+// except the inbox's (notifications are addressed; the snapshot returns
+// the requestor's own rows, while the per-workspace delta/stream let
+// the client keep only the rows addressed to it).
+func (a *API) collectModel(ctx context.Context, model, workspaceID, accountID string) ([]syncActionRecord, error) {
 	seq := 0
 	emit := func(id string, data any) (syncActionRecord, error) {
 		seq++
@@ -203,6 +207,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID string) ([]sy
 		return a.collectSwarmActivity(ctx, workspaceID, emit)
 	case "View":
 		return a.collectViews(ctx, workspaceID, emit)
+	case notifModel:
+		return a.collectNotifications(ctx, workspaceID, accountID, emit)
 	default:
 		return nil, nil
 	}

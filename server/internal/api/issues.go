@@ -601,6 +601,15 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 			changed = true
 		}
 	}
+	// The inbox (docs/spec 12): the patch's triggers — assign/reassign,
+	// state change, terminal "closed" — fire inside the same transaction
+	// as the mutation, so the nudge and the change commit as one fact.
+	if nrecs, err := a.notifyIssuePatchTx(ctx, tx, p, workspaceID, row, req); err != nil {
+		return false, nil, err
+	} else if len(nrecs) > 0 {
+		historyRecs = append(historyRecs, nrecs...)
+	}
+
 	// D1 escalation recovery: a human mutation on a paused issue resumes
 	// the swarm. (Agents never reach this: the paused guard rejects
 	// them before the transaction opens.) A relation edge counts as a

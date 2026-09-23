@@ -84,6 +84,11 @@ func reviewFixture(t *testing.T, statusID string, parkCount, replies int, forema
 			{frag: "insert into sync_sequences", rowVals: []any{int64(7)}},
 			{frag: "insert into comments", rowVals: []any{"com1"}},
 			{frag: "from comments cm where cm.id", rowVals: []any{"com1", `{"type":"doc"}`, "human1", "iss1", nil, now, now}},
+			// The escalation's inbox nudge (SWR-13): the fake's accounts
+			// table knows no such recipient, so the upsert no-ops — the
+			// escalation's writes (the reassignment, the flag clear) are
+			// the contract this fixture pins.
+			{frag: "insert into notifications", rowErr: pgx.ErrNoRows},
 		},
 	}
 }
