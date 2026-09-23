@@ -54,6 +54,7 @@ export function BootstrapWrapper({ children }: Props) {
     projectsStore,
     viewsStore,
     swarmActivityStore,
+    notificationsStore,
   } = useContextStore();
 
   const MODEL_STORE_MAP = {
@@ -69,7 +70,17 @@ export function BootstrapWrapper({ children }: Props) {
     [MODELS.IssueArtifact]: issueArtifactsStore,
     [MODELS.View]: viewsStore,
     [MODELS.SwarmActivity]: swarmActivityStore,
+    [MODELS.Notification]: notificationsStore,
   };
+
+  // The inbox is addressed (SWR-13): the plane's feed is per-workspace,
+  // so the store's recipient slot is the delivery filter for the live
+  // stream, the delta, and the bootstrap prune. It is set on mount and
+  // on account change, before any snapshot or record is applied.
+  React.useEffect(() => {
+    notificationsStore.setRecipient(user.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id, notificationsStore]);
 
   React.useEffect(() => {
     if (workspace) {
@@ -115,6 +126,7 @@ export function BootstrapWrapper({ children }: Props) {
         data.syncActions,
         workspace?.id ?? '',
         MODEL_STORE_MAP,
+        user?.id ?? '',
       );
 
       // Max-only (SWR-51): another tab may have advanced the shared key

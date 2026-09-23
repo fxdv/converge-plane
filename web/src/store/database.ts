@@ -8,6 +8,7 @@ import type {
   IssueHistoryType,
   IssueType,
   LabelType,
+  NotificationType,
   ProjectType,
   TeamType,
   UsersOnWorkspaceType,
@@ -34,11 +35,12 @@ export class ConvergeDatabase extends Dexie {
   usersOnWorkspaces: Dexie.Table<UsersOnWorkspaceType, string>;
   views: Dexie.Table<ViewType, string>;
   projects: Dexie.Table<ProjectType, string>;
+  notifications: Dexie.Table<NotificationType, string>;
 
   constructor(databaseName: string) {
     super(databaseName);
 
-    this.version(21).stores({
+    this.version(22).stores({
       [MODELS.Workspace]: 'id,createdAt,updatedAt,name,slug,preferences',
       [MODELS.Label]:
         'id,createdAt,updatedAt,name,color,description,workspaceId,groupId,teamId',
@@ -62,6 +64,10 @@ export class ConvergeDatabase extends Dexie {
         'id,createdAt,updatedAt,workspaceId,name,description,filters,isBookmarked,teamId',
       [MODELS.Project]:
         'id,createdAt,updatedAt,name,color,description,workspaceId',
+      // SWR-13: the inbox. recipientId is the load key (one database
+      // per user, the rows addressed to them); readAt and createdAt
+      // serve the badge and the ordering.
+      [MODELS.Notification]: 'id, workspaceId, recipientId, readAt, createdAt',
     });
 
     this.workspaces = this.table(MODELS.Workspace);
@@ -75,6 +81,7 @@ export class ConvergeDatabase extends Dexie {
     this.issueArtifacts = this.table(MODELS.IssueArtifact);
     this.views = this.table(MODELS.View);
     this.projects = this.table(MODELS.Project);
+    this.notifications = this.table(MODELS.Notification);
   }
 }
 

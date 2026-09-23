@@ -32,6 +32,7 @@ import { IssueHistoryStore } from 'store/issue-history/store';
 import { IssuesStore } from 'store/issues/store';
 import { LabelsStore } from 'store/labels/store';
 import { MODELS } from 'store/models';
+import { NotificationsStore } from 'store/notifications/store';
 import { ProjectsStore } from 'store/projects/store';
 import { SwarmActivityStore } from 'store/swarm-activity/store';
 import { TeamsStore } from 'store/teams/store';
@@ -226,6 +227,23 @@ const signal = (
   since: stamp,
   ...over,
 });
+const notification = (
+  over: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  id: 'n1',
+  workspaceId: 'w1',
+  issueId: 'i1',
+  issueNumber: 7,
+  type: 'assigned',
+  actorId: 'u1',
+  actorName: 'Jane Doe',
+  // The store in storeMap() is addressed to u2 (the signed-in user);
+  // a row for another member must be dropped by the guard.
+  recipientId: 'u2',
+  createdAt: stamp,
+  readAt: null,
+  ...over,
+});
 
 const rec = (
   modelName: string,
@@ -258,6 +276,7 @@ const TABLE_PROPS: Record<string, string> = {
   [MODELS.IssueArtifact]: 'issueArtifacts',
   [MODELS.View]: 'views',
   [MODELS.Project]: 'projects',
+  [MODELS.Notification]: 'notifications',
 };
 
 interface TableStub {
@@ -341,6 +360,10 @@ function storeMap(): Record<string, any> {
     [MODELS.SwarmActivity]: SwarmActivityStore.create({
       activities: {},
     } as never),
+    [MODELS.Notification]: NotificationsStore.create({
+      notifications: [],
+      recipientId: 'u2',
+    } as never),
   };
 }
 
@@ -357,7 +380,16 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     await saveSocketData(
       [
         rec('Integration', 'x1', 'I', { id: 'x1', workspaceId: 'w1' }, '1'),
-        rec('Notification', 'x2', 'U', { id: 'x2', workspaceId: 'w1' }, '2'),
+        // The inbox is synced, but addressed: a nudge for another
+        // member is dropped by the guard (SWR-13), so neither record
+        // may write.
+        rec(
+          MODELS.Notification,
+          'x2',
+          'U',
+          { id: 'x2', recipientId: 'u9', workspaceId: 'w1' } as never,
+          '2',
+        ),
       ],
       map,
     );
@@ -380,6 +412,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
         rec(MODELS.View, 'v1', 'I', view(), '10'),
         rec(MODELS.SwarmActivity, 'a1', 'I', signal(), '11'),
         rec(MODELS.IssueArtifact, 'ar1', 'I', artifact(), '12'),
+        rec(MODELS.Notification, 'n1', 'I', notification(), '13'),
       ],
       map,
     );
@@ -414,6 +447,8 @@ describe('saveSocketData (the sync apply pipeline)', () => {
       map[MODELS.SwarmActivity].activities.get('a1')?.phase,
       'deciding',
     );
+    assert.equal(map[MODELS.Notification].notifications.length, 1);
+    assert.equal(map[MODELS.Notification].notifications[0].recipientId, 'u2');
 
     // Every table-backed model got its cache row; swarm is in-memory.
     for (const model of Object.keys(TABLE_PROPS)) {
@@ -582,5 +617,77 @@ describe('saveLiveSocketData (the dedupe guard composed with the apply)', () => 
       map,
     );
     assert.equal(map[MODELS.Issue].issuesMap.get('i4')?.title, 'D');
+  });
+});
+
+describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
+  // The plane's stream and delta are per-workspace: every member of the
+  // tenant receives every notification record, and the client keeps only
+  // the rows addressed to its user. The store in storeMap() is addressed
+  // to u2 (the signed-in account).
+  it('keeps the recipient rows and drops another members nudges', async () => {
+    const map = storeMap();
+    const putsBefore = tableStubs.get(MODELS.Notification)!.puts.length;
+    await saveSocketData(
+      [
+        rec(MODELS.Notification, 'n1', 'I', notification(), '50'),
+        rec(
+          MODELS.Notification,
+          'n2',
+          'I',
+          notification({ id: 'n2', recipientId: 'u9' }),
+          '51',
+        ),
+      ],
+      map,
+    );
+    assert.deepEqual(
+      map[MODELS.Notification].notifications.map((n: { id: string }) => n.id),
+      ['n1'],
+    );
+    // The object cache keeps the same set: another member's nudge never
+    // lands in the local store of this account.
+    assert.equal(
+      tableStubs.get(MODELS.Notification)!.puts.length,
+      putsBefore + 1,
+    );
+  });
+
+  it('a row without a recognizable recipient is dropped (never guessed)', async () => {
+    const map = storeMap();
+    const putsBefore = tableStubs.get(MODELS.Notification)!.puts.length;
+    await saveSocketData(
+      [
+        rec(
+          MODELS.Notification,
+          'n3',
+          'I',
+          { ...notification({ id: 'n3' }), recipientId: undefined } as never,
+          '52',
+        ),
+      ],
+      map,
+    );
+    assert.equal(map[MODELS.Notification].notifications.length, 0);
+    assert.equal(tableStubs.get(MODELS.Notification)!.puts.length, putsBefore);
+  });
+
+  it('a D removes from the store and the cache (the retention path)', async () => {
+    const map = storeMap();
+    await saveSocketData(
+      [rec(MODELS.Notification, 'n1', 'I', notification(), '53')],
+      map,
+    );
+    assert.equal(map[MODELS.Notification].notifications.length, 1);
+    const delsBefore = tableStubs.get(MODELS.Notification)!.dels.length;
+    await saveSocketData(
+      [rec(MODELS.Notification, 'n1', 'D', { id: 'n1' }, '54')],
+      map,
+    );
+    assert.equal(map[MODELS.Notification].notifications.length, 0);
+    assert.equal(
+      tableStubs.get(MODELS.Notification)!.dels.length,
+      delsBefore + 1,
+    );
   });
 });
