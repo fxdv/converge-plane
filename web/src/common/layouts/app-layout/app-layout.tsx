@@ -1,20 +1,20 @@
+import { RoleEnum } from '@converge/types';
 import {
   AI,
   ChartLine,
+  Inbox,
   MyIssues,
   StackLine,
   TeamLine,
 } from '@converge/ui/icons';
-import { RoleEnum } from '@converge/types';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import * as React from 'react';
 
-import type { UsersOnWorkspaceType } from 'common/types';
-
 import { GlobalShortcuts, IssueShortcutDialogs } from 'modules/shortcuts';
 
+import type { UsersOnWorkspaceType } from 'common/types';
 import { AllProviders } from 'common/wrappers/all-providers';
 
 import { useCurrentTeam } from 'hooks/teams';
@@ -33,13 +33,21 @@ interface LayoutProps {
 }
 
 export const AppLayoutChild = observer(({ children }: LayoutProps) => {
-  const { applicationStore, workspaceStore } = useContextStore();
+  const { applicationStore, workspaceStore, notificationsStore } =
+    useContextStore();
   useSidebarShortcut();
 
   const {
     query: { workspaceSlug },
   } = useRouter();
   const team = useCurrentTeam();
+
+  // The inbox badge: the store holds only this account's rows, so the
+  // pending count is the unread view (the badge's truth is the feed,
+  // the database settles it on the next bootstrap).
+  const inboxUnread = workspaceStore.workspace
+    ? notificationsStore.unreadIn(workspaceStore.workspace.id).length
+    : 0;
 
   // The Swarm link appears only when the workspace has machine
   // members (the same check as the board's Swarm button).
@@ -89,6 +97,12 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
                         },
                       ]
                     : []),
+                  {
+                    title: 'Inbox',
+                    icon: Inbox,
+                    href: `/${workspaceSlug}/inbox`,
+                    count: inboxUnread,
+                  },
                 ]}
               />
               <TeamList />

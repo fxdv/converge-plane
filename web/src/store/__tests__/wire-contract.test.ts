@@ -36,6 +36,8 @@ import { Issue } from 'store/issues/models';
 import { IssuesStore } from 'store/issues/store';
 import { Label } from 'store/labels/models';
 import { LabelsStore } from 'store/labels/store';
+import { Notification } from 'store/notifications/models';
+import { NotificationsStore } from 'store/notifications/store';
 import { Project } from 'store/projects/models';
 import { ProjectsStore } from 'store/projects/store';
 import { SwarmActivity } from 'store/swarm-activity/models';
@@ -1144,5 +1146,148 @@ describe('store update merges (the SWR-49 wire->model seams)', () => {
     store.update(label({ name: 'Renamed' }) as never, 'l1');
     assert.equal(store.labels[0].name, 'Renamed');
     assert.equal(store.labels[0].color, '#f00');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inbox (SWR-13): the addressed nudge. The wire shape mirrors
+// server/internal/api/notifications_test.go (TestNotificationData): the
+// nine keys, present or null, never absent.
+// ---------------------------------------------------------------------------
+
+const notification = (
+  over: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  id: 'n1',
+  workspaceId: 'w1',
+  issueId: 'i1',
+  issueNumber: 7,
+  type: 'assigned',
+  actorId: 'u1',
+  actorName: 'Jane Doe',
+  recipientId: 'u2',
+  createdAt: stamp,
+  readAt: null,
+  ...over,
+});
+
+describe('Notification model', () => {
+  it('accepts the exact 9-key wire shape the server emits', () => {
+    const node = Notification.create(notification() as never);
+    assert.equal(node.recipientId, 'u2');
+    assert.equal(node.issueNumber, 7);
+    assert.equal(node.type, 'assigned');
+    assert.equal(node.readAt, null);
+  });
+  it('rides a null actor as explicit null (a gone account leaves a pointer)', () => {
+    const node = Notification.create(
+      notification({ actorId: null, actorName: null }) as never,
+    );
+    assert.equal(node.actorId, null);
+    assert.equal(node.actorName, null);
+  });
+  it('accepts a read row (readAt set)', () => {
+    const node = Notification.create(notification({ readAt: stamp }) as never);
+    assert.equal(node.readAt, stamp);
+  });
+  it('accepts a future, unknown type (degrades, never crashes validation)', () => {
+    // The OWNER-role crash class: a value outside the client vocabulary
+    // must not throw during model creation. The row renders its type
+    // as a plain word instead.
+    const node = Notification.create(
+      notification({ type: 'escalation' }) as never,
+    );
+    assert.equal(node.type, 'escalation');
+  });
+  it('rejects a degraded payload (missing the delivery key)', () => {
+    assert.throws(() =>
+      Notification.create({ id: 'n1', workspaceId: 'w1' } as never),
+    );
+  });
+});
+
+describe('NotificationsStore (addressed delivery)', () => {
+  const store = () =>
+    NotificationsStore.create({
+      notifications: [],
+      recipientId: 'u2',
+    } as never);
+
+  it('setRecipient swaps the delivery key and clears the previous account rows', () => {
+    const s = store();
+    s.update(notification() as never);
+    s.update(notification({ id: 'n2', readAt: stamp }) as never);
+    assert.equal(s.notifications.length, 2);
+    s.setRecipient('u3');
+    assert.equal(s.recipientId, 'u3');
+    assert.equal(s.notifications.length, 0);
+    s.setRecipient('u3'); // idempotent: the same account re-set keeps state
+    assert.equal(s.notifications.length, 0);
+  });
+
+  it('forWorkspace scopes by workspace AND recipient, newest first', () => {
+    const s = store();
+    s.update(notification({ createdAt: stamp }) as never);
+    s.update(
+      notification({
+        id: 'n2',
+        createdAt: '2026-09-03T12:00:00.000Z',
+      }) as never,
+    );
+    s.update(notification({ id: 'n3', workspaceId: 'w2' }) as never);
+    s.update(notification({ id: 'n4', recipientId: 'u9' }) as never); // another member
+    const rows = s.forWorkspace('w1');
+    assert.deepEqual(
+      rows.map((n: { id: string }) => n.id),
+      ['n2', 'n1'],
+    );
+  });
+
+  it('unreadIn is the badge: the pending rows only', () => {
+    const s = store();
+    s.update(notification() as never);
+    s.update(notification({ id: 'n2', readAt: stamp }) as never);
+    assert.deepEqual(
+      s.unreadIn('w1').map((n: { id: string }) => n.id),
+      ['n1'],
+    );
+  });
+
+  it('staleIdsForModel: the inbox prunes the recipient own residue and nothing else', () => {
+    const rows: PruneRow[] = [
+      pruneRow('n1', { workspaceId: 'w1', recipientId: 'u2' }), // live in the snapshot
+      pruneRow('n2', { workspaceId: 'w1', recipientId: 'u2' }), // residue: mine, gone server-side
+      pruneRow('n3', { workspaceId: 'w1', recipientId: 'u9' }), // another member: cache, never
+      pruneRow('n4', { workspaceId: 'w2', recipientId: 'u2' }), // another workspace: never
+    ];
+    const live = liveIdsByModel([rec('Notification', 'n1', 'I')]);
+    assert.deepEqual(
+      staleIdsForModel(
+        'Notification',
+        domain({ recipientId: 'u2' }),
+        rows,
+        live,
+      ),
+      ['n2'],
+    );
+    // A zero-row snapshot (retention swept everything): every own row is
+    // residue; the other member's and the other workspace's rows are still
+    // out of domain.
+    const empty = liveIdsByModel([]);
+    assert.deepEqual(
+      staleIdsForModel(
+        'Notification',
+        domain({ recipientId: 'u2' }),
+        rows,
+        empty,
+      ),
+      ['n1', 'n2'],
+    );
+    // No recipient in the domain never prunes (conservative): even a
+    // zero-row snapshot must not touch rows of an unknown recipient.
+    assert.deepEqual(
+      staleIdsForModel('Notification', domain(), rows, empty),
+      [],
+    );
   });
 });

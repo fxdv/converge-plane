@@ -9,6 +9,7 @@ import { saveIssueHistoryData } from 'store/issue-history';
 import { saveIssuesData } from 'store/issues';
 import { saveLabelData } from 'store/labels';
 import { MODELS } from 'store/models';
+import { saveNotificationsData } from 'store/notifications';
 import { saveProjectData } from 'store/projects';
 import { saveSwarmActivityData } from 'store/swarm-activity';
 import { saveTeamData } from 'store/teams';
@@ -35,6 +36,7 @@ const SAVE_HANDLERS: Record<string, Function> = {
   [MODELS.View]: saveViewData,
   [MODELS.Project]: saveProjectData,
   [MODELS.SwarmActivity]: saveSwarmActivityData,
+  [MODELS.Notification]: saveNotificationsData,
 };
 
 // ---------------------------------------------------------------------------
@@ -199,6 +201,10 @@ export interface PruneDomain {
   workspaceId: string;
   teamIds: ReadonlySet<string>;
   issueIds: ReadonlySet<string>;
+  // The inbox's recipient (SWR-13): the bootstrap snapshot is the
+  // recipient's own rows, so the prune only touches rows addressed to
+  // the same account. Absent (undefined) never prunes the model.
+  recipientId?: string | null;
 }
 
 // The minimum of a local row the prune reads: the id plus the scoping key
@@ -208,6 +214,7 @@ export interface PruneRow {
   workspaceId?: string | null;
   teamId?: string | null;
   issueId?: string | null;
+  recipientId?: string | null;
 }
 
 // Model -> live id set. Every synced model gets an entry; an empty set is
@@ -265,12 +272,22 @@ function inDomain(
     case MODELS.IssueHistory:
     case MODELS.IssueArtifact:
       // Same typeof predicate as the team case above.
-      return typeof row.issueId === 'string' &&
-        domain.issueIds.has(row.issueId);
+      return (
+        typeof row.issueId === 'string' && domain.issueIds.has(row.issueId)
+      );
     case MODELS.SwarmActivity:
       // In-memory session store: the snapshot replays the runtime's live
       // signal set in full; anything else is a ghost (a crashed worker).
       return true;
+    case MODELS.Notification:
+      // Addressed delivery (SWR-13): the snapshot carries the recipient's
+      // own rows only, so a row of another recipient is cache, not
+      // residue. No recipient in the domain never prunes (conservative).
+      return (
+        row.workspaceId === domain.workspaceId &&
+        typeof domain.recipientId === 'string' &&
+        row.recipientId === domain.recipientId
+      );
     default:
       return false; // Workspace + unknown models: the cache is untouched
   }
@@ -369,6 +386,11 @@ async function localRowsForModel(
       return Array.from(
         MODEL_STORE_MAP[MODELS.SwarmActivity]?.activities.values() ?? [],
       );
+    case MODELS.Notification:
+      return db.notifications
+        .where('workspaceId')
+        .equals(domain.workspaceId)
+        .toArray();
     default:
       return [];
   }
@@ -383,6 +405,7 @@ export async function pruneStaleLocalRecords(
   workspaceId: string,
   // eslint-disable-next-line @typescript-eslint/ban-types
   MODEL_STORE_MAP: Record<string, any>,
+  recipientId?: string,
 ): Promise<void> {
   if (!convergeDatabase || !workspaceId || !Array.isArray(snapshot)) {
     return;
@@ -405,7 +428,12 @@ export async function pruneStaleLocalRecords(
           .toArray()
       : [];
     const issueIds = new Set(issues.map((i) => i.id));
-    const domain: PruneDomain = { workspaceId, teamIds, issueIds };
+    const domain: PruneDomain = {
+      workspaceId,
+      teamIds,
+      issueIds,
+      recipientId,
+    };
 
     // Decision phase.
     const results = await Promise.all(
