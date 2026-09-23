@@ -198,6 +198,12 @@ func (a *API) Mount(r chi.Router) {
 		// M6: agent actors (swarm-capable machine members).
 		// D2: the swarm panel's fleet roster (read-only, any member).
 		r.Get("/workspaces/{id}/swarm", a.handleSwarmStatus)
+		// The in-app inbox (docs/spec 12): the recipient's own rows, the
+		// one per-recipient read in the sync world; read state is the
+		// user's badge.
+		r.Get("/notifications", a.handleListNotifications)
+		r.Post("/notifications/{id}/read", a.handleMarkNotificationRead)
+		r.Post("/notifications/read_all", a.handleMarkNotificationsRead)
 		// The metrics plane (docs/spec ch. 6, §Metrics): product,
 		// codebase, swarm, proxy — read-only, any active member.
 		r.Get("/workspaces/{id}/metrics", a.handleMetrics)

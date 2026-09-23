@@ -58,6 +58,12 @@ func commentCreateTx(t *testing.T, reloaded []any) *fakeTx {
 		{frag: "insert into comments (", rowVals: []any{"c9"}},
 		{frag: "from comments cm where cm.id", rowVals: reloaded},
 		{frag: "insert into sync_sequences", rowVals: []any{int64(41)}},
+		// The inbox hook (SWR-13) reads the comment's participants and
+		// upserts the recipients' pending rows; the fixture's creator is
+		// the actor and its assignee is nil, so the collapse is empty and
+		// any non-human recipient no-ops on the accounts join.
+		{frag: "select distinct author_id from comments", rows: [][]any{}},
+		{frag: "insert into notifications", rowErr: pgx.ErrNoRows},
 	}}
 }
 

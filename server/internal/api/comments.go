@@ -113,11 +113,22 @@ func (a *API) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	// The inbox (docs/spec 12): the comment's trigger (assignee + creator
+	// + participants) plus mentions, in the same transaction as the
+	// comment. The body scans for @handles in its stored form.
+	var nrecs []syncActionRecord
+	if nrecs, err = a.notifyCommentTx(ctx, tx, p, workspaceID, row, req.Body); err != nil {
+		a.internalError(w, err)
+		return
+	}
 	if err := tx.Commit(ctx); err != nil {
 		a.internalError(w, err)
 		return
 	}
 	a.broadcastRecord(rec)
+	for i := range nrecs {
+		a.broadcastRecord(nrecs[i])
+	}
 	writeJSON(w, http.StatusCreated, a.commentData(fresh, createdAt, updatedAt))
 }
 

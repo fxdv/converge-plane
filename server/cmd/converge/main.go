@@ -112,6 +112,10 @@ func run() (err error) {
 	apiSvc.StartRuntime(ctx)
 	defer apiSvc.StopRuntime()
 
+	// The inbox retention sweeper (the 90-day horizon): its own coarse
+	// clock next to the runtime's fine one.
+	apiSvc.StartInboxRetention(ctx)
+
 	server := httpx.New(httpx.Dependencies{
 		Logger:      logger,
 		Version:     version,

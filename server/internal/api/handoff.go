@@ -224,12 +224,27 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	// The inbox (docs/spec 12): a handoff to a human is the matrix's
+	// human-facing handoff — a task landed on someone who did not
+	// choose it. The endpoint validates agent targets today; the
+	// trigger stays for the paths that relax that validation.
+	var nrecs []syncActionRecord
+	var kind string
+	if err := tx.QueryRow(ctx, "select kind from accounts where id = $1", req.ToAccountID).Scan(&kind); err == nil && kind == auth.AccountKindHuman {
+		if nrecs, err = a.notifyIssueTx(ctx, tx, workspaceID, p, row, notifHandoff, []string{req.ToAccountID}); err != nil {
+			a.internalError(w, err)
+			return
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		a.internalError(w, err)
 		return
 	}
 	a.broadcastRecord(issueRec)
 	a.broadcastRecord(histRec)
+	for i := range nrecs {
+		a.broadcastRecord(nrecs[i])
+	}
 	// D3 fast path: the handoff's target is (validated above) an active
 	// agent — wake its worker now; the tick backstop covers a dropped
 	// wake. The pause branch above deliberately does not wake: a paused
@@ -412,6 +427,15 @@ func (a *API) pauseIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, r
 		return nil, err
 	}
 	recs = append(recs, commentRec)
+	// The inbox (docs/spec 12): a pause is a human moment — the assignee
+	// and the creator. Every escalation the swarm can produce goes
+	// through this choke point, so every one carries its nudge.
+	if nrecs, err := a.notifyIssueTx(ctx, tx, workspaceID, p, row, notifPause,
+		[]string{strval(row.AssigneeID), strval(row.CreatedByID)}); err != nil {
+		return nil, err
+	} else if len(nrecs) > 0 {
+		recs = append(recs, nrecs...)
+	}
 	return recs, nil
 }
 

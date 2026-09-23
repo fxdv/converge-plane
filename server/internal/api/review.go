@@ -333,6 +333,17 @@ func (a *API) escalateIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string
 		return nil, err
 	}
 	recs = append(recs, commentRec)
+	// The inbox (docs/spec 12): an escalation to a human is the
+	// matrix's human-facing handoff — the card lands on someone who
+	// did not choose it (the nudge skips when the target already held
+	// the card).
+	if strval(row.AssigneeID) != targetID {
+		if nrecs, err := a.notifyIssueTx(ctx, tx, workspaceID, actor, row, notifHandoff, []string{targetID}); err != nil {
+			return nil, err
+		} else if len(nrecs) > 0 {
+			recs = append(recs, nrecs...)
+		}
+	}
 	fresh, err := a.issueByIDTx(ctx, tx, row.ID)
 	if err != nil {
 		return nil, err

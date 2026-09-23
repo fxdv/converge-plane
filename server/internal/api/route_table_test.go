@@ -1226,6 +1226,62 @@ var rtRouteCases = []routeCase{
 		code: 422, err: "the workspace owner cannot be suspended",
 	},
 
+	// GET /notifications — the inbox list: the caller's own rows in the
+	// workspace (the one per-recipient read in the sync world); an empty
+	// inbox is an empty array, never null (the client iterates it).
+	{
+		route: "GET /api/v1/notifications", method: "GET",
+		path:    "/api/v1/notifications?workspaceId=" + rtWS + "&unreadOnly=true",
+		handler: (*API).handleListNotifications,
+		pool: &fakePool{rules: []fakeRule{
+			rtRole("member"),
+			{frag: "from notifications", rows: [][]any{}},
+		}},
+		code: 200,
+		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
+			if strings.TrimSpace(rec.Body.String()) != `[]` {
+				t.Fatalf("inbox = %s, want an empty array, never null", rec.Body.String())
+			}
+		},
+	},
+
+	// POST /notifications/{id}/read — the addressed guard: a row that is
+	// not the caller's 404s (a notification is addressed, not shared —
+	// the recipient sits in the WHERE, not the client).
+	{
+		route: "POST /api/v1/notifications/{id}/read", method: "POST",
+		path:      "/api/v1/notifications/" + rtComment + "/read",
+		urlParams: []string{"id", rtComment},
+		handler:   (*API).handleMarkNotificationRead,
+		pool: &fakePool{txs: []*fakeTx{{rules: []fakeRule{
+			{frag: "from notifications n", rowErr: pgx.ErrNoRows},
+		}}}},
+		code: 404, err: "not found",
+	},
+
+	// POST /notifications/read_all — the clear-all on a workspace with no
+	// pending rows: an empty updated count, still a 200 (a no-op sweep is
+	// a success; the badge settles on the next list fetch).
+	{
+		route: "POST /api/v1/notifications/read_all", method: "POST",
+		path:    "/api/v1/notifications/read_all?workspaceId=" + rtWS,
+		handler: (*API).handleMarkNotificationsRead,
+		pool: &fakePool{
+			rules: []fakeRule{rtRole("member")},
+			txs:   []*fakeTx{{rules: []fakeRule{{frag: "from notifications n", rows: [][]any{}}}}},
+		},
+		code: 200,
+		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
+			var v struct {
+				Updated int `json:"updated"`
+			}
+			decodeBody(t, rec, &v)
+			if v.Updated != 0 {
+				t.Fatalf("updated = %d, want 0 (no pending rows)", v.Updated)
+			}
+		},
+	},
+
 	// GET /workspaces/{id}/swarm — the fleet panel on a swarm-free
 	// workspace: the arrays are empty, never null (the client iterates
 	// them); the settings fall back to the deploy defaults without a
@@ -1469,7 +1525,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 57 // the v1 surface: every route in Mount, one entry each
+	const want = 60 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}
