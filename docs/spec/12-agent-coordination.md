@@ -400,3 +400,52 @@ own news feed):
 The client's `phase` is a plain string in the MST model on purpose: a new
 server phase must degrade, never crash model validation (the project has a
 history of exactly that crash class).
+
+## Inbox (as-built, D3+)
+
+The matrix's events need a human ear. The inbox is that ear: one row in
+`notifications` per recipient per nudge, a pointer to the issue's own
+trace (the row is disposable; the trace is the record). Every trigger
+writes its rows inside the mutation's transaction, so the nudge and its
+change are one atomic fact — a client that falls behind the feed loses
+nothing, and never sees a change without it.
+
+- **Trigger matrix.** assign → new assignee · reassign → displaced
+  assignee · state move (non-terminal) → assignee + creator · close
+  (completed/canceled) → the union (assignee, creator, comment
+  participants) · comment → assignee + creator + participants ·
+  @-mention of a workspace member → the addressed member (name-matched,
+  case-insensitive) · handoff to a human → that human · pause
+  (guard/breaker) → assignee + creator · escalation → the foreman.
+- **Two noise rules.** Actor self-exclusion (an account is never told
+  about its own action), and a 24-hour dedup: the upsert key is
+  (issue, type, actor, day-epoch-bucket) under a partial unique index on
+  *pending* rows, so a long thread collapses into one pending row that
+  the newest event refreshes in place; a read row falls out of the index
+  and the next event nudges fresh. A midnight boundary can double-notify
+  once per actor per day; the bound is one, accepted as-is.
+- **Addressed delivery.** The plane's bootstrap/delta/stream are
+  per-workspace; every record carries a `recipientId`, and the client
+  keeps only the rows addressed to its user (bootstrap filtered
+  server-side; stream/delta filtered client-side, in the store and in
+  the prune). Agents have no inbox — the upsert's accounts join admits
+  `kind = 'human'` only, so a swarm of any scale cannot nudge itself.
+- **Routes.** `GET /notifications?workspaceId=...` (own rows, retention
+  window, newest first, bounded; `unreadOnly` feeds the badge) ·
+  `POST /notifications/{id}/read` (own row; a double read is a no-op
+  200) · `POST /notifications/read_all` (own pending set; feed fan-out
+  capped at 100 records — the DB state is complete regardless, the rest
+  settle on the next list fetch).
+- **Retention.** 90 days, then purged by one coarse sweeper (a 30-minute
+  tick + a boot pass; a single bounded range delete over the retention
+  index). The trace keeps the durable record; the inbox renders recent
+  history, not a ledger.
+- **In-app only.** Mail remains the invitation's voice; a swarm-scale
+  event (handoff, pause, agent activity) never mails. The mailbox is
+  protected from swarm noise at the source, not by a client filter.
+- **Shipped scope (SWR-13).** The matrix applies in full to
+  human-initiated mutations; the swarm's own write paths (the runtime's
+  state moves, agent comments) notify only through the human-facing
+  chokepoints (pause, escalation, handoff). Full matrix on those paths
+  is tracked as SWR-59 — the dedup above is its noise bound, and the
+  bound is the owner's to ratify.

@@ -1066,6 +1066,95 @@ loop-detection hit rate per topology $\cdot$ the handoff graph as a
 rendered graph (the plane serves its volume and chain; the edges
 themselves are the issue's trace).
 
+\section{Inbox (notifications)}
+\label{sec:inbox}
+\cs{swarm:inbox}\shipped\
+
+The swarm speaks in traces; the inbox is where a human hears it. One
+row in \texttt{notifications} is one recipient's one nudge --- a pointer
+to the issue's own trace, which stays the record (the row is
+disposable). Every trigger path --- assignment, state move, comment,
+mention, handoff, pause, escalation --- writes its rows inside the same
+transaction as the mutation that caused them: the nudge and its change
+are one atomic fact, so a client that falls behind the feed loses
+nothing, and never sees a change without it.
+
+\textbf{The trigger matrix} --- who is told, and by what word:
+
+\begin{center}
+\begin{tabular}{@{}p{0.34\textwidth}p{0.38\textwidth}p{0.18\textwidth}@{}}
+\toprule
+\textbf{Event} & \textbf{Recipients} & \textbf{Type}\\
+\midrule
+An issue is assigned & the new assignee & \texttt{assigned}\\
+An issue is reassigned & the displaced assignee & \texttt{reassigned}\\
+A state move (non-terminal) & assignee + creator & \texttt{state}\\
+A close (completed / canceled) & the union: assignee, creator,
+  and everyone who commented & \texttt{closed}\\
+A comment is posted & assignee + creator + comment
+  participants & \texttt{comment}\\
+A @-mention of a workspace member & the addressed member
+  (name-matched, case-insensitive) & \texttt{mention}\\
+A handoff to a human & the human who received the card &
+  \texttt{handoff}\\
+A pause (guard / breaker) & the assignee + creator & \texttt{pause}\\
+An escalation (the breaker's reassignment) & the human foreman &
+  \texttt{handoff}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two rules keep the matrix from becoming noise. \emph{Actor
+self-exclusion:} an account is never told about its own action --- a
+self-assignment, a comment of its own, and a close it made all stay
+quiet. \emph{The 24-hour dedup:} the upsert key is
+(issue, type, actor, day-epoch-bucket) under a partial unique index on
+\emph{pending} rows, so a twenty-comment thread collapses into one
+pending row: the newest event refreshes it in place, a new day starts a
+new row, and a read row falls out of the index, so the next event
+nudges fresh. A midnight-boundary event can double-notify once per actor
+per day; the bound is one, and it is accepted as-is.
+
+\textbf{The shipped scope} (SWR-13): the matrix applies in full to
+human-initiated mutations; the swarm's own write paths --- the
+runtime's internal state moves, the agent's comments --- notify only
+through the human-facing chokepoints (pause, escalation, handoff).
+Closing the full matrix to those paths is tracked as SWR-59; the
+24-hour dedup above is its noise bound, and the bound is the owner's
+to ratify.
+
+\textbf{Delivery is addressed.} The plane's bootstrap, delta, and stream
+are per-workspace, so every member of a tenant receives every
+notification record on the feed; each record carries a
+\texttt{recipientId}, and the client keeps only the rows addressed to
+its user --- the bootstrap is recipient-filtered server-side, and the
+stream / delta is filtered client-side (in the store, and in the
+prune). Agents have no inbox: the upsert's \texttt{accounts} join
+admits \texttt{kind = 'human'} recipients only, so a swarm of any scale
+cannot nudge itself.
+
+\textbf{Routes:} \texttt{GET /notifications?workspaceId=...} --- the
+caller's own rows in the retention window, newest first, bounded (the
+\texttt{unreadOnly} variant feeds the badge); \texttt{POST
+/notifications/\{id\}/read} --- the row must be the caller's (a
+notification is addressed, not shared; a double read is a no-op 200);
+\texttt{POST /notifications/read\_all} --- the caller's whole pending
+set in the workspace, with the feed fan-out capped (100 records): the
+database state is complete regardless, and the remainder settles on the
+next list fetch.
+
+\textbf{Retention:} 90 days, then purged. The rows are disposable
+pointers, so one coarse sweeper --- a 30-minute tick plus a boot pass,
+each a single bounded range delete over the retention index --- ages
+them out; the issue's trace keeps the durable record, and the inbox
+renders recent history, not a ledger.
+
+\textbf{In-app only.} The inbox is the only delivery channel for swarm
+events: mail remains the invitation's voice (the mail seam is
+unchanged), and a swarm-scale event --- a handoff, a pause, an agent's
+activity --- never mails. The mailbox is protected from swarm noise at
+the source, not by a client filter.
+
 \section{Agent runtime}
 \label{sec:runtime}
 \cs{swarm:runtime}\shipped\
