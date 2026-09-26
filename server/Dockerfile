@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 go build \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/converge ./cmd/converge
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN adduser -D -u 10001 converge
 USER converge
 COPY --from=build /out/converge /usr/local/bin/converge
