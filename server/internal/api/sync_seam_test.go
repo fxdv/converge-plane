@@ -355,6 +355,33 @@ func TestStreamPayload(t *testing.T) {
 	}
 }
 
+// TestStreamHeartbeat pins the keep-alive frame the client's trailing-loss
+// repair reads: a named `head` event whose data carries the committed head
+// as a string sequence, and a bare comment when the head cannot be read.
+func TestStreamHeartbeat(t *testing.T) {
+	a := apiForTests(t, &fakePool{t: t, rules: []fakeRule{
+		{frag: "coalesce((select last_sequence", rowVals: []any{int64(42)}},
+	}})
+	frame := a.streamHeartbeat(context.Background(), "ws1")
+	data, ok := strings.CutPrefix(frame, "event: head\ndata: ")
+	if !ok || !strings.HasSuffix(data, "\n\n") {
+		t.Fatalf("heartbeat = %q, want a head event", frame)
+	}
+	var head struct {
+		SequenceID string `json:"sequenceId"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &head); err != nil || head.SequenceID != "42" {
+		t.Fatalf("heartbeat data = %q (%v), want sequenceId \"42\"", data, err)
+	}
+
+	failing := apiForTests(t, &fakePool{t: t, rules: []fakeRule{
+		{frag: "coalesce((select last_sequence", rowErr: context.DeadlineExceeded},
+	}})
+	if got := failing.streamHeartbeat(context.Background(), "ws1"); got != ": ping\n\n" {
+		t.Fatalf("heartbeat on read failure = %q, want the bare comment", got)
+	}
+}
+
 // TestEmitChangeAddressesNotifications pins where the recipient comes
 // from: the inbox record's own recipientId, and nothing else.
 func TestEmitChangeAddressesNotifications(t *testing.T) {

@@ -72,12 +72,7 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 	// The server's current watermark for the workspace: the cursor
 	// reported back to the client so it can advance past what was
 	// delivered. Never echo the client's own (stale) cursor.
-	var serverSeq int64
-	if err := a.pool.QueryRow(r.Context(),
-		"select coalesce((select last_sequence from sync_sequences where workspace_id = $1), 0)",
-		workspaceID).Scan(&serverSeq); err != nil {
-		serverSeq = 0
-	}
+	serverSeq, _ := a.workspaceHead(r.Context(), workspaceID)
 
 	// Non-nil: the client contract is an array, and a Go nil slice
 	// marshals as JSON null, which crashes the client's iteration.

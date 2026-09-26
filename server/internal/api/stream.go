@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,6 +15,10 @@ import (
 )
 
 const ssePingInterval = 15 * time.Second
+
+// headReadTimeout bounds the heartbeat's head read: the stream loop waits
+// on it, so a slow database must not hold back the events queued behind.
+const headReadTimeout = 2 * time.Second
 
 // CollectMetrics reports the realtime fan-out at scrape time.
 func (a *API) CollectMetrics(e *metrics.Emitter) {
@@ -31,7 +36,9 @@ func (a *API) CollectMetrics(e *metrics.Emitter) {
 // The stream is gap-free per workspace: every committed sequence is
 // delivered, in full or — for a record addressed to another account —
 // as a bare {"sequenceId","skip":true} marker, so the client's
-// contiguous cursor can advance without seeing the record.
+// contiguous cursor can advance without seeing the record. The heartbeat
+// carries the committed head (streamHeartbeat), so a delivery that never
+// happened is noticed even when no later record follows it.
 func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
@@ -95,7 +102,7 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 			}
 			fl.Flush()
 		case <-ping.C:
-			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+			if _, err := fmt.Fprint(w, a.streamHeartbeat(r.Context(), workspaceID)); err != nil {
 				return
 			}
 			fl.Flush()
@@ -103,6 +110,20 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// streamHeartbeat is the keep-alive frame: a `head` event with the
+// workspace's committed head, which the client compares with its cursor.
+// A failed read degrades to a bare comment that only keeps the
+// connection open.
+func (a *API) streamHeartbeat(ctx context.Context, workspaceID string) string {
+	ctx, cancel := context.WithTimeout(ctx, headReadTimeout)
+	defer cancel()
+	head, err := a.workspaceHead(ctx, workspaceID)
+	if err != nil {
+		return ": ping\n\n"
+	}
+	return fmt.Sprintf("event: head\ndata: {\"sequenceId\":\"%d\"}\n\n", head)
 }
 
 // streamPayload is what one subscriber receives for an event: the record

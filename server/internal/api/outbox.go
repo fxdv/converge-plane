@@ -104,6 +104,20 @@ func (a *API) claimSequenceTx(ctx context.Context, tx pgx.Tx, workspaceID string
 	return seq, err
 }
 
+// workspaceHead reads the workspace's committed sync head: the last
+// claimed sequence (0 before the first write, or when the read fails).
+// A claim is invisible until its transaction commits, and claims commit
+// in order, so every sequence up to the head is in the outbox.
+func (a *API) workspaceHead(ctx context.Context, workspaceID string) (int64, error) {
+	var head int64
+	if err := a.pool.QueryRow(ctx,
+		"select coalesce((select last_sequence from sync_sequences where workspace_id = $1), 0)",
+		workspaceID).Scan(&head); err != nil {
+		return 0, err
+	}
+	return head, nil
+}
+
 // emitChange claims the next sync sequence for the workspace, writes the
 // outbox row inside the caller's transaction, and returns the wire record
 // to broadcast after commit.

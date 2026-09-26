@@ -83,6 +83,8 @@ The conventions above are the target; these are the contracts the Go server impl
 
 **Notifications.** Notification records are addressed: the SSE stream and the delta feed deliver each one only to its recipient.
 
+**Realtime delivery.** Sync sequences are gap-free per workspace and commit in order. The SSE stream carries every committed sequence (another member's notification arrives as `{"sequenceId","skip":true}`), and every 15 s it sends `event: head` with `{"sequenceId":"<committed head>"}`. The client buffers out-of-order records and runs a delta when a hole outlasts 1.5 s; a head beyond its cursor counts as a hole, so a lost final record is repaired within one heartbeat instead of at the next write. A subscriber 64 events behind is disconnected and resyncs from the delta on reconnect. `sync-soak.test.ts` (client, seeded fault injection) and `outbox_db_test.go` (server, concurrent writers and rollbacks) pin these properties.
+
 ## Resource contracts by release
 
 These are capability endpoints, not a fixed framework/router prescription.

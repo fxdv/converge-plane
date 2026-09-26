@@ -194,8 +194,8 @@ location / {
 }
 ```
 
-The API itself already sends `X-Accel-Buffering: no` and 15 s keep-alive
-pings on the stream; the `flush_interval` / `proxy_buffering off` lines are
+The API itself already sends `X-Accel-Buffering: no` and a 15 s heartbeat
+event on the stream; the `flush_interval` / `proxy_buffering off` lines are
 what keeps the proxy from holding the bytes.
 
 Set in `.env`:

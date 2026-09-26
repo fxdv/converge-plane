@@ -16,6 +16,7 @@ import { UserContext } from 'store/user-context';
 
 import {
   acceptDeltaBatch,
+  acceptStreamHead,
   acceptStreamRecord,
   dedupeLiveRecords,
   hasSequenceGap,
@@ -215,6 +216,15 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
           gapTimerRef.current = undefined;
         }
       };
+
+      // The server's heartbeat carries the workspace's committed head, so a
+      // lost final record surfaces within one heartbeat instead of waiting
+      // for the next write.
+      socket.addEventListener('head', (event: MessageEvent) => {
+        if (acceptStreamHead(JSON.parse(event.data)?.sequenceId)) {
+          scheduleGapRepair();
+        }
+      });
 
       socket.onopen = () => {
         void reconcile();
