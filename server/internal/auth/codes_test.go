@@ -95,6 +95,11 @@ func TestEmailPattern(t *testing.T) {
 		"a@@b.co",                            // double at
 		"a@b@c.co",                           // second at in the domain
 		"ab.co",                              // no at at all
+		"x\r\nSubject: hi\r\n@b.co",          // header injection
+		"a b@b.co",                           // whitespace
+		"a\x00@b.co",                         // control character
+		"Name <a@b.co>",                      // display name
+		"<a@b.co>",                           // angle brackets
 		"a@b.co@" + strings.Repeat("x", 250), // > 255 total
 		"a@" + strings.Repeat("x", 251) + ".co",
 	}

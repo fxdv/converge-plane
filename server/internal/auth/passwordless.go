@@ -40,6 +40,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"strconv"
 	"strings"
 	"time"
@@ -207,15 +208,25 @@ func (req codeRequest) email() string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-var emailPattern = func() func(string) bool {
-	return func(email string) bool {
-		if email == "" || len(email) < 5 || len(email) > 255 {
+// emailPattern accepts a bare address (no display name, no angle
+// brackets) with a dotted domain. Whitespace and control characters are
+// refused outright: the address is written into mail headers and logs.
+func emailPattern(email string) bool {
+	if len(email) < 5 || len(email) > 255 {
+		return false
+	}
+	for _, r := range email {
+		if r <= ' ' || r == 0x7f {
 			return false
 		}
-		at := strings.Index(email, "@")
-		return at > 0 && at < len(email)-1 && !strings.Contains(email[at+1:], "@") && strings.Contains(email[at+1:], ".")
 	}
-}()
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email || addr.Name != "" {
+		return false
+	}
+	at := strings.LastIndex(email, "@")
+	return at > 0 && strings.Contains(email[at+1:], ".")
+}
 
 // handleCreateCode implements POST /api/auth/signinup/code.
 //
@@ -410,9 +421,8 @@ func (s *Service) handleConsumeCode(w http.ResponseWriter, r *http.Request) {
 	if code == "" {
 		code = strings.ToUpper(strings.TrimSpace(body.Code))
 	}
-	if code == "" {
-		code = strings.ToUpper(r.URL.Query().Get("code"))
-	}
+	// Never from the query string: a code in a URL lands in proxy access
+	// logs, and a query needs no body a cross-site form must shape.
 	if code == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "code is required")
 		return
