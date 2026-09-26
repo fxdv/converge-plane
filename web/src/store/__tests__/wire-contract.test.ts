@@ -197,6 +197,25 @@ describe('Issue model', () => {
     assert.equal(Issue.create(legacy as never).agentPaused, false);
   });
 
+  // Phase 2: the work-API claim (server/internal/api/wire_builders.go
+  // issueData — claimedById / claimedAt, null when unclaimed).
+  it('accepts the work-API claim fields (claimed and unclaimed)', () => {
+    const claimed = Issue.create(
+      issue({ claimedById: 'ag1', claimedAt: stamp }) as never,
+    );
+    assert.equal(claimed.claimedById, 'ag1');
+    assert.equal(claimed.claimedAt, stamp);
+    const open = Issue.create(
+      issue({ claimedById: null, claimedAt: null }) as never,
+    );
+    assert.equal(open.claimedById, null);
+  });
+  it('defaults the claim fields on pre-Phase-2 payloads', () => {
+    const node = Issue.create(issue() as never);
+    assert.equal(node.claimedById, null);
+    assert.equal(node.claimedAt, null);
+  });
+
   // v1.1: the denormalized relations array (server/internal/api/
   // issue_relation.go relationListSQL — the reader's perspective).
   const relation = (over: Record<string, unknown> = {}) => ({

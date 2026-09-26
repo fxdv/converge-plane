@@ -381,26 +381,27 @@ func (s *Service) sessionFromRequest(r *http.Request) (tokenClaims, bool) {
 // Bearer values with the API-token prefix (machine actors, M6) take a
 // distinct path into ValidateAPIToken: one indexed lookup, no HMAC.
 // Session tokens stay on the stateless path, so web traffic is
-// unaffected.
-func (s *Service) accountFromRequest(r *http.Request) string {
+// unaffected. tok is non-nil exactly when an API token authenticated
+// the request.
+func (s *Service) accountFromRequest(r *http.Request) (accountID string, tok *APIToken) {
 	if t := bearerToken(r); t != "" {
 		if strings.HasPrefix(t, APITokenPrefix) {
-			id, ok := s.ValidateAPIToken(r.Context(), t)
+			tok, ok := s.ValidateAPIToken(r.Context(), t)
 			if ok {
-				return id
+				return tok.AccountID, tok
 			}
-			return ""
+			return "", nil
 		}
 		if id, ok := s.ValidateAccess(t); ok {
-			return id
+			return id, nil
 		}
 	}
 	if c, err := r.Cookie(CookieAccessToken); err == nil {
 		if inner, err := innerFromEnvelope(c.Value); err == nil {
 			if id, ok := s.ValidateAccess(inner); ok {
-				return id
+				return id, nil
 			}
 		}
 	}
-	return ""
+	return "", nil
 }

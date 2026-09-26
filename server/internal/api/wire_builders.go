@@ -36,6 +36,10 @@ func (a *API) issueData(r issueRow) map[string]any {
 	if len(projectIds) > 0 {
 		projectID = projectIds[0]
 	}
+	var claimedAt any = nil
+	if r.ClaimedAt != nil {
+		claimedAt = r.ClaimedAt.Format(iso)
+	}
 	return map[string]any{
 		"id":                 r.ID,
 		"createdAt":          r.CreatedAt.Format(iso),
@@ -63,6 +67,8 @@ func (a *API) issueData(r issueRow) map[string]any {
 		"agentPaused":        r.AgentPaused,
 		"relations":          relations,
 		"version":            r.Version,
+		"claimedById":        nullOrEmpty(strval(r.ClaimedByID)),
+		"claimedAt":          claimedAt,
 	}
 }
 

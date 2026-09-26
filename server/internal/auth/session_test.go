@@ -233,7 +233,7 @@ func TestAccountFromRequest(t *testing.T) {
 	t.Run("bearer session token", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Authorization", "Bearer "+m.AccessToken)
-		if got := s.accountFromRequest(r); got != "acct-1" {
+		if got, tok := s.accountFromRequest(r); tok != nil || got != "acct-1" {
 			t.Fatalf("account = %q, want acct-1", got)
 		}
 	})
@@ -241,7 +241,7 @@ func TestAccountFromRequest(t *testing.T) {
 	t.Run("cookie envelope", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.AddCookie(&http.Cookie{Name: CookieAccessToken, Value: encodeEnvelope(m.AccessToken, "acct-1")})
-		if got := s.accountFromRequest(r); got != "acct-1" {
+		if got, tok := s.accountFromRequest(r); tok != nil || got != "acct-1" {
 			t.Fatalf("account = %q, want acct-1", got)
 		}
 	})
@@ -250,7 +250,7 @@ func TestAccountFromRequest(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Authorization", "Bearer "+mint("access", "acct-1", 1, "wrong-secret"))
 		r.AddCookie(&http.Cookie{Name: CookieAccessToken, Value: encodeEnvelope(m.AccessToken, "acct-1")})
-		if got := s.accountFromRequest(r); got != "acct-1" {
+		if got, tok := s.accountFromRequest(r); tok != nil || got != "acct-1" {
 			t.Fatalf("account = %q, want acct-1 via cookie", got)
 		}
 	})
@@ -259,7 +259,7 @@ func TestAccountFromRequest(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Authorization", "Bearer garbage")
 		r.AddCookie(&http.Cookie{Name: CookieAccessToken, Value: "junk"})
-		if got := s.accountFromRequest(r); got != "" {
+		if got, tok := s.accountFromRequest(r); tok != nil || got != "" {
 			t.Fatalf("account = %q, want empty", got)
 		}
 	})

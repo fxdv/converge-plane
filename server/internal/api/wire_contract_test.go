@@ -201,6 +201,21 @@ func TestIssueDataWireContract(t *testing.T) {
 	if m2["agentPaused"] != true {
 		t.Errorf("paused flag must serialize true, got %v", m2["agentPaused"])
 	}
+
+	// Phase 2: the work-API claim — both keys always present, null when
+	// unclaimed, an id and an ISO timestamp while claimed.
+	for _, k := range []string{"claimedById", "claimedAt"} {
+		if v, ok := m2[k]; !ok || v != nil {
+			t.Errorf("%s must be an explicit null when unclaimed, got %v (present %v)", k, v, ok)
+		}
+	}
+	agent := "ag1"
+	claimed := issueRow{ID: "i4", TeamID: "t1", Number: 10, Title: "T", Status: "active",
+		CreatedAt: wireNow, UpdatedAt: wireNow, StatusID: &stateID, ClaimedByID: &agent, ClaimedAt: &wireNow}
+	mc := wirePayload(t, a.issueData(claimed))
+	if mc["claimedById"] != "ag1" || mc["claimedAt"] != wireNow.Format(iso) {
+		t.Errorf("claim must serialize id + ISO time, got %v / %v", mc["claimedById"], mc["claimedAt"])
+	}
 }
 
 func TestCommentDataWireContract(t *testing.T) {

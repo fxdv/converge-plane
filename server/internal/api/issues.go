@@ -27,7 +27,8 @@ import (
 )
 
 // teamWorkspace resolves the team's workspace and verifies the principal
-// is an active member. ok is false for unknown teams or non-members.
+// is an active member. ok is false for unknown teams, non-members, and
+// teams outside a team-limited token's grants.
 func (a *API) teamWorkspace(ctx context.Context, principal *Principal, teamID string) (workspaceID string, ok bool) {
 	err := a.pool.QueryRow(ctx, `
 		select w.id
@@ -38,6 +39,9 @@ func (a *API) teamWorkspace(ctx context.Context, principal *Principal, teamID st
 		return "", false
 	}
 	if _, ok := a.workspaceRole(ctx, principal, workspaceID); !ok {
+		return "", false
+	}
+	if !a.tokenTeamAllowed(ctx, principal, teamID) {
 		return "", false
 	}
 	return workspaceID, true
@@ -147,6 +151,11 @@ func (a *API) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 	// stateId as a strict string, and Tegon's schema requires it.
 	if req.StateID == nil || *req.StateID == "" || !a.statusExistsForTeam(ctx, *req.StateID, *req.TeamID) {
 		writeError(w, http.StatusUnprocessableEntity, "stateId must be one of the team workflow statuses")
+		return
+	}
+	if req.ParentID != nil && *req.ParentID != "" &&
+		(!a.issueInWorkspace(ctx, *req.ParentID, workspaceID) || !a.tokenReachesIssue(ctx, p, *req.ParentID)) {
+		writeError(w, http.StatusUnprocessableEntity, "parentId is not in this workspace")
 		return
 	}
 
@@ -328,7 +337,7 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.ParentID != nil && *req.ParentID != "" {
-		ok := a.issueInWorkspace(ctx, *req.ParentID, workspaceID)
+		ok := a.issueInWorkspace(ctx, *req.ParentID, workspaceID) && a.tokenReachesIssue(ctx, p, *req.ParentID)
 		if !ok {
 			writeError(w, http.StatusUnprocessableEntity, "parentId is not in this workspace")
 			return
@@ -346,7 +355,8 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		// The tenant boundary is the workspace; the related picker keeps
 		// the reader to one team, but the API does not pretend it cannot
 		// reach a neighbour team's issue.
-		if !a.issueInWorkspace(ctx, req.IssueRelation.RelatedIssueID, workspaceID) {
+		if !a.issueInWorkspace(ctx, req.IssueRelation.RelatedIssueID, workspaceID) ||
+			!a.tokenReachesIssue(ctx, p, req.IssueRelation.RelatedIssueID) {
 			writeError(w, http.StatusNotFound, "not found")
 			return
 		}

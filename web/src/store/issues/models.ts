@@ -52,6 +52,11 @@ export const Issue = types.model('Issue', {
   // always emits the array (v1: at most one element); retained
   // pre-v1.1 payloads lack the field, so it defaults to [].
   projectIds: types.optional(types.array(types.string), []),
+  // Phase 2: the open work-API claim (spec cs:agents:work) — the
+  // external agent holding a lease on this issue, and since when.
+  // Payloads that predate the work API lack both, so they default to null.
+  claimedById: types.optional(types.union(types.string, types.null), null),
+  claimedAt: types.optional(types.union(types.string, types.null), null),
 });
 
 export const IssuesMap = types.map(Issue);

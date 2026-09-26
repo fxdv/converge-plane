@@ -51,6 +51,8 @@ type API struct {
 	// runtime is the in-process agent runtime (D3): it acts for agents
 	// that have work, through the same transactional paths as the API.
 	runtime *AgentRuntime
+	// sweeperDone stops the claim sweeper (work.go).
+	sweeperDone chan struct{}
 	// startedAt is the process birth (the metrics plane's uptime source).
 	startedAt time.Time
 }
@@ -70,11 +72,15 @@ func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.
 	return a
 }
 
-// StartRuntime launches the agent runtime on the process context (D3).
-// It is a no-op when CONVERGE_RUNTIME is off; main calls it before the
-// HTTP listener and StopRuntime on the way out.
+// StartRuntime launches the agent runtime on the process context (D3)
+// and the work API's claim sweeper. The runtime is a no-op when
+// CONVERGE_RUNTIME is off; the sweeper always runs, since external
+// agents do not depend on the runtime. main calls it before the HTTP
+// listener and StopRuntime on the way out.
 func (a *API) StartRuntime(ctx context.Context) {
 	a.runtime.Start(ctx)
+	a.sweeperDone = make(chan struct{})
+	go a.runClaimSweeper(ctx, a.sweeperDone)
 }
 
 // StopRuntime drains the runtime: the dispatcher stops and live workers
@@ -82,6 +88,10 @@ func (a *API) StartRuntime(ctx context.Context) {
 // the real forcing on shutdown.
 func (a *API) StopRuntime() {
 	a.runtime.Stop()
+	if a.sweeperDone != nil {
+		close(a.sweeperDone)
+		a.sweeperDone = nil
+	}
 }
 
 // wakeIssueOwner enqueues the issue's assignee for runtime work when the
@@ -97,6 +107,7 @@ func (a *API) wakeIssueOwner(ctx context.Context, workspaceID, issueID string) {
 		select i.assignee_id::text
 		from issues i
 		join accounts a2 on a2.id = i.assignee_id and a2.kind = $2 and a2.status = 'active'
+		                and a2.agent_driver = '`+agentDriverRuntime+`'
 		where i.id = $1`, issueID, auth.AccountKindAgent).Scan(&assignee)
 	if err == nil {
 		a.runtime.Wake(workspaceID, assignee)
@@ -111,6 +122,11 @@ type Principal struct {
 	Email     string
 	Fullname  string
 	Kind      string
+	// Driver is who works an agent account: agentDriverRuntime or
+	// agentDriverExternal. Meaningless for humans.
+	Driver string
+	// Token is the API token's grant; nil for web sessions.
+	Token *auth.APIToken
 }
 
 type ctxKey string
@@ -141,8 +157,9 @@ func (a *API) routes(r chi.Router) {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// The guard runs after the principal is resolved: unauthenticated
-		// probes pay the middleware and nothing else.
-		r.Use(a.sessionMiddleware, a.rateLimitGuard)
+		// probes pay the middleware and nothing else. Narrowed tokens are
+		// held to their route policy before any handler runs.
+		r.Use(a.sessionMiddleware, a.tokenScopeGuard(r), a.rateLimitGuard)
 		r.Get("/users", a.handleGetUser)
 		r.Put("/users", a.handleUpdateUser)
 		r.Post("/workspaces/onboarding", a.handleOnboarding)
@@ -219,10 +236,16 @@ func (a *API) routes(r chi.Router) {
 		r.Post("/workspaces/{id}/swarm/settings", a.handleUpdateSwarmSettings)
 		r.Post("/workspaces/{id}/agents", a.handleCreateAgent)
 		r.Get("/workspaces/{id}/agents", a.handleListAgents)
+		r.Post("/workspaces/{id}/agents/{accountId}", a.handleUpdateAgent)
 		r.Post("/workspaces/{id}/agents/{accountId}/token", a.handleRotateAgentToken)
 		r.Post("/workspaces/{id}/agents/{accountId}/token/revoke", a.handleRevokeAgentToken)
 		r.Delete("/workspaces/{id}/agents/{accountId}", a.handleDeleteAgent)
 		r.Get("/search", a.handleSearch)
+		// Phase 2: the work API for external agents (claim leases).
+		r.Get("/agent/queue", a.handleAgentQueue)
+		r.Post("/issues/{id}/claim", a.handleClaimIssue)
+		r.Post("/issues/{id}/claim/heartbeat", a.handleClaimHeartbeat)
+		r.Post("/issues/{id}/claim/release", a.handleClaimRelease)
 	})
 }
 
@@ -230,7 +253,7 @@ func (a *API) routes(r chi.Router) {
 // rejects the request with 401.
 func (a *API) sessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		accountID := a.auth.ResolveAccountID(r.Context(), r)
+		accountID, tok := a.auth.ResolveAccountID(r.Context(), r)
 		if accountID == "" {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -239,9 +262,10 @@ func (a *API) sessionMiddleware(next http.Handler) http.Handler {
 		}
 		var p Principal
 		p.AccountID = accountID
+		p.Token = tok
 		if err := a.pool.QueryRow(r.Context(),
-			"select email, name, kind from accounts where id = $1 and status = 'active'",
-			accountID).Scan(&p.Email, &p.Fullname, &p.Kind); err != nil {
+			"select email, name, kind, agent_driver from accounts where id = $1 and status = 'active'",
+			accountID).Scan(&p.Email, &p.Fullname, &p.Kind, &p.Driver); err != nil {
 			a.log.Error("principal lookup failed", "error", err, "account_id", accountID)
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)

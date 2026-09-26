@@ -178,7 +178,9 @@ const issueColumns = `
 		coalesce((select array_agg(il.label_id) from issue_labels il where il.issue_id = i.id), '{}'),
 		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}'),
 	` + relationListSQL + `,
-		i.version`
+		i.version,
+		(select c.agent_id from issue_claims c where c.issue_id = i.id and c.ended_at is null),
+		(select c.claimed_at from issue_claims c where c.issue_id = i.id and c.ended_at is null)`
 
 // issueRow is one issues-table row with everything the client shape
 // needs, shared by the sync collectors and the mutation handlers.
@@ -208,6 +210,10 @@ type issueRow struct {
 	// test. The runtime's work cycle anchors on it, and API-token
 	// writers send it back as If-Match (precondition.go).
 	Version int
+	// ClaimedByID / ClaimedAt are the open work-API claim (work.go):
+	// the external agent holding the issue, nil when unclaimed.
+	ClaimedByID *string
+	ClaimedAt   *time.Time
 }
 
 // scanDest lists the scan destinations in issueColumns order.
@@ -215,7 +221,8 @@ func (r *issueRow) scanDest() []any {
 	return []any{&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
 		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
 		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw, &r.Version}
+		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw, &r.Version,
+		&r.ClaimedByID, &r.ClaimedAt}
 }
 
 // issueByID loads one issue (any status) for the mutation handlers.
