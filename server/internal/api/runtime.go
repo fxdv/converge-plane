@@ -383,13 +383,14 @@ func (rt *AgentRuntime) reconcile(ctx context.Context) {
 }
 
 // workspacesWithAgents lists the workspaces that currently have at least
-// one active agent member.
+// one active agent member the runtime drives (external agents work
+// through the work API, never here).
 func (rt *AgentRuntime) workspacesWithAgents(ctx context.Context) ([]string, error) {
 	rows, err := rt.a.pool.Query(ctx, `
 		select distinct wm.workspace_id::text
 		from workspace_members wm
 		join accounts a on a.id = wm.account_id
-		where a.kind = $1 and wm.status = 'active'`, auth.AccountKindAgent)
+		where a.kind = $1 and wm.status = 'active' and a.agent_driver = '`+agentDriverRuntime+`'`, auth.AccountKindAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -472,11 +473,14 @@ func (rt *AgentRuntime) applyPlanLocked(workspaceID string, fleet []fleetAgent) 
 // keeps exhausted issues out of the spawn set — the constant pair is
 // fmt'd in, the single source of truth staying handoff.go — and the
 // Human Review exclusion keeps parked cards out the same way: a card in
-// that column waits for a human, not for a worker.
+// that column waits for a human, not for a worker. External agents stay
+// in the snapshot with no work, so a worker left over from before a
+// driver switch is retired.
 func (rt *AgentRuntime) fleetSnapshot(ctx context.Context, workspaceID string) ([]fleetAgent, error) {
 	rows, err := rt.a.pool.Query(ctx, `
 		select a.id, a.name,
-		       count(*) filter (where not i.agent_paused and `+notHumanReviewSQL+`
+		       count(*) filter (where a.agent_driver = '`+agentDriverRuntime+`'
+		                          and not i.agent_paused and `+notHumanReviewSQL+`
 			                          and (select count(*)
 				                             from issue_history h
 				                             join accounts ha on ha.id = h.actor_id
@@ -575,7 +579,7 @@ func (w *agentWorker) run() {
 }
 
 // agentActive reports whether the agent is a live (active) workspace
-// member with a machine identity.
+// member with a machine identity that the runtime drives.
 func (rt *AgentRuntime) agentActive(ctx context.Context, workspaceID, agentID string) bool {
 	var ok bool
 	err := rt.a.pool.QueryRow(ctx, `
@@ -584,7 +588,8 @@ func (rt *AgentRuntime) agentActive(ctx context.Context, workspaceID, agentID st
 			from workspace_members wm
 			join accounts a on a.id = wm.account_id
 			where wm.workspace_id = $1 and wm.account_id = $2
-			  and wm.status = 'active' and a.status = 'active' and a.kind = $3)`,
+			  and wm.status = 'active' and a.status = 'active' and a.kind = $3
+			  and a.agent_driver = '`+agentDriverRuntime+`')`,
 		workspaceID, agentID, auth.AccountKindAgent).Scan(&ok)
 	return err == nil && ok
 }

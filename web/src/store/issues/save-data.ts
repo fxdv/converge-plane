@@ -40,6 +40,9 @@ export async function saveIssuesData(
         // v1.1: the project membership (spec cs:api:projects). Same
         // retention normalization as relations.
         projectIds: record.data.projectIds ?? [],
+        // Phase 2: the open work-API claim; absent on older payloads.
+        claimedById: record.data.claimedById ?? null,
+        claimedAt: record.data.claimedAt ?? null,
       };
 
       switch (record.action) {

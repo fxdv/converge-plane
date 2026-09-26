@@ -30,6 +30,9 @@ export interface IssueType {
   sourceMetadata?: string;
   // D1: agent swarm paused on this issue ("needs human" badge).
   agentPaused?: boolean;
+  // Phase 2: the external agent holding a work-API claim, and since when.
+  claimedById?: string | null;
+  claimedAt?: string | null;
 
   projectId?: string;
   // v1.1: the project membership (spec cs:api:projects). The server

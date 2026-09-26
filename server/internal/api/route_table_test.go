@@ -1409,6 +1409,7 @@ var rtRouteCases = []routeCase{
 		handler:   (*API).handleListAgents,
 		pool: &fakePool{rules: []fakeRule{
 			rtRole("member"),
+			{frag: "from api_tokens t", rows: [][]any{}},
 			{frag: "where a.kind = 'agent'", rows: [][]any{}},
 		}},
 		code: 200,
@@ -1522,6 +1523,58 @@ var rtRouteCases = []routeCase{
 			}
 		},
 	},
+
+	// POST /workspaces/{id}/agents/{accountId} — the driver switch; an
+	// unknown driver is refused before anything is written.
+	{
+		route: "POST /api/v1/workspaces/{id}/agents/{accountId}", method: "POST",
+		path:      "/api/v1/workspaces/" + rtWS + "/agents/" + rtAgent,
+		urlParams: []string{"id", rtWS, "accountId", rtAgent},
+		handler:   (*API).handleUpdateAgent,
+		body:      `{"driver":"cron"}`,
+		pool: &fakePool{rules: []fakeRule{
+			rtRole("owner"),
+			rtMemberRow(rtMemberID, "agent", "active", rtAgent, rtWS, rtTeam),
+			{frag: "select kind from accounts where id = $1", rowVals: []any{"agent"}},
+		}},
+		code: 422, err: "driver must be runtime or external",
+	},
+
+	// The work API (work.go): external agents only, humans are refused
+	// at the door.
+	{
+		route: "GET /api/v1/agent/queue", method: "GET",
+		path:    "/api/v1/agent/queue",
+		handler: (*API).handleAgentQueue,
+		code:    403, err: "the work API is for agents with the external driver",
+	},
+	{
+		route: "POST /api/v1/issues/{id}/claim", method: "POST",
+		path:      "/api/v1/issues/" + rtIssue + "/claim",
+		urlParams: []string{"id", rtIssue},
+		handler:   (*API).handleClaimIssue,
+		principal: externalAgentPrincipal(rtAgent),
+		body:      `{"ttlSeconds":5}`,
+		code:      422, err: "ttlSeconds must be between 30 and 900",
+	},
+	{
+		route: "POST /api/v1/issues/{id}/claim/heartbeat", method: "POST",
+		path:      "/api/v1/issues/" + rtIssue + "/claim/heartbeat",
+		urlParams: []string{"id", rtIssue},
+		handler:   (*API).handleClaimHeartbeat,
+		principal: externalAgentPrincipal(rtAgent),
+		body:      `{}`,
+		code:      404, err: "claim not found",
+	},
+	{
+		route: "POST /api/v1/issues/{id}/claim/release", method: "POST",
+		path:      "/api/v1/issues/" + rtIssue + "/claim/release",
+		urlParams: []string{"id", rtIssue},
+		handler:   (*API).handleClaimRelease,
+		principal: agentPrincipal(rtAgent),
+		body:      `{"claimId":"` + rtToken + `"}`,
+		code:      403, err: "the work API is for agents with the external driver",
+	},
 }
 
 // ---- the tests ------------------------------------------------------------
@@ -1532,7 +1585,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 60 // the v1 surface: every route in Mount, one entry each
+	const want = 65 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}

@@ -41,7 +41,14 @@ func humanPrincipal(id string) *Principal {
 
 // agentPrincipal is a swarm member (the pause-guard's other branch).
 func agentPrincipal(id string) *Principal {
-	return &Principal{AccountID: id, Email: id + "@converge.dev", Fullname: "agent", Kind: auth.AccountKindAgent}
+	return &Principal{AccountID: id, Email: id + "@converge.dev", Fullname: "agent", Kind: auth.AccountKindAgent, Driver: agentDriverRuntime}
+}
+
+// externalAgentPrincipal is an agent driven through the work API.
+func externalAgentPrincipal(id string) *Principal {
+	p := agentPrincipal(id)
+	p.Driver = agentDriverExternal
+	return p
 }
 
 // requestFor builds the in-process request: rawBody is the request body

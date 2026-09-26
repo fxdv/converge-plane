@@ -41,8 +41,106 @@ var (
 // verbatim by the client, so it is bounded the same way as team names.
 var agentNamePattern = regexp.MustCompile(`^[^\x00-\x1f]{1,64}$`)
 
+// Agent drivers: who works an agent's queue.
+const (
+	agentDriverRuntime  = "runtime"
+	agentDriverExternal = "external"
+)
+
+func validDriver(d string) bool { return d == agentDriverRuntime || d == agentDriverExternal }
+
+// tokenSpec is the requested grant of a new token. Omitted (null)
+// scopes or teamIds keep the agent's full authority; an empty list is
+// refused rather than read as either extreme.
+type tokenSpec struct {
+	Scopes   []string `json:"scopes"`
+	TeamIDs  []string `json:"teamIds"`
+	TTLHours *int     `json:"ttlHours"`
+}
+
+// issuedToken is a freshly minted token: the plaintext exists only here.
+type issuedToken struct {
+	ID        string
+	Plaintext string
+	ExpiresAt time.Time
+	Scopes    []string
+	TeamIDs   []string
+}
+
+// validate checks the spec against the vocabulary and the agent's team
+// memberships (a grant may only narrow them). It returns the normalized
+// spec (deduplicated) or a client-visible error.
+func (s tokenSpec) validate(agentTeams []string) (tokenSpec, string) {
+	out := tokenSpec{TTLHours: s.TTLHours}
+	if s.Scopes != nil {
+		if len(s.Scopes) == 0 {
+			return out, "scopes must name at least one scope (omit it for full access)"
+		}
+		seen := map[string]bool{}
+		out.Scopes = []string{}
+		for _, sc := range s.Scopes {
+			if !auth.ValidScope(sc) {
+				return out, "unknown scope: " + sc
+			}
+			if !seen[sc] {
+				seen[sc] = true
+				out.Scopes = append(out.Scopes, sc)
+			}
+		}
+	}
+	if s.TeamIDs != nil {
+		if len(s.TeamIDs) == 0 {
+			return out, "teamIds must name at least one team (omit it for every team)"
+		}
+		member := map[string]bool{}
+		for _, id := range agentTeams {
+			member[id] = true
+		}
+		seen := map[string]bool{}
+		out.TeamIDs = []string{}
+		for _, id := range s.TeamIDs {
+			if !isUUID(id) || !member[id] {
+				return out, "token teamIds must be teams the agent belongs to"
+			}
+			if !seen[id] {
+				seen[id] = true
+				out.TeamIDs = append(out.TeamIDs, id)
+			}
+		}
+		for _, sc := range out.Scopes {
+			if sc == auth.ScopeSyncRead {
+				return out, "sync:read covers the whole workspace and cannot be combined with teamIds"
+			}
+		}
+	}
+	if s.TTLHours != nil && (*s.TTLHours < 1 || time.Duration(*s.TTLHours)*time.Hour > auth.MaxAPITokenTTL) {
+		return out, "ttlHours must be between 1 and 87600"
+	}
+	return out, ""
+}
+
+// insertTokenTx mints and stores one token for the agent.
+func (a *API) insertTokenTx(ctx context.Context, tx pgx.Tx, accountID, createdBy, label string, spec tokenSpec) (issuedToken, error) {
+	plaintext, hash, err := auth.IssueAPIToken()
+	if err != nil {
+		return issuedToken{}, err
+	}
+	ttl := auth.APITokenTTL
+	if spec.TTLHours != nil {
+		ttl = time.Duration(*spec.TTLHours) * time.Hour
+	}
+	out := issuedToken{Plaintext: plaintext, ExpiresAt: time.Now().Add(ttl), Scopes: spec.Scopes, TeamIDs: spec.TeamIDs}
+	err = tx.QueryRow(ctx, `
+		insert into api_tokens (account_id, name, token_hash, token_prefix, expires_at, created_by, scopes, team_ids)
+		values ($1, $2, $3, $4, $5, $6, $7, $8::uuid[])
+		returning id`,
+		accountID, label, hash, auth.APITokenPrefix, out.ExpiresAt, createdBy, spec.Scopes, spec.TeamIDs).Scan(&out.ID)
+	return out, err
+}
+
 // agentResponse is the creation/rotation wire shape the client's
 // agent-creation dialog renders (the token plaintext is shown once).
+// Null tokenScopes / tokenTeamIds mean the agent's full authority.
 type agentResponse struct {
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
@@ -50,10 +148,14 @@ type agentResponse struct {
 	Kind           string    `json:"kind"`
 	Role           string    `json:"role"`
 	Status         string    `json:"status"`
+	Driver         string    `json:"driver"`
 	TeamIDs        []string  `json:"teamIds"`
+	TokenID        string    `json:"tokenId"`
 	Token          string    `json:"token,omitempty"`
 	TokenPrefix    string    `json:"tokenPrefix"`
 	TokenExpiresAt time.Time `json:"tokenExpiresAt"`
+	TokenScopes    []string  `json:"tokenScopes"`
+	TokenTeamIDs   []string  `json:"tokenTeamIds"`
 }
 
 // handleCreateAgent implements POST /api/v1/workspaces/{id}/agents
@@ -69,8 +171,10 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var req struct {
-		Name    string   `json:"name"`
-		TeamIDs []string `json:"teamIds"`
+		Name    string    `json:"name"`
+		TeamIDs []string  `json:"teamIds"`
+		Driver  string    `json:"driver"`
+		Token   tokenSpec `json:"token"`
 	}
 	if err := jsonDecode(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -86,6 +190,18 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnprocessableEntity, "teamIds must be uuids")
 			return
 		}
+	}
+	if req.Driver == "" {
+		req.Driver = agentDriverRuntime
+	}
+	if !validDriver(req.Driver) {
+		writeError(w, http.StatusUnprocessableEntity, "driver must be runtime or external")
+		return
+	}
+	spec, problem := req.Token.validate(req.TeamIDs)
+	if problem != "" {
+		writeError(w, http.StatusUnprocessableEntity, problem)
+		return
 	}
 	workspaceID := r.PathValue("id")
 	if !isUUID(workspaceID) {
@@ -123,11 +239,11 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	// agent emails; this is the belt to that suspend).
 	var accountID *string
 	err = tx.QueryRow(ctx, `
-		insert into accounts (email, name, kind) values ($1, $2, 'agent')
+		insert into accounts (email, name, kind, agent_driver) values ($1, $2, 'agent', $3)
 		on conflict (email) do update
-			set name = excluded.name, updated_at = now()
+			set name = excluded.name, agent_driver = excluded.agent_driver, updated_at = now()
 			where accounts.kind = 'agent'
-		returning id`, email, name).Scan(&accountID)
+		returning id`, email, name, req.Driver).Scan(&accountID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		a.internalError(w, err)
 		return
@@ -175,16 +291,8 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	plaintext, hash, err := auth.IssueAPIToken()
+	tok, err := a.insertTokenTx(ctx, tx, *accountID, p.AccountID, "default", spec)
 	if err != nil {
-		a.internalError(w, err)
-		return
-	}
-	tokenExpiry := time.Now().Add(auth.APITokenTTL)
-	if _, err := tx.Exec(ctx, `
-		insert into api_tokens (account_id, name, token_hash, token_prefix, expires_at, created_by)
-		values ($1, $2, $3, $4, $5, $6)`,
-		*accountID, "default", hash, auth.APITokenPrefix, tokenExpiry, p.AccountID); err != nil {
 		a.internalError(w, err)
 		return
 	}
@@ -219,22 +327,40 @@ func (a *API) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		Kind:           "agent",
 		Role:           "AGENT",
 		Status:         "ACTIVE",
+		Driver:         req.Driver,
 		TeamIDs:        teamIDs,
-		Token:          plaintext,
+		TokenID:        tok.ID,
+		Token:          tok.Plaintext,
 		TokenPrefix:    auth.APITokenPrefix,
-		TokenExpiresAt: tokenExpiry,
+		TokenExpiresAt: tok.ExpiresAt,
+		TokenScopes:    tok.Scopes,
+		TokenTeamIDs:   tok.TeamIDs,
 	})
 }
 
 // agentListEntry is the GET list shape: everything the admin UI needs to
 // manage a swarm, without any token material.
 type agentListEntry struct {
+	ID         string           `json:"id"`
+	Name       string           `json:"name"`
+	Email      string           `json:"email"`
+	Status     string           `json:"status"`
+	Driver     string           `json:"driver"`
+	TeamIDs    []string         `json:"teamIds"`
+	TokenCount int              `json:"tokenCount"`
+	LastUsedAt *time.Time       `json:"lastUsedAt"`
+	CreatedAt  time.Time        `json:"createdAt"`
+	Tokens     []agentTokenInfo `json:"tokens"`
+}
+
+// agentTokenInfo describes one live token (never its material). Null
+// scopes / teamIds mean the agent's full authority.
+type agentTokenInfo struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
-	Email      string     `json:"email"`
-	Status     string     `json:"status"`
+	Scopes     []string   `json:"scopes"`
 	TeamIDs    []string   `json:"teamIds"`
-	TokenCount int        `json:"tokenCount"`
+	ExpiresAt  *time.Time `json:"expiresAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt"`
 	CreatedAt  time.Time  `json:"createdAt"`
 }
@@ -260,7 +386,7 @@ func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := a.pool.Query(ctx, `
-		select a.id, a.name, a.email, wm.status, a.created_at,
+		select a.id, a.name, a.email, wm.status, a.agent_driver, a.created_at,
 		       coalesce((select array_agg(tm.team_id) from team_members tm
 		               where tm.account_id = a.id), '{}'),
 		       count(t.id) filter (where t.revoked_at is null),
@@ -269,23 +395,26 @@ func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		join workspace_members wm on wm.workspace_id = $1 and wm.account_id = a.id
 		left join api_tokens t on t.account_id = a.id
 		where a.kind = 'agent'
-		group by a.id, a.name, a.email, wm.status, a.created_at
+		group by a.id, a.name, a.email, wm.status, a.agent_driver, a.created_at
 		order by a.created_at`, workspaceID)
 	if err != nil {
 		a.internalError(w, err)
 		return
 	}
 	out := []agentListEntry{}
+	byID := map[string]int{}
 	for rows.Next() {
 		var e agentListEntry
 		var status string
-		if err := rows.Scan(&e.ID, &e.Name, &e.Email, &status, &e.CreatedAt,
+		if err := rows.Scan(&e.ID, &e.Name, &e.Email, &status, &e.Driver, &e.CreatedAt,
 			&e.TeamIDs, &e.TokenCount, &e.LastUsedAt); err != nil {
 			rows.Close()
 			a.internalError(w, err)
 			return
 		}
 		e.Status = strings.ToUpper(status)
+		e.Tokens = []agentTokenInfo{}
+		byID[e.ID] = len(out)
 		out = append(out, e)
 	}
 	err = rows.Err()
@@ -294,7 +423,99 @@ func (a *API) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	tokRows, err := a.pool.Query(ctx, `
+		select t.account_id, t.id, t.name, t.scopes, t.team_ids::text[], t.expires_at, t.last_used_at, t.created_at
+		from api_tokens t
+		join accounts a on a.id = t.account_id and a.kind = 'agent'
+		join workspace_members wm on wm.workspace_id = $1 and wm.account_id = t.account_id
+		where t.revoked_at is null and (t.expires_at is null or t.expires_at > now())
+		order by t.created_at`, workspaceID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer tokRows.Close()
+	for tokRows.Next() {
+		var owner string
+		var ti agentTokenInfo
+		if err := tokRows.Scan(&owner, &ti.ID, &ti.Name, &ti.Scopes, &ti.TeamIDs, &ti.ExpiresAt, &ti.LastUsedAt, &ti.CreatedAt); err != nil {
+			a.internalError(w, err)
+			return
+		}
+		if i, ok := byID[owner]; ok {
+			out[i].Tokens = append(out[i].Tokens, ti)
+		}
+	}
+	if err := tokRows.Err(); err != nil {
+		a.internalError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleUpdateAgent implements POST /api/v1/workspaces/{id}/agents/{accountId}
+// (workspace admin only): today, the driver. Handing an agent back to
+// the runtime ends its open claims, so the runtime never works a card
+// an external client still believes it holds.
+func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	workspaceID := r.PathValue("id")
+	accountID := r.PathValue("accountId")
+	if _, err := a.agentTarget(ctx, p, workspaceID, accountID); err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	var req struct {
+		Driver string `json:"driver"`
+	}
+	if err := jsonDecode(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !validDriver(req.Driver) {
+		writeError(w, http.StatusUnprocessableEntity, "driver must be runtime or external")
+		return
+	}
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx,
+		"update accounts set agent_driver = $2, updated_at = now() where id = $1 and kind = 'agent'",
+		accountID, req.Driver); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	var recs []syncActionRecord
+	if req.Driver == agentDriverRuntime {
+		recs, err = a.endAgentClaimsTx(ctx, tx, accountID, claimEndRevoked)
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+	}
+	if err := a.auditTx(ctx, tx, workspaceID, p.AccountID, "agent.driver."+req.Driver, "Agent", accountID); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	for i := range recs {
+		a.broadcastRecord(recs[i])
+	}
+	if req.Driver == agentDriverRuntime {
+		a.runtime.Wake(workspaceID, accountID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": accountID, "driver": req.Driver})
 }
 
 // agentTarget resolves the workspace + agent membership shared by the
@@ -341,8 +562,12 @@ func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Name *string `json:"name"`
+		tokenSpec
 	}
-	_ = jsonDecode(r, &req)
+	if err := decodeOptional(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 	label := "default"
 	if req.Name != nil {
 		label = strings.TrimSpace(*req.Name)
@@ -354,25 +579,30 @@ func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "token name must be 1-64 characters")
 		return
 	}
-
-	plaintext, hash, err := auth.IssueAPIToken()
-	if err != nil {
-		a.internalError(w, err)
+	var agentTeams []string
+	if req.TeamIDs != nil {
+		if err := a.pool.QueryRow(ctx, `
+			select coalesce(array_agg(tm.team_id::text), '{}')
+			from team_members tm join teams t on t.id = tm.team_id
+			where tm.account_id = $1 and t.workspace_id = $2`,
+			accountID, r.PathValue("id")).Scan(&agentTeams); err != nil {
+			a.internalError(w, err)
+			return
+		}
+	}
+	spec, problem := req.tokenSpec.validate(agentTeams)
+	if problem != "" {
+		writeError(w, http.StatusUnprocessableEntity, problem)
 		return
 	}
-	tokenExpiry := time.Now().Add(auth.APITokenTTL)
+
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		a.internalError(w, err)
 		return
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var tokenID *string
-	err = tx.QueryRow(ctx, `
-		insert into api_tokens (account_id, name, token_hash, token_prefix, expires_at, created_by)
-		values ($1, $2, $3, $4, $5, $6)
-		returning id`,
-		accountID, label, hash, auth.APITokenPrefix, tokenExpiry, p.AccountID).Scan(&tokenID)
+	tok, err := a.insertTokenTx(ctx, tx, accountID, p.AccountID, label, spec)
 	if err != nil {
 		a.internalError(w, err)
 		return
@@ -386,10 +616,12 @@ func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"tokenId":        *tokenID,
-		"token":          plaintext,
+		"tokenId":        tok.ID,
+		"token":          tok.Plaintext,
 		"tokenPrefix":    auth.APITokenPrefix,
-		"tokenExpiresAt": tokenExpiry,
+		"tokenExpiresAt": tok.ExpiresAt,
+		"scopes":         tok.Scopes,
+		"teamIds":        tok.TeamIDs,
 	})
 }
 

@@ -622,7 +622,7 @@ func (s *Service) handleSignout(w http.ResponseWriter, r *http.Request) {
 // handleSession reports the current session for debugging and for clients
 // that still poll GET /session (the v17 SDK does not call it).
 func (s *Service) handleSession(w http.ResponseWriter, r *http.Request) {
-	accountID := s.accountFromRequest(r)
+	accountID, _ := s.accountFromRequest(r)
 	if accountID == "" {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "UNAUTHORIZED"})
 		return
@@ -680,8 +680,9 @@ func (s *Service) accountKindByEmail(ctx context.Context, email string) (string,
 //  1. Authorization: Bearer <accessToken>
 //  2. st-access-token cookie envelope
 //
-// It returns "" when the request carries no usable session.
-func (s *Service) ResolveAccountID(ctx context.Context, r *http.Request) string {
+// It returns "" when the request carries no usable session. tok is the
+// API token's grant when one authenticated the request, nil otherwise.
+func (s *Service) ResolveAccountID(ctx context.Context, r *http.Request) (accountID string, tok *APIToken) {
 	return s.accountFromRequest(r)
 }
 

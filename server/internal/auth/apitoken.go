@@ -76,27 +76,93 @@ func IssueAPIToken() (plaintext, hash string, err error) {
 	return plaintext, hex.EncodeToString(sum[:]), nil
 }
 
+// MaxAPITokenTTL bounds a caller-chosen token lifetime.
+const MaxAPITokenTTL = APITokenTTL
+
+// Token scopes (docs/spec 07). A token without scopes carries the full
+// authority of its agent; a scoped token may call only the routes its
+// scopes name, and nothing an unscoped caller could not.
+const (
+	ScopeIssuesRead    = "issues:read"
+	ScopeIssuesWrite   = "issues:write"
+	ScopeCommentsRead  = "comments:read"
+	ScopeCommentsWrite = "comments:write"
+	ScopeWork          = "work"
+	ScopeSyncRead      = "sync:read"
+)
+
+var knownScopes = map[string]bool{
+	ScopeIssuesRead: true, ScopeIssuesWrite: true,
+	ScopeCommentsRead: true, ScopeCommentsWrite: true,
+	ScopeWork: true, ScopeSyncRead: true,
+}
+
+// ValidScope reports whether s is in the scope vocabulary.
+func ValidScope(s string) bool { return knownScopes[s] }
+
+// APIToken is the grant a live API token carries. Scopes nil means the
+// agent's full authority; TeamIDs nil means every team the agent can
+// reach. Both only ever narrow.
+type APIToken struct {
+	ID        string
+	AccountID string
+	Scopes    []string
+	TeamIDs   []string
+}
+
+// Scoped reports whether the token is limited to named scopes.
+func (t *APIToken) Scoped() bool { return t != nil && t.Scopes != nil }
+
+// HasScope reports whether the token may act with scope s.
+func (t *APIToken) HasScope(s string) bool {
+	if !t.Scoped() {
+		return true
+	}
+	for _, have := range t.Scopes {
+		if have == s {
+			return true
+		}
+	}
+	return false
+}
+
+// TeamLimited reports whether the token is limited to named teams.
+func (t *APIToken) TeamLimited() bool { return t != nil && t.TeamIDs != nil }
+
+// TeamGranted reports whether the token's grants include teamID.
+func (t *APIToken) TeamGranted(teamID string) bool {
+	if !t.TeamLimited() {
+		return true
+	}
+	for _, id := range t.TeamIDs {
+		if id == teamID {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateAPIToken verifies a bearer API token against the token table
 // and the account it belongs to. A token is valid while unexpired,
 // unrevoked, and its account active — account suspension kills every
-// token of it. Returns "" when the token is not a live API token.
+// token of it. ok is false when the token is not a live API token.
 //
 // The last-use stamp refreshes at most once per hour per token, so
 // steady validation costs one indexed read and (rarely) a single-row
 // write — a swarm poll loop stays cheap.
-func (s *Service) ValidateAPIToken(ctx context.Context, token string) (string, bool) {
+func (s *Service) ValidateAPIToken(ctx context.Context, token string) (*APIToken, bool) {
 	sum := sha256.Sum256([]byte(token))
 	hash := hex.EncodeToString(sum[:])
-	var accountID string
+	var t APIToken
 	if err := s.pool.QueryRow(ctx, `
-		select t.account_id
+		select t.id, t.account_id, t.scopes, t.team_ids::text[]
 		from api_tokens t
 		join accounts a on a.id = t.account_id and a.status = 'active'
 		where t.token_hash = $1
 		  and t.revoked_at is null
 		  and (t.expires_at is null or t.expires_at > now())`,
-		hash).Scan(&accountID); err != nil {
-		return "", false
+		hash).Scan(&t.ID, &t.AccountID, &t.Scopes, &t.TeamIDs); err != nil {
+		return nil, false
 	}
 	if _, err := s.pool.Exec(ctx, `
 		update api_tokens
@@ -106,5 +172,5 @@ func (s *Service) ValidateAPIToken(ctx context.Context, token string) (string, b
 		hash); err != nil {
 		s.log.Warn("api token last-use stamp failed", "error", err)
 	}
-	return accountID, true
+	return &t, true
 }

@@ -56,6 +56,36 @@ func TestIssueAPIToken(t *testing.T) {
 	}
 }
 
+// TestAPITokenGrants pins the narrowing rules: no token (a web session)
+// and a pre-scope token both carry full authority; an empty grant list
+// grants nothing, never everything.
+func TestAPITokenGrants(t *testing.T) {
+	var session *APIToken
+	if session.Scoped() || !session.HasScope(ScopeIssuesWrite) || session.TeamLimited() || !session.TeamGranted("t1") {
+		t.Fatal("a nil token (session caller) must carry full authority")
+	}
+	legacy := &APIToken{ID: "k", AccountID: "a"}
+	if legacy.Scoped() || !legacy.HasScope(ScopeSyncRead) || !legacy.TeamGranted("t1") {
+		t.Fatal("a pre-scope token must carry full authority")
+	}
+	empty := &APIToken{Scopes: []string{}, TeamIDs: []string{}}
+	if !empty.Scoped() || empty.HasScope(ScopeWork) || !empty.TeamLimited() || empty.TeamGranted("t1") {
+		t.Fatal("empty grants must grant nothing")
+	}
+	scoped := &APIToken{Scopes: []string{ScopeWork}, TeamIDs: []string{"t1"}}
+	if !scoped.HasScope(ScopeWork) || scoped.HasScope(ScopeIssuesWrite) || !scoped.TeamGranted("t1") || scoped.TeamGranted("t2") {
+		t.Fatal("scoped token grants drifted")
+	}
+	for _, s := range []string{ScopeIssuesRead, ScopeIssuesWrite, ScopeCommentsRead, ScopeCommentsWrite, ScopeWork, ScopeSyncRead} {
+		if !ValidScope(s) {
+			t.Fatalf("%q missing from the vocabulary", s)
+		}
+	}
+	if ValidScope("admin") || ValidScope("") || ValidScope("issues:delete") {
+		t.Fatal("unknown scopes must be rejected")
+	}
+}
+
 // TestValidateAPIToken exercises the SQL against a real Postgres. It is
 // gated on CONVERGE_TEST_DATABASE_URL so CI without a database stays green;
 // the local dogfood sets it. The SQL is the contract: revoked, expired and
@@ -74,8 +104,26 @@ func TestValidateAPIToken(t *testing.T) {
 	accountID, token := createTestAccount(t, pool, "active")
 	ctx := context.Background()
 
-	if got, ok := s.ValidateAPIToken(ctx, token); !ok || got != accountID {
-		t.Fatalf("valid token: got=%q ok=%v, want %q true", got, ok, accountID)
+	got, ok := s.ValidateAPIToken(ctx, token)
+	if !ok || got.AccountID != accountID || got.ID == "" {
+		t.Fatalf("valid token: got=%+v ok=%v, want account %q", got, ok, accountID)
+	}
+	if got.Scoped() || got.TeamLimited() {
+		t.Fatalf("a pre-scope token must carry full authority, got %+v", got)
+	}
+
+	// Scopes and team grants come back exactly as stored.
+	const team = "0a0a0a0a-0000-4000-8000-000000000001"
+	if _, err := pool.Exec(ctx, `update api_tokens set scopes = '{work,issues:read}', team_ids = array[$2::uuid] where token_hash = $1`,
+		sha256hex(token), team); err != nil {
+		t.Fatalf("scope: %v", err)
+	}
+	got, ok = s.ValidateAPIToken(ctx, token)
+	if !ok || !got.HasScope(ScopeWork) || !got.HasScope(ScopeIssuesRead) || got.HasScope(ScopeIssuesWrite) {
+		t.Fatalf("scoped token: got=%+v ok=%v", got, ok)
+	}
+	if !got.TeamGranted(team) || got.TeamGranted("0a0a0a0a-0000-4000-8000-000000000002") {
+		t.Fatalf("team grants: got=%+v", got.TeamIDs)
 	}
 
 	// Revocation kills the token.
@@ -83,7 +131,7 @@ func TestValidateAPIToken(t *testing.T) {
 		t.Fatalf("revoke: %v", err)
 	}
 	if got, ok := s.ValidateAPIToken(ctx, token); ok {
-		t.Fatalf("revoked token accepted: %q", got)
+		t.Fatalf("revoked token accepted: %+v", got)
 	}
 
 	// A fresh token for a suspended account is dead too.

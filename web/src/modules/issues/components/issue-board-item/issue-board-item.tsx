@@ -233,6 +233,21 @@ export const BoardIssueItem = observer(
                 {liveActivity.phase === 'deciding' ? ' deciding' : ' working'}
               </span>
             )}
+            {/* Phase 2: an external agent holds a work-API lease; the
+                claimant is the assignee shown below. */}
+            {!showLiveChip && issue.claimedById && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-600 dark:text-sky-400"
+                title={
+                  issue.claimedAt
+                    ? `Claimed by an external agent since ${new Date(issue.claimedAt).toLocaleString()}`
+                    : 'Claimed by an external agent'
+                }
+              >
+                <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
+                claimed
+              </span>
+            )}
             <div className="text-muted-foreground font-mono">{`${team?.identifier ?? ''}-${issue.number}`}</div>
           </div>
         </div>
