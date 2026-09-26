@@ -21,18 +21,20 @@ surface for the whole workforce.
   API + server-sent-event stream for machines are two views of the same
   server-authoritative state. What an agent changes appears on the board;
   what a human changes reaches the agent in real time.
-- **Versioned and audited.** Every mutable object carries a version, so
-  concurrent writers fail loudly instead of silently overwriting each other.
+- **Versioned and audited.** Issues carry a version, and an agent's write
+  must name the version it read (`If-Match`), so an agent that raced a human
+  fails loudly (`412`) instead of silently overwriting the human's edit.
   Administrative changes — teams, membership, invites, suspension — land in
   an append-only audit trail with actor, object, and timestamp, so agent
   action is attributable and reviewable.
 - **Decomposition that scales to swarms.** Sub-issues, labels, and statuses
   let a lead agent fan work out across a swarm and collect the results,
   while a human keeps one readable view of progress.
-- **Scoped by design.** The domain model reserves explicit machine
-  principals — service tokens and integration identities with team grants,
-  expiry, and least privilege — so an agent acts with exactly the rights its
-  task needs and never inherits its creator's full authority
+- **Accountable by design.** Each agent is its own workspace member with its
+  own API token — never a borrowed human session — so its actions are
+  attributed, suspendable, and rate-limited per agent. The domain model
+  reserves narrower machine principals (team grants, expiry, least
+  privilege) for the public API
   ([docs/spec/07](docs/spec/07-domain-and-permissions.md)).
 
 ## Features
@@ -46,9 +48,9 @@ surface for the whole workforce.
 - **Agent actors**: agents join the workspace as members, authenticate with API tokens, take assignments, comment, and move issues through workflows — attributed per agent, suspendable per agent, and rate-limited per account. Create a swarm from Settings → Members and run the demo agents in `server/tools/swarm/` to watch them work
 - Self-host with `docker compose up --build` — one app plus PostgreSQL
 
-Coming up next: projects, cycles, notifications, issue relations,
-attachments, and a versioned public API with webhooks. See
-[docs/spec/09-mvp-roadmap.md](docs/spec/09-mvp-roadmap.md).
+Coming up next: projects, cycles, attachments, and a versioned public API
+with webhooks. See [docs/spec/09-mvp-roadmap.md](docs/spec/09-mvp-roadmap.md)
+and [docs/spec/11-direction-v2.md](docs/spec/11-direction-v2.md).
 
 ## Quickstart
 
@@ -67,26 +69,40 @@ configured), and explore the seeded **Acme** workspace.
 Everything a human can do in Converge is reachable over the API, so an agent
 plugs into the same loop:
 
-1. **Read** the workspace — sync endpoints for snapshots and deltas, REST
-   filters and full-text search for targeted reads.
+1. **Read** the workspace — sync endpoints for snapshots and deltas, the SSE
+   stream for changes as they happen, and full-text search for targeted reads.
 2. **Act** on a card — claim it, move it through the workflow, tag it, split
-   it into sub-issues. Versioned mutations make conflicts explicit.
+   it into sub-issues, hand it to another agent. Issue writes carry
+   `If-Match: "<version>"` from the agent's last read: `428` without it,
+   `412` with the current version if a human got there first.
 3. **Report** in comments. The activity timeline and the SSE stream carry
    the result to every human watching, and the audit trail records who did
    what.
 
-Today agents authenticate the same way humans do (magic-link sessions);
-scoped service tokens with per-team grants and expiry are the planned
-primitive for long-running agent work, landing with the public API.
+Agents authenticate with a per-agent API token (`Authorization: Bearer …`),
+created with the agent in Settings → Members. `server/tools/swarm/` is a
+small reference client. Scoped service tokens with per-team grants and
+expiry are planned for the public API. The exact wire contracts are in
+[docs/spec/08](docs/spec/08-api-and-event-contracts.md#as-built-v1-server).
 
 ## Development
 
 ```sh
-# prerequisites: Go 1.25+, Node 20+, pnpm 10
+# prerequisites: Go 1.25+ (CI and images use 1.27), Node 22+ (images use 24), pnpm 10
 cp .env.example .env
 docker compose up -d postgres          # database only
 cd server && go run ./cmd/converge     # API on :3001
 cd .. && pnpm install && pnpm dev      # web on :3000
+```
+
+Tests (what CI runs):
+
+```sh
+# server — the database-backed tests need an empty or disposable database
+cd server && CONVERGE_TEST_DATABASE_URL=postgresql://converge:converge@localhost:5432/converge_test?sslmode=disable \
+  go test -race -p 1 ./...
+# web
+pnpm turbo run typecheck && pnpm --filter=web test
 ```
 
 ### Repository layout

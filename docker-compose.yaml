@@ -53,19 +53,33 @@ services:
       CONVERGE_WEB_ORIGIN: ${CONVERGE_WEB_ORIGIN:-http://localhost:3000}
       CONVERGE_LOG_LEVEL: ${CONVERGE_LOG_LEVEL:-info}
       # Dev conveniences: the sign-in response includes the magic link, so
-      # a local setup without an email provider is sign-in-able. Set
-      # false in any real deployment.
+      # a local setup without an email provider is sign-in-able. The API
+      # refuses to start in dev mode unless CONVERGE_PUBLIC_URL and
+      # CONVERGE_WEB_ORIGIN are localhost. Set false in any real deployment.
       CONVERGE_DEV_MODE: ${CONVERGE_DEV_MODE:-true}
-      # Signs session tokens; must be a long random value in real
-      # deployments (e.g.: openssl rand -hex 32).
-      CONVERGE_SESSION_SECRET: ${CONVERGE_SESSION_SECRET:-converge-dev-session-secret-do-not-use-in-prod}
-      # Set true when the deployment is behind TLS.
-      CONVERGE_SECURE_COOKIES: ${CONVERGE_SECURE_COOKIES:-false}
+      # Signs session tokens. Required (>= 32 chars) when dev mode is off;
+      # the API refuses to start without it: openssl rand -hex 32
+      CONVERGE_SESSION_SECRET: ${CONVERGE_SESSION_SECRET:-}
+      # Unset = Secure cookies iff CONVERGE_WEB_ORIGIN is https.
+      CONVERGE_SECURE_COOKIES: ${CONVERGE_SECURE_COOKIES:-}
+      CONVERGE_ACCESS_TOKEN_TTL: ${CONVERGE_ACCESS_TOKEN_TTL:-}
+      CONVERGE_REFRESH_TOKEN_TTL: ${CONVERGE_REFRESH_TOKEN_TTL:-}
       CONVERGE_HTTP_TIMEOUT: ${CONVERGE_HTTP_TIMEOUT:-30s}
       CONVERGE_DB_MIN_CONNS: ${CONVERGE_DB_MIN_CONNS:-2}
       CONVERGE_DB_MAX_CONNS: ${CONVERGE_DB_MAX_CONNS:-20}
-      # Invitation mail; unset host = log driver (messages + link to the
-      # API log). See deploy/README.md → Invitation mail.
+      # Whose X-Forwarded-For is believed. The default (loopback + private
+      # ranges) trusts the web container and a proxy on this network;
+      # narrow it if clients can reach :3001 directly. deploy/README.md →
+      # Client IP and trusted proxies.
+      CONVERGE_TRUSTED_PROXIES: ${CONVERGE_TRUSTED_PROXIES:-}
+      # Prometheus listener, off when empty. ":9464" serves it on the
+      # compose network; it is not published (deploy/README.md → Metrics).
+      CONVERGE_METRICS_ADDR: ${CONVERGE_METRICS_ADDR:-}
+      # Sign-in and invitation mail; unset host = log driver, which logs
+      # bodies (sign-in links) only in dev mode or with
+      # CONVERGE_MAIL_LOG_BODIES=true. Production needs SMTP for anyone to
+      # sign in. deploy/README.md → Mail.
+      CONVERGE_MAIL_LOG_BODIES: ${CONVERGE_MAIL_LOG_BODIES:-}
       CONVERGE_SMTP_HOST: ${CONVERGE_SMTP_HOST:-}
       CONVERGE_SMTP_PORT: ${CONVERGE_SMTP_PORT:-587}
       CONVERGE_SMTP_USER: ${CONVERGE_SMTP_USER:-}
