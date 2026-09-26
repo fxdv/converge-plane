@@ -16,7 +16,7 @@
     "@converge/typescript-config": "workspace:*",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20",
-    "@types/react": "^18",
+    "@types/react": "^19",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "postcss-load-config": "^6.0.1",
