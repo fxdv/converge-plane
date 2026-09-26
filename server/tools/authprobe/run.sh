@@ -81,14 +81,15 @@ done
 
 "$WORK/authprobe" -api "http://$API_ADDR" -web-origin "$WEB_ORIGIN" -smtp "$SMTP_ADDR" -secure-cookies || fail=1
 
-# The server logged every request at debug level: no sign-in link or code
-# may be in it.
-if grep -Eq 'auth/verify\?preAuthSessionId=|"(linkCode|userInputCode)"' "$WORK/server.log"; then
-  echo "FAIL  LOG       sign-in links or codes appear in the server log:"
-  grep -E 'auth/verify\?preAuthSessionId=|"(linkCode|userInputCode)"' "$WORK/server.log" | head -3
+# The server logged every request at debug level: no sign-in link or code,
+# and no agent API token, may be in it.
+SECRET_RE='auth/verify\?preAuthSessionId=|"(linkCode|userInputCode)"|conv_agent_[A-Za-z0-9_-]{20,}'
+if grep -Eq "$SECRET_RE" "$WORK/server.log"; then
+  echo "FAIL  LOG       sign-in links, codes or API tokens appear in the server log:"
+  grep -E "$SECRET_RE" "$WORK/server.log" | head -3
   fail=1
 else
-  echo "PASS  LOG       no sign-in link or code in the server log ($(wc -l <"$WORK/server.log" | tr -d ' ') lines at debug)"
+  echo "PASS  LOG       no sign-in link, code or API token in the server log ($(wc -l <"$WORK/server.log" | tr -d ' ') lines at debug)"
 fi
 
 if [ "$fail" -ne 0 ]; then
