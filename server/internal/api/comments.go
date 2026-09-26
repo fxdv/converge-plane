@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -148,7 +149,9 @@ func (a *API) commentByID(ctx context.Context, q queryer, id string) (commentRow
 	return c, createdAt.Format(iso), updatedAt.Format(iso), err
 }
 
-// handleUpdateComment implements POST /api/v1/issue_comments/{id}.
+// handleUpdateComment implements POST /api/v1/issue_comments/{id}. Only
+// the author may edit: a comment is attributed speech, and an admin
+// rewriting it would put words in someone else's mouth.
 func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
@@ -170,6 +173,10 @@ func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	if c.AuthorID != p.AccountID {
+		writeError(w, http.StatusForbidden, "only the author can edit a comment")
+		return
+	}
 	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
@@ -185,10 +192,18 @@ func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, `
+	// A deleted comment is gone: an UPDATE record for it would resurrect
+	// it on every client.
+	var updated string
+	if err := tx.QueryRow(ctx, `
 		update comments set body = $2::jsonb, parent_id = $3, version = version + 1, updated_at = now()
-		where id = $1 and status = 'active'`,
-		id, toJSONB(req.Body), nullForEmpty(&req.ParentID)); err != nil {
+		where id = $1 and status = 'active'
+		returning id`,
+		id, toJSONB(req.Body), nullForEmpty(&req.ParentID)).Scan(&updated); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
 		a.internalError(w, err)
 		return
 	}
@@ -202,7 +217,6 @@ func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	_ = c
 	if err := a.refreshOutboxTx(ctx, tx, workspaceID, &rec, a.commentData(fresh, createdAt, updatedAt)); err != nil {
 		a.internalError(w, err)
 		return
@@ -216,7 +230,8 @@ func (a *API) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDeleteComment implements DELETE /api/v1/issue_comments/{id}
-// (soft delete).
+// (soft delete). Permission: the author, or a workspace owner/admin
+// (moderation).
 func (a *API) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
@@ -230,6 +245,13 @@ func (a *API) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	if c.AuthorID != p.AccountID {
+		role, member := a.workspaceRole(ctx, p, workspaceID)
+		if !member || !adminRole(role) {
+			writeError(w, http.StatusForbidden, "only the author or a workspace admin can delete a comment")
+			return
+		}
+	}
 	if !a.agentPausedGuard(ctx, w, p, row) {
 		return
 	}
@@ -241,7 +263,16 @@ func (a *API) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, `update comments set status = 'deleted', version = version + 1, updated_at = now() where id = $1`, id); err != nil {
+	var deleted string
+	if err := tx.QueryRow(ctx, `
+		update comments set status = 'deleted', version = version + 1, updated_at = now()
+		where id = $1 and status = 'active'
+		returning id`, id).Scan(&deleted); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Already deleted: idempotent, and no second DELETE record.
+			writeJSON(w, http.StatusOK, map[string]string{"id": c.ID})
+			return
+		}
 		a.internalError(w, err)
 		return
 	}

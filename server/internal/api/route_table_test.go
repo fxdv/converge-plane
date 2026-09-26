@@ -342,8 +342,10 @@ var rtRouteCases = []routeCase{
 			if len(resp.SyncActions) != 1 || resp.SyncActions[0].Action != "U" {
 				t.Fatalf("delta = %+v, want one U record (the wire contract)", resp.SyncActions)
 			}
-			if resp.LastSequenceID != "10" {
-				t.Fatalf("lastSequenceId = %q, want the server watermark, never the client's cursor", resp.LastSequenceID)
+			// The scan saw 11 (committed after the watermark read): the
+			// delta is complete through 11, never the client's own 5.
+			if resp.LastSequenceID != "11" {
+				t.Fatalf("lastSequenceId = %q, want the scan's 11, never the client's cursor", resp.LastSequenceID)
 			}
 		},
 	},
@@ -384,7 +386,7 @@ var rtRouteCases = []routeCase{
 				rtTeamWS(rtWS), rtRole("owner"),
 				{frag: "join accounts a2", rowErr: pgx.ErrNoRows}, // the wake: no agent assignee
 			},
-			txs: []*fakeTx{{rules: append(rtHistoryRules(), rtSeq(8))}},
+			txs: []*fakeTx{{rules: append(rtHistoryRules(), rtSeq(8), lockedVersionRule(0))}},
 		},
 		code: 200,
 		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
@@ -416,6 +418,7 @@ var rtRouteCases = []routeCase{
 				{frag: "join accounts a2", rowErr: pgx.ErrNoRows}, // the wake: no agent assignee
 			},
 			txs: []*fakeTx{{rules: []fakeRule{
+				lockedVersionRule(0),
 				{frag: "coalesce(max(number), 0) + 1", rowVals: []any{5}},
 				rtSeq(9),
 				rtIssueRow(rtIssue, rtTeam2, rtState, 5, false, nil, []string{}),
@@ -502,6 +505,7 @@ var rtRouteCases = []routeCase{
 				{frag: "wm.status = 'active' and a.kind = $3", rowVals: []any{true}}, // agentMember
 			},
 			txs: []*fakeTx{{rules: append(rtHistoryRules(),
+				lockedVersionRule(0),
 				fakeRule{frag: "to_account_id = $2 and created_at > now()", rowVals: []any{3}}, // the loop count
 				fakeRule{frag: "h.issue_id = $1 and a.kind = $2", rowVals: []any{0}},           // the op budget
 				fakeRule{frag: "and action = 'paused'", rowVals: []any{0, time.Time{}, 0}},     // reviewFacts: a fresh issue
@@ -574,7 +578,10 @@ var rtRouteCases = []routeCase{
 				rtIssueRow(rtIssue, rtTeam, rtState, 7, false, nil, []string{}),
 				rtTeamWS(rtWS), rtRole("owner"),
 			},
-			txs: []*fakeTx{{rules: []fakeRule{rtSeq(12)}}},
+			txs: []*fakeTx{{rules: []fakeRule{
+				{frag: "set status = 'deleted'", rowVals: []any{rtComment}},
+				rtSeq(12),
+			}}},
 		},
 		code: 200,
 		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {

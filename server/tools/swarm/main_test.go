@@ -118,6 +118,27 @@ func TestCommentBodyShape(t *testing.T) {
 	}
 }
 
+// The server refuses an agent's issue write without the version it read
+// (428), so the move must carry it.
+func TestAdvanceSendsIfMatch(t *testing.T) {
+	var gotPath, gotIfMatch, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotIfMatch = r.URL.Path, r.Header.Get("If-Match")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := &client{base: srv.URL, token: "conv_agent_x", http: &http.Client{}, ctx: context.Background()}
+	if err := c.advance(issue{ID: "iss-1", Version: 7}, "s2"); err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	if gotPath != "/api/v1/issues/iss-1" || gotIfMatch != `"7"` || gotBody != `{"stateId":"s2"}` {
+		t.Fatalf("request = %s If-Match=%s body=%s", gotPath, gotIfMatch, gotBody)
+	}
+}
+
 func TestInList(t *testing.T) {
 	if !inList([]string{"a", "b"}, "b") {
 		t.Fatal("b not found")

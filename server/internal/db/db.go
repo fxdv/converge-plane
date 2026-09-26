@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"converge/internal/metrics"
 )
 
 // DB wraps the connection pool. Services and repositories receive this
@@ -55,4 +57,19 @@ func (d *DB) Healthy(ctx context.Context) error {
 // Close releases the pool.
 func (d *DB) Close() {
 	d.Pool.Close()
+}
+
+// CollectMetrics reports the pool's state at scrape time: saturation
+// (acquired against max) and time spent waiting for a connection are the
+// early signs of an undersized pool or a stuck transaction.
+func (d *DB) CollectMetrics(e *metrics.Emitter) {
+	s := d.Pool.Stat()
+	const conns = "Pool connections by state."
+	e.Gauge("converge_db_pool_connections", conns, float64(s.AcquiredConns()), "state", "acquired")
+	e.Gauge("converge_db_pool_connections", conns, float64(s.IdleConns()), "state", "idle")
+	e.Gauge("converge_db_pool_connections", conns, float64(s.ConstructingConns()), "state", "constructing")
+	e.Gauge("converge_db_pool_max_connections", "Pool size limit.", float64(s.MaxConns()))
+	e.Counter("converge_db_pool_acquires_total", "Connections acquired from the pool.", float64(s.AcquireCount()))
+	e.Counter("converge_db_pool_empty_acquires_total", "Acquires that had to wait for a connection.", float64(s.EmptyAcquireCount()))
+	e.Counter("converge_db_pool_acquire_seconds_total", "Time spent acquiring connections.", s.AcquireDuration().Seconds())
 }

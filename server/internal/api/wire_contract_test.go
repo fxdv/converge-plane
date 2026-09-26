@@ -168,6 +168,12 @@ func TestIssueDataWireContract(t *testing.T) {
 		t.Errorf("agentPaused must serialize as a boolean, got %v (%T)", m["agentPaused"], m["agentPaused"])
 	}
 
+	// version is the If-Match anchor API-token writers echo back: always
+	// a JSON number.
+	if _, ok := m["version"].(float64); !ok {
+		t.Errorf("version must serialize as a number, got %v (%T)", m["version"], m["version"])
+	}
+
 	// v1.1: projectIds must always be a JSON array (never null); the
 	// legacy singular projectId derives from it (nil with no
 	// membership, the member id with one).

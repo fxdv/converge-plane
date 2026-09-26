@@ -41,9 +41,35 @@ func TestNewAppliesDefaults(t *testing.T) {
 	}
 }
 
-func TestSendLogDriverEmitsFullMessage(t *testing.T) {
+func TestSendLogDriverWithholdsBodiesByDefault(t *testing.T) {
 	log, buf := captured(t)
 	s := New(Config{}, log)
+	if err := s.Send(context.Background(), Message{
+		To:      "jane@example.com",
+		Subject: "Your Converge sign-in link",
+		Body:    "http://localhost:3000/auth/verify?preAuthSessionId=x#SECRETCODE",
+	}); err != nil {
+		t.Fatalf("log driver must not fail: %v", err)
+	}
+	if strings.Contains(buf.String(), "SECRETCODE") {
+		t.Fatalf("log driver leaked the body (a sign-in credential) without LogBodies: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "jane@example.com") {
+		t.Fatalf("the recipient must still be logged: %s", buf.String())
+	}
+}
+
+func TestSignInMessage(t *testing.T) {
+	link := "http://localhost:3000/auth/verify?preAuthSessionId=abc#XYZ"
+	m := SignInMessage("jane@acme.dev", link, 15*time.Minute)
+	if m.To != "jane@acme.dev" || !strings.Contains(m.Body, link) || !strings.Contains(m.Body, "15 minutes") {
+		t.Fatalf("sign-in message: %+v", m)
+	}
+}
+
+func TestSendLogDriverEmitsFullMessage(t *testing.T) {
+	log, buf := captured(t)
+	s := New(Config{LogBodies: true}, log)
 	err := s.Send(context.Background(), Message{
 		To:      "jane@example.com",
 		Subject: "demo invited you to Acme on Converge",

@@ -334,10 +334,17 @@ func updateIssuePool(t *testing.T, row []any, extra ...fakeRule) *fakePool {
 	return &fakePool{t: t, rules: rules}
 }
 
+// lockedVersionRule answers issuePreconditionTx's row lock with the
+// version the fixtures' rows carry (they omit it: zero).
+func lockedVersionRule(version int) fakeRule {
+	return fakeRule{frag: "select version from issues where id = $1 for update", rowVals: []any{version}}
+}
+
 // updateIssueTx wires the transaction of the update path.
 func updateIssueTx(t *testing.T, reloadRow []any) *fakeTx {
 	t.Helper()
 	return &fakeTx{t: t, rules: []fakeRule{
+		lockedVersionRule(0),
 		{frag: "from issues i where i.id = $1", rowVals: reloadRow},
 		{frag: "insert into issue_history", rowVals: []any{"h1"}},
 		{frag: "created_at from issue_history", rowVals: []any{time.Now()}},
@@ -573,6 +580,7 @@ func TestSameLabelSet(t *testing.T) {
 func TestDeleteAndSubscribe(t *testing.T) {
 	row := issueRowFixture(7, "Test", "st2", int(2))
 	tx := &fakeTx{t: t, rules: []fakeRule{
+		lockedVersionRule(0),
 		{frag: "insert into issue_history", rowVals: []any{"h1"}},
 		{frag: "created_at from issue_history", rowVals: []any{time.Now()}},
 		{frag: "insert into sync_sequences", rowVals: []any{int64(13)}},

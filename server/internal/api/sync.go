@@ -26,6 +26,9 @@ type syncActionRecord struct {
 	Action      string          `json:"action"`
 	WorkspaceID string          `json:"workspaceId"`
 	SequenceID  string          `json:"sequenceId"`
+	// recipient addresses the record to one account (the inbox); other
+	// members' streams and deltas carry only its sequence.
+	recipient string
 }
 
 // syncResponse matches the web client's BootstrapResponse.
@@ -90,12 +93,21 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 				afterSeq = n
 			}
 		}
-		var err error
-		records, err = a.collectOutbox(r.Context(), workspaceID, afterSeq, q.Get("modelNames"))
+		var (
+			err     error
+			scanned int64
+		)
+		records, scanned, err = a.collectOutbox(r.Context(), workspaceID, p.AccountID, afterSeq, q.Get("modelNames"))
 		if err != nil {
 			a.internalError(w, err)
 			return
 		}
+		// The watermark above was read before the outbox query, which may
+		// have seen later commits. Sequences commit in order, so the scan
+		// is complete up to its highest sequence: report that, or a
+		// record delivered here would be re-applied from the stream over
+		// newer state.
+		serverSeq = max(serverSeq, scanned)
 		// The outbox is trimmed per workspace; if the client's cursor
 		// predates the oldest retained record, the delta cannot be
 		// complete. An empty outbox with a watermark behind it is stale
@@ -159,9 +171,8 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 
 // collectModel runs one model's bootstrap collector for the tenant.
 // accountID is the requesting principal: every collector ignores it
-// except the inbox's (notifications are addressed; the snapshot returns
-// the requestor's own rows, while the per-workspace delta/stream let
-// the client keep only the rows addressed to it).
+// except the inbox's (notifications are addressed: the snapshot, the
+// delta and the stream all carry the requestor's own rows only).
 func (a *API) collectModel(ctx context.Context, model, workspaceID, accountID string) ([]syncActionRecord, error) {
 	seq := 0
 	emit := func(id string, data any) (syncActionRecord, error) {

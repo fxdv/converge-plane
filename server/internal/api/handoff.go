@@ -192,6 +192,9 @@ func (a *API) handleHandoff(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	if _, ok := a.issuePreconditionTx(ctx, tx, w, r, p, row.ID); !ok {
+		return
+	}
 
 	// Rule 3: the quiet guards, checked under the lock against the
 	// freshest state. A trip pauses the issue (committed) and rejects

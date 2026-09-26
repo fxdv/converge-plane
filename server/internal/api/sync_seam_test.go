@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"converge/internal/broadcast"
 )
 
 // TestWireAction pins the internal→client action vocabulary. The client
@@ -244,8 +246,10 @@ func TestSyncDelta(t *testing.T) {
 		if len(resp.SyncActions) != 1 || resp.SyncActions[0].ModelID != "i2" {
 			t.Fatalf("records = %+v, want the record newer than the server anchor", resp.SyncActions)
 		}
-		if resp.LastSequenceID != "42" || !resp.Stale {
-			t.Fatalf("lastSequenceId = %q stale = %v, want the server's 42 anchor and a stale report", resp.LastSequenceID, resp.Stale)
+		// The reported watermark is the scan's 43 (it delivered 43), not
+		// the anchor: re-applying 43 from the stream would be a rewind.
+		if resp.LastSequenceID != "43" || !resp.Stale {
+			t.Fatalf("lastSequenceId = %q stale = %v, want the scanned 43 and a stale report", resp.LastSequenceID, resp.Stale)
 		}
 	})
 	t.Run("a malformed watermark is not stale while the window still covers it", func(t *testing.T) {
@@ -283,19 +287,87 @@ func TestCollectOutbox(t *testing.T) {
 	}})
 	ctx := context.Background()
 
-	all, err := a.collectOutbox(ctx, "ws1", 5, "")
-	if err != nil || len(all) != 3 {
-		t.Fatalf("no filter: %d records (%v), want 3", len(all), err)
+	all, scanned, err := a.collectOutbox(ctx, "ws1", "u1", 5, "")
+	if err != nil || len(all) != 3 || scanned != 8 {
+		t.Fatalf("no filter: %d records, scanned %d (%v), want 3 up to 8", len(all), scanned, err)
 	}
-	issues, err := a.collectOutbox(ctx, "ws1", 5, "Issue")
+	issues, scanned, err := a.collectOutbox(ctx, "ws1", "u1", 5, "Issue")
 	if err != nil || len(issues) != 2 {
 		t.Fatalf("Issue filter: %d records (%v), want 2", len(issues), err)
+	}
+	if scanned != 8 {
+		t.Fatalf("scanned = %d, want 8: a filtered-out record still counts toward completeness", scanned)
 	}
 	if issues[0].SequenceID != "6" || issues[0].Action != "U" || issues[1].Action != "D" {
 		t.Fatalf("records = %+v, want seq 6/U and D", issues)
 	}
 	if issues[0].WorkspaceID != "ws1" {
 		t.Fatalf("workspace = %q, want ws1 stamped on every record", issues[0].WorkspaceID)
+	}
+}
+
+// TestCollectOutboxWithholdsOthersInbox pins addressed delivery on the
+// delta: another member's notification is withheld (the query flags it
+// hidden, bound to the caller), yet its sequence still bounds the scan.
+func TestCollectOutboxWithholdsOthersInbox(t *testing.T) {
+	pool := &fakePool{t: t, rules: []fakeRule{
+		{frag: "sequence_id > $2", rows: [][]any{
+			{int64(6), notifModel, "n1", "CREATE", json.RawMessage(`{"id":"n1","recipientId":"u1"}`), false},
+			{int64(7), notifModel, "n2", "CREATE", nil, true},
+		}},
+	}}
+	a := apiForTests(t, pool)
+	recs, scanned, err := a.collectOutbox(context.Background(), "ws1", "u1", 5, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 1 || recs[0].ModelID != "n1" {
+		t.Fatalf("records = %+v, want only the caller's own n1", recs)
+	}
+	if scanned != 7 {
+		t.Fatalf("scanned = %d, want 7 (the withheld record still advances the watermark)", scanned)
+	}
+	q := pool.poolQueries()
+	var args []any
+	for _, c := range q {
+		if strings.Contains(c.sql, "sequence_id > $2") {
+			args = c.args
+		}
+	}
+	if len(args) != 4 || args[2] != notifModel || args[3] != "u1" {
+		t.Fatalf("outbox query args = %v, want the inbox model and the caller bound", args)
+	}
+}
+
+// TestStreamPayload pins the realtime counterpart: a record addressed to
+// another account reaches the stream as its sequence alone.
+func TestStreamPayload(t *testing.T) {
+	ev := broadcast.Event{Data: []byte(`{"modelName":"Notification","sequenceId":"9"}`), Seq: "9", To: "u2"}
+	if got := string(streamPayload(ev, "u2")); got != string(ev.Data) {
+		t.Fatalf("recipient payload = %s, want the record", got)
+	}
+	if got := string(streamPayload(ev, "u1")); got != `{"sequenceId":"9","skip":true}` {
+		t.Fatalf("other member payload = %s, want the bare skip marker", got)
+	}
+	open := broadcast.Event{Data: []byte(`{"modelName":"Issue"}`), Seq: "10"}
+	if got := string(streamPayload(open, "u1")); got != string(open.Data) {
+		t.Fatalf("unaddressed payload = %s, want the record", got)
+	}
+}
+
+// TestEmitChangeAddressesNotifications pins where the recipient comes
+// from: the inbox record's own recipientId, and nothing else.
+func TestEmitChangeAddressesNotifications(t *testing.T) {
+	a := apiForTests(t, &fakePool{t: t})
+	tx := &fakeTx{t: t, rules: []fakeRule{{frag: "insert into sync_sequences", rowVals: []any{int64(9)}}}}
+	rec, err := a.emitChange(context.Background(), tx, "ws1", notifModel, "n1", "CREATE", map[string]any{"id": "n1", "recipientId": "u2"})
+	if err != nil || rec.recipient != "u2" {
+		t.Fatalf("notification recipient = %q (%v), want u2", rec.recipient, err)
+	}
+	tx2 := &fakeTx{t: t, rules: []fakeRule{{frag: "insert into sync_sequences", rowVals: []any{int64(10)}}}}
+	rec2, _ := a.emitChange(context.Background(), tx2, "ws1", "Issue", "i1", "UPDATE", map[string]any{"id": "i1", "recipientId": "u2"})
+	if rec2.recipient != "" {
+		t.Fatalf("a non-inbox record is addressed to %q; it must reach every member", rec2.recipient)
 	}
 }
 

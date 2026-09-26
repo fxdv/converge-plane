@@ -52,9 +52,10 @@ const notifRetention = "interval '90 days'"
 const notifModel = "Notification"
 
 // notification is the wire shape the client's MST model reads.
-// recipientId is the delivery key: the plane's stream and delta are
-// per-workspace, so every member receives every tenant notification and
-// the client keeps only the rows addressed to its user.
+// recipientId is the delivery key: emitChange addresses the record to
+// it, so the stream and delta deliver it to the recipient alone (other
+// members receive only its sequence). The client still keeps only the
+// rows addressed to its user.
 type notification struct {
 	ID          string  `json:"id"`
 	WorkspaceID string  `json:"workspaceId"`

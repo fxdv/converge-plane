@@ -64,10 +64,7 @@ func (a *API) handleSearch(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var row issueRow
-		if err := rows.Scan(&row.ID, &row.TeamID, &row.Number, &row.Priority, &row.SortOrder,
-			&row.Title, &row.DescRaw, &row.Status, &row.CreatedAt, &row.UpdatedAt,
-			&row.CreatedByID, &row.AssigneeID, &row.ParentID, &row.StatusID,
-			&row.AgentPaused, &row.ProjectIds, &row.LabelIDs, &row.Children, &row.RelationRaw); err != nil {
+		if err := rows.Scan(row.scanDest()...); err != nil {
 			a.internalError(w, err)
 			return
 		}

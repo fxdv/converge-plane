@@ -139,7 +139,7 @@ func TestUpdateAndDeleteComment(t *testing.T) {
 		row := issueRowFixture(7, "Test", "st2", int(2))
 		row[14] = true
 		pool := &fakePool{t: t, rules: []fakeRule{
-			{frag: "from comments cm where cm.id", rowVals: base},
+			{frag: "from comments cm where cm.id", rowVals: commentRowVals("c1", `"old"`, "ag1", "i1", nil, now, now)},
 			{frag: "from issues i where i.id = $1", rowVals: row},
 			{frag: "join workspaces w on w.id = t.workspace_id", rowVals: []any{"ws1"}},
 			{frag: "select role from workspace_members", rowVals: []any{"admin"}},
@@ -156,6 +156,7 @@ func TestUpdateAndDeleteComment(t *testing.T) {
 			{frag: "select role from workspace_members", rowVals: []any{"admin"}},
 		}}
 		pool.txs = []*fakeTx{{t: t, rules: []fakeRule{
+			{frag: "update comments set body", rowVals: []any{"c1"}},
 			{frag: "from comments cm where cm.id", rowVals: commentRowVals("c1", `"new"`, "u1", "i1", nil, now, now)},
 			{frag: "insert into sync_sequences", rowVals: []any{int64(42)}},
 		}}}
@@ -182,6 +183,7 @@ func TestUpdateAndDeleteComment(t *testing.T) {
 			{frag: "select role from workspace_members", rowVals: []any{"admin"}},
 		}}
 		pool.txs = []*fakeTx{{t: t, rules: []fakeRule{
+			{frag: "set status = 'deleted'", rowVals: []any{"c1"}},
 			{frag: "insert into sync_sequences", rowVals: []any{int64(43)}},
 		}}}
 		a := apiForTests(t, pool)
@@ -208,7 +210,85 @@ func TestUpdateAndDeleteComment(t *testing.T) {
 			t.Fatalf("comment outbox = %+v, want a DELETE record (the client removes it)", issueOut)
 		}
 	})
-	t.Run("replies list the thread", func(t *testing.T) {
+	t.Run("replies list the thread", testCommentReplies(base, issueRow, now))
+}
+
+// commentAccessPool wires the reads every comment mutation performs; role
+// is the caller's workspace role.
+func commentAccessPool(t *testing.T, comment, issue []any, role string) *fakePool {
+	t.Helper()
+	return &fakePool{t: t, rules: []fakeRule{
+		{frag: "from comments cm where cm.id", rowVals: comment},
+		{frag: "from issues i where i.id = $1", rowVals: issue},
+		{frag: "join workspaces w on w.id = t.workspace_id", rowVals: []any{"ws1"}},
+		{frag: "select role from workspace_members", rowVals: []any{role}},
+	}}
+}
+
+// TestCommentAuthorship pins who may change a comment: edit is the
+// author's alone; delete is the author's or a workspace admin's.
+func TestCommentAuthorship(t *testing.T) {
+	now := time.Now()
+	byU1 := commentRowVals("c1", `"old"`, "u1", "i1", nil, now, now)
+	issue := issueRowFixture(7, "Test", "st2", int(2))
+
+	t.Run("another member cannot edit", func(t *testing.T) {
+		pool := commentAccessPool(t, byU1, issue, "member")
+		a := apiForTests(t, pool)
+		rec := record(t, a, requestFor(t, humanPrincipal("u2"), "POST", "http://x/api/v1/issue_comments/c1", `{"body":"forged"}`, "id", "c1"), a.handleUpdateComment)
+		wantError(t, rec, 403, "only the author can edit a comment")
+	})
+	t.Run("an admin cannot edit someone else's words either", func(t *testing.T) {
+		pool := commentAccessPool(t, byU1, issue, "owner")
+		a := apiForTests(t, pool)
+		rec := record(t, a, requestFor(t, humanPrincipal("u2"), "POST", "http://x/api/v1/issue_comments/c1", `{"body":"forged"}`, "id", "c1"), a.handleUpdateComment)
+		wantError(t, rec, 403, "only the author can edit a comment")
+	})
+	t.Run("another member cannot delete", func(t *testing.T) {
+		pool := commentAccessPool(t, byU1, issue, "member")
+		a := apiForTests(t, pool)
+		rec := record(t, a, requestFor(t, humanPrincipal("u2"), "DELETE", "http://x/api/v1/issue_comments/c1", "", "id", "c1"), a.handleDeleteComment)
+		wantError(t, rec, 403, "only the author or a workspace admin can delete a comment")
+	})
+	t.Run("an admin may delete (moderation)", func(t *testing.T) {
+		pool := commentAccessPool(t, byU1, issue, "admin")
+		pool.txs = []*fakeTx{{t: t, rules: []fakeRule{
+			{frag: "set status = 'deleted'", rowVals: []any{"c1"}},
+			{frag: "insert into sync_sequences", rowVals: []any{int64(44)}},
+		}}}
+		a := apiForTests(t, pool)
+		checkStatus(t, record(t, a, requestFor(t, humanPrincipal("u2"), "DELETE", "http://x/api/v1/issue_comments/c1", "", "id", "c1"), a.handleDeleteComment), 200)
+		if !hasSQL(pool.txs[0], "set status = 'deleted'") {
+			t.Fatal("admin delete did not soft-delete")
+		}
+	})
+	t.Run("editing a deleted comment 404s and emits nothing", func(t *testing.T) {
+		pool := commentAccessPool(t, byU1, issue, "member")
+		pool.txs = []*fakeTx{{t: t, rules: []fakeRule{
+			{frag: "update comments set body", rowErr: pgx.ErrNoRows},
+		}}}
+		a := apiForTests(t, pool)
+		rec := record(t, a, requestFor(t, humanPrincipal("u1"), "POST", "http://x/api/v1/issue_comments/c1", `{"body":"x"}`, "id", "c1"), a.handleUpdateComment)
+		wantError(t, rec, 404, "not found")
+		if hasSQL(pool.txs[0], "insert into sync_outbox") {
+			t.Fatal("an edit of a deleted comment must not reach the sync feed")
+		}
+	})
+	t.Run("deleting twice emits one DELETE", func(t *testing.T) {
+		pool := commentAccessPool(t, byU1, issue, "member")
+		pool.txs = []*fakeTx{{t: t, rules: []fakeRule{
+			{frag: "set status = 'deleted'", rowErr: pgx.ErrNoRows},
+		}}}
+		a := apiForTests(t, pool)
+		checkStatus(t, record(t, a, requestFor(t, humanPrincipal("u1"), "DELETE", "http://x/api/v1/issue_comments/c1", "", "id", "c1"), a.handleDeleteComment), 200)
+		if hasSQL(pool.txs[0], "insert into sync_outbox") {
+			t.Fatal("a repeated delete must not emit another record")
+		}
+	})
+}
+
+func testCommentReplies(base, issueRow []any, now time.Time) func(t *testing.T) {
+	return func(t *testing.T) {
 		pool := &fakePool{t: t, rules: []fakeRule{
 			{frag: "from comments cm where cm.id", rowVals: base},
 			{frag: "from issues i where i.id = $1", rowVals: issueRow},
@@ -225,5 +305,5 @@ func TestUpdateAndDeleteComment(t *testing.T) {
 		if len(out) != 1 || out[0]["body"] != "reply" || out[0]["sourceMetadata"] != nil {
 			t.Fatalf("replies = %+v, want one reply with a null sourceMetadata", out)
 		}
-	})
+	}
 }

@@ -49,10 +49,11 @@ echo "signed in as $ADMIN"
 TEAM_IDS_JSON=$(echo "$TEAMS" | python3 -c 'import json,sys; t=sys.stdin.read().strip(); print(json.dumps([x.strip() for x in t.split(",") if x.strip()]))')
 
 # --- create the swarm ------------------------------------------------------
+# Cookie-authenticated writes must carry the web origin, as a browser's do.
 declare -a TOKENS=()
 for NAME in scout hunter forge; do
   TOKEN_FILE=$(mktemp)
-  curl -sS -b "$JAR" -H 'Content-Type: application/json' \
+  curl -sS -b "$JAR" -H "Origin: $WEB" -H 'Content-Type: application/json' \
     -d "{\"name\":\"$NAME\",\"teamIds\":$TEAM_IDS_JSON}" \
     "$API_URL/api/v1/workspaces/$WS_ID/agents" > "$TOKEN_FILE"
   TOKENS+=( "$(python3 -c "import json;print(json.load(open('$TOKEN_FILE'))['token'])")" )
@@ -61,10 +62,10 @@ for NAME in scout hunter forge; do
 done
 
 # --- assign work: unassigned open issues, round-robin over the agents ------
-python3 - "$JAR" "$API_URL" "$WS_ID" <<'EOF'
+python3 - "$JAR" "$API_URL" "$WS_ID" "$WEB" <<'EOF'
 import json, subprocess, sys
 
-jar, api_url, ws_id = sys.argv[1], sys.argv[2], sys.argv[3]
+jar, api_url, ws_id, web = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
 def get(url):
     out = subprocess.run(["curl", "-sS", "-b", jar, url],
@@ -84,6 +85,7 @@ for n, issue in enumerate(open_issues[: len(agent_ids) * 2]):
     target = agent_ids[n % len(agent_ids)]
     subprocess.run(
         ["curl", "-sS", "-b", jar, "-X", "POST",
+         "-H", "Origin: " + web,
          "-H", "Content-Type: application/json",
          "-d", json.dumps({"assigneeId": target}),
          f"{api_url}/api/v1/issues/{issue['id']}"],

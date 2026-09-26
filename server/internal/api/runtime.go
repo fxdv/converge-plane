@@ -669,15 +669,12 @@ func (rt *AgentRuntime) hasLLMPolicy() bool {
 	return ok
 }
 
-// loadIssueRowTx reads one issue row with its version anchor; it is
-// pgx.ErrNoRows when the issue is gone.
+// loadIssueRowTx reads and row-locks one issue with its version anchor;
+// it is pgx.ErrNoRows when the issue is gone. The row lock holds the
+// anchor against writers that take no team lock (the HTTP delete).
 func (a *API) loadIssueRowTx(ctx context.Context, tx pgx.Tx, issueID string, row *issueRow) error {
 	return tx.QueryRow(ctx,
-		"select "+issueColumns+", i.version from issues i where i.id = $1", issueID).Scan(
-		&row.ID, &row.TeamID, &row.Number, &row.Priority, &row.SortOrder,
-		&row.Title, &row.DescRaw, &row.Status, &row.CreatedAt, &row.UpdatedAt,
-		&row.CreatedByID, &row.AssigneeID, &row.ParentID, &row.StatusID,
-		&row.AgentPaused, &row.ProjectIds, &row.LabelIDs, &row.Children, &row.RelationRaw, &row.Version)
+		"select "+issueColumns+" from issues i where i.id = $1 for update of i", issueID).Scan(row.scanDest()...)
 }
 
 // snapshotTx is the work cycle's first phase: one short transaction

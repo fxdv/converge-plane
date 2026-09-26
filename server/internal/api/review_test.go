@@ -61,9 +61,8 @@ func reviewRow(paused bool, statusID string) []any {
 }
 
 // reviewFixture is the full canned result set of the review's queries.
-// Rule order matters: the version-carrying load (issueColumns + the
-// version) before the plain issueByID, since both share the "from
-// issues i" tail.
+// Rule order matters: the row-locked anchor load before the plain
+// issueByID, since both share the "from issues i" tail.
 // statusID is the row's current state (the parked column for the tick
 // tests, In Progress for the work-cycle breaker test).
 func reviewFixture(t *testing.T, statusID string, parkCount, replies int, foremanErr error, paused bool) *fakeTx {
@@ -73,7 +72,7 @@ func reviewFixture(t *testing.T, statusID string, parkCount, replies int, forema
 	return &fakeTx{
 		t: t,
 		rules: []fakeRule{
-			{frag: "i.version from issues i where i.id", rowVals: append(append([]any{}, row...), 3)},
+			{frag: "where i.id = $1 for update of i", rowVals: append(append([]any{}, row...), 3)},
 			{frag: "with park as", rowVals: []any{parkCount, lastPark, replies}},
 			{frag: "from workspace_members", rowVals: []any{"human1"}, rowErr: foremanErr},
 			{frag: "category = 'STARTED'", rowVals: []any{"st-ip"}},
@@ -294,7 +293,7 @@ func TestReviewIssueMissingRow(t *testing.T) {
 	tx := &fakeTx{
 		t: t,
 		rules: []fakeRule{
-			{frag: "i.version from issues i where i.id", rowErr: pgx.ErrNoRows},
+			{frag: "where i.id = $1 for update of i", rowErr: pgx.ErrNoRows},
 		},
 	}
 	a := reviewAPI()
