@@ -67,6 +67,15 @@ const SAVE_HANDLERS: Record<string, Function> = {
 let appliedSeq = 0;
 const pending = new Map<number, SyncActionRecord>();
 
+// The highest committed sequence the stream's heartbeat has announced. A
+// cursor below it with nothing buffered is a trailing loss: a record that
+// never arrived, with no later record to reveal the hole.
+let knownHead = 0;
+
+function gapOpen(): boolean {
+  return pending.size > 0 || appliedSeq < knownHead;
+}
+
 // Bounds the buffer when the stream runs far ahead (a dropped record
 // with steady traffic behind it): past this, the buffered tail is
 // discarded and the repair delta re-fetches it.
@@ -97,9 +106,20 @@ export function tabHighWater(): number {
   return appliedSeq;
 }
 
-// A stream record is ahead of the cursor with the hole still open.
+// A stream record or the heartbeat's head is ahead of the cursor with the
+// hole still open.
 export function hasSequenceGap(): boolean {
-  return pending.size > 0;
+  return gapOpen();
+}
+
+// The heartbeat path: the workspace's committed head in, whether a gap is
+// open out.
+export function acceptStreamHead(head: unknown): boolean {
+  const n = Number(head);
+  if (Number.isFinite(n) && n > knownHead) {
+    knownHead = n;
+  }
+  return gapOpen();
 }
 
 // Releases the buffered records that are now contiguous with the
@@ -130,10 +150,10 @@ export function acceptStreamRecord(record: SyncActionRecord): {
   const seq = Number(record?.sequenceId);
   if (!Number.isFinite(seq) || seq <= 0) {
     // Synthetic or unknown sequence: nothing to order it against.
-    return { ready: record?.skip ? [] : [record], gap: pending.size > 0 };
+    return { ready: record?.skip ? [] : [record], gap: gapOpen() };
   }
   if (seq <= appliedSeq) {
-    return { ready: [], gap: pending.size > 0 }; // duplicate or rewind
+    return { ready: [], gap: gapOpen() }; // duplicate or rewind
   }
   if (pending.size >= MAX_PENDING) {
     pending.clear();
@@ -141,7 +161,7 @@ export function acceptStreamRecord(record: SyncActionRecord): {
   }
   pending.set(seq, record);
   const ready = drainPending();
-  return { ready, gap: pending.size > 0 };
+  return { ready, gap: gapOpen() };
 }
 
 // The delta path: the response is complete through lastSequenceId (the
