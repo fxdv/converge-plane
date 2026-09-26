@@ -2,27 +2,29 @@
 
 Open decisions do not authorize broader scope. Each row has a recommended default that governs prototypes and discussion, but a blocking row must be explicitly accepted before its gate.
 
+> **Status as of 2026-09-26.** [Doc 11](11-direction-v2.md) controls where it conflicts with this document. It closed OD-01 (R-2), OD-02 (R-3, R-12), OD-03 (R-4), OD-04 (R-5), OD-05 (R-6), OD-09 (R-7), OD-16 (R-8), and OD-19 (resolved in M3); the Status column below is updated accordingly. The remaining rows are open as written.
+
 | ID | Decision | Recommended default | Gate | Status |
 | --- | --- | --- | --- | --- |
-| OD-01 | Open-source license and contribution model | Choose AGPL-3.0-or-later for network copyleft, or Apache-2.0 if ecosystem adoption outweighs hosted-service reciprocity; obtain legal review | Before public repository/code contribution | OPEN — blocking |
-| OD-02 | Product name/trademark and visual identity | New name, original iconography/copy/layout; document Tegon only as research provenance | Before public UI/repository | OPEN — blocking |
-| OD-03 | Implementation stack | Modular monolith and one deployable artifact; PostgreSQL; typed web client; choose languages/frameworks from team expertise and maintenance quality | Before schema/application code | OPEN — blocking |
-| OD-04 | Authentication boundary | Maintained OIDC/email-magic-link capable component with secure server sessions; no custom password crypto | Before auth implementation | OPEN — blocking |
-| OD-05 | Rich-text document format/editor | Small versioned JSON schema with sanitized renderer and plain-text projection; evaluate maintained editors without importing their whole product model | Before issue schema freeze | OPEN — blocking |
+| OD-01 | Open-source license and contribution model | Choose AGPL-3.0-or-later for network copyleft, or Apache-2.0 if ecosystem adoption outweighs hosted-service reciprocity; obtain legal review | Before public repository/code contribution | CLOSED — AGPL-3.0-or-later (doc 11 R-2) |
+| OD-02 | Product name/trademark and visual identity | New name, original iconography/copy/layout; document Tegon only as research provenance | Before public UI/repository | CLOSED — Converge (doc 11 R-3, R-12); trademark validation is a launch gate |
+| OD-03 | Implementation stack | Modular monolith and one deployable artifact; PostgreSQL; typed web client; choose languages/frameworks from team expertise and maintenance quality | Before schema/application code | CLOSED — Go API + forked Next.js web + PostgreSQL (doc 11 R-4) |
+| OD-04 | Authentication boundary | Maintained OIDC/email-magic-link capable component with secure server sessions; no custom password crypto | Before auth implementation | CLOSED — own Go magic-link auth with server-side, rotated, revocable sessions (doc 11 R-5) |
+| OD-05 | Rich-text document format/editor | Small versioned JSON schema with sanitized renderer and plain-text projection; evaluate maintained editors without importing their whole product model | Before issue schema freeze | CLOSED — inherited TipTap document format (doc 11 R-6) |
 | OD-06 | Workspace admin access to all team content | Baseline: Owner/Admin has disclosed implicit access to all teams; evaluate private-team demand before changing the policy graph | Before permission fixtures/schema | OPEN — blocking |
 | OD-07 | Team identifier changes and issue move keys | Team identifier immutable after first issue; move allocates target-team key and records old key alias/activity | Before issue numbering code | OPEN — blocking |
 | OD-08 | Archive, deletion, and retention periods | Recoverable archive; 30-day deletion window as starting proposal; backup disclosure; legal/operator configuration bounded by safe minimums | Before destructive UI and production beta | OPEN — blocking for beta |
-| OD-09 | MVP deployment topology | One application artifact with web/API and optional worker process mode plus PostgreSQL; reverse proxy/TLS outside app; no Redis | Before deployment skeleton | OPEN — blocking |
+| OD-09 | MVP deployment topology | One application artifact with web/API and optional worker process mode plus PostgreSQL; reverse proxy/TLS outside app; no Redis | Before deployment skeleton | CLOSED — web + api + PostgreSQL, no Redis (doc 11 R-7) |
 | OD-10 | PostgreSQL search strategy | Built-in full-text/trigram indexes with exact key boost; no Elasticsearch/vector DB | Before search implementation | OPEN — default strong |
 | OD-11 | MVP job execution | PostgreSQL transactional outbox and leased worker, runnable in same artifact; no Trigger.dev/external scheduler | Before outbox implementation | OPEN — default strong |
 | OD-12 | NEXT attachment storage/scanning | S3-compatible interface plus local-development adapter; short-lived URLs; pluggable scanning hook and quarantine policy | Before attachment schema/API | OPEN — NEXT blocking |
 | OD-13 | NEXT project/cycle rules | Projects cross teams without granting access; cycles single-team/non-overlapping; explicit incomplete-item rollover | Before planning schema | OPEN — NEXT blocking |
 | OD-14 | NEXT notification triggers/grouping | Assignment, mention, comment, relation, watched issue; deterministic burst grouping; in-app only; user mute controls | Before notification projector | OPEN — NEXT blocking |
 | OD-15 | Performance budgets and representative scale | Define p95 API/UI budgets using 10k issues/workspace, 1k/team active collection, 100 concurrent sessions as initial fixture—not claimed capacity | Before MVP UI acceptance | OPEN — blocking for beta |
-| OD-16 | Realtime transport | SSE in NEXT; refetch/gap recovery authoritative; WebSocket only for measured bidirectional need | Before NEXT realtime implementation | OPEN — NEXT default strong |
+| OD-16 | Realtime transport | SSE in NEXT; refetch/gap recovery authoritative; WebSocket only for measured bidirectional need | Before NEXT realtime implementation | CLOSED — SSE (doc 11 R-8) |
 | OD-17 | Public API versioning/support | Resource-oriented `/v1`, cursor pagination, idempotency, scoped credentials, published deprecation window and ownership | Before LATER public API | OPEN — LATER blocking |
 | OD-18 | GitHub/Slack exact workflows | GitHub linking before sync; Slack bounded notification/intake; validate with users and provider policy | Before provider installation work | OPEN — LATER blocking |
-| OD-19 | Telemetry and crash reporting | Off by default for self-host; explicit operator opt-in; publish fields/retention; no issue content | Before any analytics dependency | OPEN — blocking if telemetry proposed |
+| OD-19 | Telemetry and crash reporting | Off by default for self-host; explicit operator opt-in; publish fields/retention; no issue content | Before any analytics dependency | CLOSED — no telemetry; forked analytics removed (doc 11, M3) |
 | OD-20 | Localization and timezone baseline | English-first externalized copy; UTC instants, account display timezone, date-only due/cycle dates | Before date/presentation schema | OPEN — default strong |
 | OD-21 | Browser support | Current and previous major Chrome/Edge/Firefox/Safari; responsive web, no native app/offline mutation | Before test matrix freeze | OPEN — default strong |
 | OD-22 | Accessibility conformance process | WCAG 2.2 AA, automated CI plus manual keyboard/screen-reader audits per release | Before design-system acceptance | OPEN — default strong |

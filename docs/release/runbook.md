@@ -13,16 +13,22 @@ server.
 | Web | `next dev` on `:3000` | `next build && next start`, origin = `CONVERGE_WEB_ORIGIN` |
 | Swarm brain | 4 self-hosted 27B instances on `:8000-8003` | any OpenAI-compatible endpoints |
 
-## Environment (the 12 knobs)
+## Environment (the knobs that matter)
+
+The full reference, with security and proxy settings, is
+[deploy/README.md](../../deploy/README.md#environment-reference).
 
 | Variable | Meaning |
 |---|---|
 | `CONVERGE_DATABASE_URL` | Postgres DSN |
 | `CONVERGE_HTTP_ADDR` | API listen address (`:3001`) |
 | `CONVERGE_PUBLIC_URL` | externally reachable API URL (links, absolute URLs) |
-| `CONVERGE_WEB_ORIGIN` | CORS/origin allowlist for the client |
-| `CONVERGE_SESSION_SECRET` | session cookie signing — rotate on leak |
-| `CONVERGE_DEV_MODE` | dev magic-link sign-in — **off in production** |
+| `CONVERGE_WEB_ORIGIN` | CORS/origin allowlist for the client; cookie writes must come from it |
+| `CONVERGE_SESSION_SECRET` | session token signing, ≥ 32 chars, required outside dev mode — rotating it signs every human out (agents keep working) |
+| `CONVERGE_DEV_MODE` | dev magic-link sign-in — **off in production**; refused off localhost |
+| `CONVERGE_SMTP_HOST` | sign-in and invitation mail — without it nobody can sign in in production |
+| `CONVERGE_TRUSTED_PROXIES` | proxies whose `X-Forwarded-For` is believed (default loopback + private) |
+| `CONVERGE_METRICS_ADDR` | Prometheus listener (off when empty; keep it private) |
 | `CONVERGE_LOG_LEVEL` | `info` for production |
 | `CONVERGE_LLM` | `true` to attach the model fleet |
 | `CONVERGE_LLM_URLS` | comma-separated OpenAI-compatible endpoints (sharded per agent) |
@@ -75,6 +81,12 @@ page without a restart.
 The Swarm page's roster shows the live view: per-agent busy / open / paused /
 tokens24h, the effective foreman, and the work-waiting-on-you queue.
 
+With `CONVERGE_METRICS_ADDR` set, `/metrics` adds the numbers
+([deploy/README.md → Metrics](../../deploy/README.md#metrics)). For the swarm,
+watch `converge_issue_precondition_failures_total{reason="stale"}` (agents
+losing races to humans — expected occasionally, alarming if constant) and
+`{reason="missing"}` (an agent client that does not send `If-Match`).
+
 ## Releasing
 
 1. Cut the release from a clean tree at the milestone's last commit.
@@ -90,3 +102,5 @@ Redeploy the previous tag. Migrations are forward-only; v1.x migrations are
 additive (new tables/columns, no destructive rewrites), so an older binary
 runs on a newer database for the v1 series. Agent runtime state is derived
 from the issues table, so a rollback changes the swarm's brain, not its work.
+Crossing the session-rotation release (migration 0020) in either direction
+signs every human out once; agents are unaffected.

@@ -53,6 +53,36 @@ Conceptual error envelope:
 
 `401` means no valid principal, `403` is used when revealing a known container and missing capability helps a signed-in user resolve access, `404` hides object existence across tenant/team boundaries, `409` covers version/invariant conflict, `422` covers field validation, and `429` includes safe retry guidance.
 
+## As built (v1 server)
+
+The conventions above are the target; these are the contracts the Go server implements today. Where they differ from the table, this section describes the running system.
+
+**Issue write concurrency.** Every Issue payload carries an integer `version`, bumped by every mutation. The four issue writes — `POST /api/v1/issues/{id}` (update), `POST /api/v1/issues/{id}/move`, `DELETE /api/v1/issues/{id}`, and `POST /api/v1/issues/{id}/handoff` — honour `If-Match: "<version>"` (bare, quoted, and `W/` forms accepted). The issue row is locked and compared inside the write's transaction:
+
+| Case | Response |
+| --- | --- |
+| API-token (agent) principal without `If-Match` | `428`; agents must always send it |
+| `If-Match` not an integer version | `400` |
+| Version differs from the locked row | `412` with `{"error", "version": <current>}` and `ETag: "<current>"`; re-read and decide again |
+| Version matches, or a human session without `If-Match` | the write proceeds; the response carries `ETag: "<new version>"` |
+
+`412` (not `409`) is used because the failure is the request's own precondition. The web client does not send versions yet, so human edits stay last-writer-wins until it does; `converge_issue_precondition_failures_total{reason="missing"|"stale"}` counts refusals.
+
+**Cookie CSRF.** Every unsafe request (`POST`/`PUT`/`PATCH`/`DELETE`) that carries a session cookie and no `Authorization` header must present an `Origin` — or, when a privacy setting strips it, a `Referer` — matching `CONVERGE_WEB_ORIGIN` or `CONVERGE_PUBLIC_URL`; otherwise `403 CROSS_ORIGIN`. Browsers do this automatically; a non-browser client that authenticates with cookies must send `Origin` itself. Bearer-token clients are unaffected.
+
+**Sessions.** Sign-in creates a `sessions` row. Tokens name it (`sid`); access tokens are stateless and short-lived, refresh tokens are single-use:
+
+- `POST /api/auth/session/refresh` rotates the refresh token (the old one stops working). The cookie flow also requires the `anti-csrf` header; the Bearer flow does not. Refresh no longer accepts an access token.
+- Presenting the refresh token that was just replaced within 30 s (concurrent tabs) returns fresh access material without rotating again. Presenting any older one is treated as theft: the session is revoked (`revoked_reason = 'reuse'`), the response is `401`, and cookies are cleared.
+- `POST /api/auth/signout` revokes the session row. Access tokens of a revoked session are refused by the instance that saw the revocation; after a restart, or on another instance, they remain valid until they expire (`CONVERGE_ACCESS_TOKEN_TTL`, default 1 h).
+- Tokens minted before the session-row change carry no `sid` and are refused: every user signs in once after that upgrade.
+
+**Auth rate limits.** `/api/auth/*` is limited per client IP (burst 30, then one request per 2 s) and code issuance per email address (5 codes, then one per 3 min). Excess requests get `429 RATE_LIMITED` with `Retry-After`. The client IP is the rightmost `X-Forwarded-For` hop not in `CONVERGE_TRUSTED_PROXIES`. The former `email/exists` probe endpoint is removed.
+
+**Comments and relations.** Editing or deleting a comment requires its author or a workspace owner/admin; deleting a relation requires its creator or an owner/admin.
+
+**Notifications.** Notification records are addressed: the SSE stream and the delta feed deliver each one only to its recipient.
+
 ## Resource contracts by release
 
 These are capability endpoints, not a fixed framework/router prescription.

@@ -221,6 +221,12 @@ against usage data before they harden into product constants.
 - **Cadence.** Two independent caps: the per-account rate limit (M6) and the
   per-issue operation budget (this document). One agent cannot flood; a swarm
   cannot flood one issue.
+- **Concurrency.** An agent acts on what it last read, so its issue writes
+  (update, move, delete, handoff) must carry `If-Match: "<version>"` from
+  that read; without it the server answers `428`, and if the issue changed
+  in between, `412` with the current version. The agent re-reads and decides
+  again instead of overwriting a human's edit (doc 08, "As built").
+  `server/tools/swarm` is the reference client.
 
 ## Topology is a policy layer, not a protocol
 
