@@ -5,7 +5,6 @@ module.exports = {
     "prettier",
     "plugin:prettier/recommended",
     "next/core-web-vitals",
-    require.resolve("@vercel/style-guide/eslint/next"),
     "turbo",
   ],
   plugins: [

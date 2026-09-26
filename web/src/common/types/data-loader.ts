@@ -14,6 +14,9 @@ export interface SyncActionRecord {
   action: Action;
   workspaceId: string;
   sequenceId: string;
+  // Stream only: a record addressed to another account, delivered as its
+  // sequence alone so the cursor can advance past it. Never applied.
+  skip?: boolean;
 }
 
 export interface BootstrapResponse {

@@ -17,6 +17,9 @@
     "turbo": "^2.0.9"
   },
   "pnpm": {
+    "overrides": {
+      "postcss@<8.5.23": "^8.5.23"
+    },
     "onlyBuiltDependencies": [
       "esbuild",
       "unrs-resolver"

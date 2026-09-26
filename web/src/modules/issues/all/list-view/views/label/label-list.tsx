@@ -1,5 +1,5 @@
 import { Button } from '@converge/ui/components/button';
-import { BadgeColor } from '@converge/ui/components/ui/badge';
+import { BadgeColor } from '@converge/ui/components/badge';
 import { LabelLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';

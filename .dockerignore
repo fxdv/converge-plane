@@ -10,5 +10,9 @@ docs
 deploy
 .env
 .env.*
+**/.env
+**/.env.*
+**/.env
+**/.env.*
 *.tsbuildinfo
 .DS_Store

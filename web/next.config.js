@@ -2,6 +2,7 @@
 
 module.exports = {
   reactStrictMode: false,
+  poweredByHeader: false,
   // Overridable output dir (CONVERGE_WEB_DIST_DIR=.next-ci) so a `next build`
   // repro can run without clobbering a live dev server's .next cache.
   distDir: process.env.CONVERGE_WEB_DIST_DIR || '.next',
@@ -15,31 +16,37 @@ module.exports = {
       },
     ];
   },
+  // The /_next/image optimizer fetches and transcodes on request; nothing
+  // here needs it, and with it off Next answers the route with a 404.
+  images: { unoptimized: true },
+  // The browser calls /api same-origin through the proxy route, so no CORS
+  // headers are sent: a cross-origin caller gets nothing it can read. The
+  // CSP carries only directives that cannot break Next's inline bootstrap
+  // scripts; script-src needs nonces and is a separate change.
   async headers() {
     return [
       {
-        // matching all API routes
-        source: '/api/:path*',
+        source: '/:path*',
         headers: [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: '*' }, // replace this your actual origin
           {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET,DELETE,PATCH,POST,PUT',
-          },
-          {
-            key: 'Access-Control-Allow-Headers',
+            key: 'Content-Security-Policy',
             value:
-              'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version',
+              "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+          },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
           },
         ],
       },
     ];
   },
   devIndicators: {
-    buildActivityPosition: 'bottom-right',
+    position: 'bottom-right',
   },
-  swcMinify: true,
   publicRuntimeConfig: {
     // Will be available on both server and client
     NEXT_PUBLIC_VERSION: process.env.NEXT_PUBLIC_VERSION,
@@ -66,7 +73,7 @@ module.exports = {
   webpack(config) {
     config.resolve.alias['react-day-picker$'] = path.join(
       path.dirname(rdpPkg),
-      'dist/index.esm.js'
+      'dist/index.esm.js',
     );
     return config;
   },
