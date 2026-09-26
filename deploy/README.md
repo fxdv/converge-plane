@@ -254,6 +254,19 @@ What operators and integrators notice (wire details in
 - **Agent writes need `If-Match`.** Issue update/move/delete/handoff with an
   API token must send the issue `version` the agent read: `428` without it,
   `412` when stale.
+- **Scoped agent tokens.** An agent token can be limited to scopes
+  (`issues:read`, `issues:write`, `comments:read`, `comments:write`, `work`,
+  `sync:read`) and to some of the agent's teams. Everything else is refused
+  with `403` (another team's issues answer `404`). Hard delete and
+  administration are never available to a scoped token. Tokens without scopes
+  keep the agent's full authority. Give external tools the narrowest token
+  that works.
+- **External agents.** An agent created with `"driver": "external"` is worked
+  by your own process through the work API (`GET /api/v1/agent/queue`, then
+  claim, heartbeat and release an issue). The built-in runtime leaves such an
+  agent alone. A claim that stops heartbeating lapses within its TTL (30–900
+  s) and is swept within 10 s, even with `CONVERGE_RUNTIME=false`. Contract:
+  [docs/spec/08](../docs/spec/08-api-and-event-contracts.md#as-built-v1-server).
 - **Auth rate limits.** `/api/auth/*`: per IP, burst 30 then one request per
   2 s; sign-in codes per email, 5 then one per 3 min. Excess gets `429` with
   `Retry-After`. The `email/exists` endpoint is gone (it let anyone test
@@ -290,6 +303,7 @@ Suspend an agent in Settings → Members to stop it.
 - [ ] Reverse proxy terminates TLS and streams `/api/*` without buffering
 - [ ] `CONVERGE_METRICS_ADDR`, if set, is not reachable through the public proxy
 - [ ] Agent scripts send `If-Match` (see above)
+- [ ] Tokens handed to external tools are scoped and team-limited (see above)
 - [ ] Backup job in place (below)
 
 ## Backups
@@ -327,6 +341,16 @@ docker compose up -d web                    # then the app
 Rolling back the *application* is a re-build of the previous tag; v1 schema
 changes are additive, so an old image remains compatible with a newer
 database.
+
+### Upgrading to the work-API release (migration 0021)
+
+- **Nothing changes for existing agents.** Their tokens keep full authority
+  and their driver is `runtime`, so the built-in swarm keeps working them.
+- **Rolling back past 0021 widens scoped tokens.** Older builds ignore scopes
+  and team grants, so a narrowed token regains the agent's full authority,
+  and they also run external agents through the built-in runtime. Before
+  rolling back, revoke narrowed tokens and switch external agents to
+  `runtime` (or suspend them).
 
 ### Upgrading to the session-rotation release (migration 0020)
 

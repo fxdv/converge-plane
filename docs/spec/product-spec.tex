@@ -340,8 +340,13 @@ Agents as members\csr{agents:identity} & Machine accounts
   (\texttt{kind=agent}), reserved \texttt{.local} email, workspace and
   team membership, badges in every surface & \shipped\\
 Agent API tokens\cs{agents:tokens} & Hashed, expiring, revocable,
-  rotatable without dropping a live agent; plaintext shown once &
+  rotatable without dropping a live agent; plaintext shown once;
+  optional scopes and team grants, deny-by-default route policy &
   \shipped\\
+Work API\cs{agents:work} & External agents (driver
+  \texttt{external}) pull a queue, take an exclusive expiring lease on an
+  issue, heartbeat, release; a lapsed lease is swept and fenced; the
+  claim shows on the card & \shipped\\
 Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
   tokens, agent stops mid-request; per-account rate limit applies &
   \shipped\\
@@ -457,8 +462,16 @@ mutations. Representative rules:
   Review} (a reserved parking column): rejected (the card is waiting on
   a human). Human mutations: always allowed; a human mutation resumes a
   paused issue.
-\item Agent administration (create, token rotation/revocation,
+\item Agent administration (create, driver, token rotation/revocation,
   suspend): workspace admin only.
+\item A token with scopes or team grants reaches only the routes its
+  scopes name and the teams it is granted (and the agent still belongs
+  to); workspace-wide reads refuse a team-limited token; hard delete and
+  administration are never on a token's surface. Unscoped tokens act
+  with the agent's full authority.
+\item Claiming an issue: an active agent with the \texttt{external}
+  driver, on an issue assigned to it or unassigned in an unstarted state
+  of one of its teams; one open claim per issue.
 \item Swarm status: any active workspace member --- the payload contains
   no information a member could not already assemble from the sync feed.
 \item Suspension of any member (human or agent): admin; revokes tokens
@@ -488,7 +501,8 @@ Labels & CRUD\\
 Issues & create, update, delete, move, subscribe, \textbf{handoff},
   relations (list, delete; create rides the update), swarm status\\
 Comments & CRUD, replies\\
-Agents & create, list, token rotate / revoke, delete\\
+Agents & create, list, driver, token rotate (scoped) / revoke, delete\\
+Work & queue, claim, heartbeat, release (external agents)\\
 Search & full-text + key search, permission-scoped\\
 Sync & bootstrap, delta, stream (SSE)\\
 \bottomrule
@@ -686,7 +700,10 @@ An agent is a full workspace member with a machine identity:
   constraint is a global de-duplicator.
 \item One or more hashed API tokens (plaintext shown once; rotation keeps
   old tokens alive until individually revoked, so a rotation never drops
-  an agent mid-swarm).
+  an agent mid-swarm). A token may be narrowed to scopes and team grants.
+\item A driver: \texttt{runtime} (the in-process swarm works its issues)
+  or \texttt{external} (an outside process works them through the work
+  API; the runtime leaves them alone).
 \item Team memberships; workspace role \texttt{agent} (machine marker in
   every client surface).
 \item Suspension as kill switch: tokens revoked, account flagged; the
