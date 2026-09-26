@@ -34,24 +34,34 @@ export default (req, res) => {
     return;
   }
 
-  proxy.once('error', (err) => {
-    console.error('[api proxy] error:', err.message);
-    if (!res.headersSent) {
-      res.statusCode = 502;
-      res.end('backend unavailable');
-    } else {
-      res.end();
-    }
-  });
-
   return new Promise((resolve) => {
     res.on('close', resolve);
-    proxy.web(req, res, {
-      target: API_URL,
-      changeOrigin: true,
-      // Preserve the original path (including the /api prefix).
-      // The SSE stream connects directly to the backend host, not through
-      // this proxy, so no upgrade handling is needed.
-    });
+    proxy.web(
+      req,
+      res,
+      {
+        target: API_URL,
+        changeOrigin: true,
+        // Append this hop to X-Forwarded-For: the API resolves the client
+        // IP (rate limits, session audit) by walking the chain from the
+        // right past trusted proxies, so every proxy must record itself.
+        xfwd: true,
+        // Preserve the original path (including the /api prefix).
+        // The SSE stream connects directly to the backend host, not through
+        // this proxy, so no upgrade handling is needed.
+      },
+      // Per-request callback: a shared 'error' listener would answer
+      // whichever response registered it, not the one that failed.
+      (err) => {
+        console.error('[api proxy] error:', err.message);
+        if (!res.headersSent) {
+          res.statusCode = 502;
+          res.end('backend unavailable');
+        } else {
+          res.end();
+        }
+        resolve();
+      },
+    );
   });
 };

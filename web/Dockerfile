@@ -2,7 +2,7 @@
 # Builds the Converge web app (Next.js, standalone output).
 # Build context: repository root (pnpm workspace).
 
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 RUN npm install -g corepack && corepack enable && apk add --no-cache dumb-init
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -40,14 +40,22 @@ RUN pnpm turbo run build --filter=web
 
 # Minimal runtime image: the traced standalone server plus the client
 # static assets it serves (Next's canonical standalone layout).
-FROM node:20-alpine AS runner
-RUN apk add --no-cache dumb-init
-ENV NODE_ENV=production
+FROM node:24-alpine AS runner
+# The server needs only node; the bundled package managers are dead weight
+# that image scanners flag.
+RUN apk add --no-cache dumb-init \
+ && rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/bin/yarn /usr/local/bin/yarnpkg
+# server.js binds to $HOSTNAME, which Docker sets to the container id.
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0
 WORKDIR /app
 # The standalone output mirrors the monorepo root with the app nested
 # under web/ (Next's monorepo layout), so the app root is /app/web.
-COPY --from=build /app/web/.next/standalone ./
-COPY --from=build /app/web/.next/static /app/web/.next/static
-COPY --from=build /app/web/public /app/web/public
+COPY --from=build --chown=node:node /app/web/.next/standalone ./
+COPY --from=build --chown=node:node /app/web/.next/static /app/web/.next/static
+COPY --from=build --chown=node:node /app/web/public /app/web/public
+USER node
 EXPOSE 3000
 CMD ["dumb-init", "node", "web/server.js"]

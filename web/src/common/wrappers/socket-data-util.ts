@@ -52,17 +52,44 @@ const SAVE_HANDLERS: Record<string, Function> = {
 // cursor another tab moved. Writes to the shared key are max-only.
 // ---------------------------------------------------------------------------
 
-// The module's one tab-scoped state: the highest outbox sequence this
-// tab has applied for its workspace (0 = nothing yet).
+// The module's tab-scoped state: the highest outbox sequence this tab
+// has applied for its workspace (0 = nothing yet), and the stream
+// records that arrived ahead of it.
+//
+// The cursor is contiguous: the server's sequences are gap-free per
+// workspace and every one reaches the stream (in full, or as a skip
+// marker for another member's inbox row), but concurrent commits publish
+// from separate goroutines, so 42 can arrive before 41. A max-only
+// cursor would apply 42 and then drop 41 as a rewind — a lost update.
+// Instead a record ahead of the cursor waits in `pending` until the hole
+// fills, or until the gap outlives a grace period and a delta from the
+// cursor repairs it (socket-data-sync).
 let appliedSeq = 0;
+const pending = new Map<number, SyncActionRecord>();
+
+// Bounds the buffer when the stream runs far ahead (a dropped record
+// with steady traffic behind it): past this, the buffered tail is
+// discarded and the repair delta re-fetches it.
+const MAX_PENDING = 1000;
+
+function prunePending(): void {
+  for (const seq of pending.keys()) {
+    if (seq <= appliedSeq) {
+      pending.delete(seq);
+    }
+  }
+}
 
 // Seeds (or raises, never lowers) the tab's cursor from the shared
-// watermark. Called at wrapper mount and after every full bootstrap.
+// watermark or a server response. Called at wrapper mount, after every
+// full bootstrap, and after every delta. Buffered records the new cursor
+// covers are dropped; callers release the rest with drainPending().
 export function seedTabHighWater(stored: string | null): number {
   const n = stored ? Number(stored) : 0;
   if (Number.isFinite(n) && n > appliedSeq) {
     appliedSeq = n;
   }
+  prunePending();
   return appliedSeq;
 }
 
@@ -70,16 +97,76 @@ export function tabHighWater(): number {
   return appliedSeq;
 }
 
-// The live-record idempotency guard (SWR-51): an SSE record and the
-// reconnection delta can both deliver the same record (the stream drops
-// between delivery and the watermark write), and a shared watermark
-// rolled back by another tab can re-deliver an old window over newer
-// state — re-applying a stale CREATE resurrects a row a newer DELETE
-// removed. The server's sequence is monotonic per workspace, so "newer
-// than everything this tab applied" is the dedupe condition. Only live
-// records (SSE/delta — real outbox sequences) pass through this; the
-// bootstrap snapshot carries a local 1..N counter, not the watermark, so
-// it applies unconditionally.
+// A stream record is ahead of the cursor with the hole still open.
+export function hasSequenceGap(): boolean {
+  return pending.size > 0;
+}
+
+// Releases the buffered records that are now contiguous with the
+// cursor, advancing it past each (skip markers advance without apply).
+export function drainPending(): SyncActionRecord[] {
+  const ready: SyncActionRecord[] = [];
+  for (;;) {
+    const next = pending.get(appliedSeq + 1);
+    if (!next) {
+      break;
+    }
+    pending.delete(appliedSeq + 1);
+    appliedSeq += 1;
+    if (!next.skip) {
+      ready.push(next);
+    }
+  }
+  prunePending();
+  return ready;
+}
+
+// The stream path: one record in, the records now safe to apply (in
+// sequence order) out. `gap` reports a hole the caller must repair.
+export function acceptStreamRecord(record: SyncActionRecord): {
+  ready: SyncActionRecord[];
+  gap: boolean;
+} {
+  const seq = Number(record?.sequenceId);
+  if (!Number.isFinite(seq) || seq <= 0) {
+    // Synthetic or unknown sequence: nothing to order it against.
+    return { ready: record?.skip ? [] : [record], gap: pending.size > 0 };
+  }
+  if (seq <= appliedSeq) {
+    return { ready: [], gap: pending.size > 0 }; // duplicate or rewind
+  }
+  if (pending.size >= MAX_PENDING) {
+    pending.clear();
+    return { ready: [], gap: true };
+  }
+  pending.set(seq, record);
+  const ready = drainPending();
+  return { ready, gap: pending.size > 0 };
+}
+
+// The delta path: the response is complete through lastSequenceId (the
+// server reports the highest sequence it scanned), so its records apply
+// past the cursor, the cursor jumps to the watermark — over holes that
+// are other models or other members' inbox rows — and any buffered
+// stream records beyond it follow.
+export function acceptDeltaBatch(
+  records: SyncActionRecord[],
+  lastSequenceId: string | null,
+): SyncActionRecord[] {
+  const fresh = dedupeLiveRecords(records);
+  seedTabHighWater(lastSequenceId);
+  return [...fresh, ...drainPending()];
+}
+
+// The batch idempotency guard (SWR-51), for delta responses: an SSE
+// record and the reconnection delta can both deliver the same record,
+// and a shared watermark rolled back by another tab can re-deliver an
+// old window over newer state — re-applying a stale CREATE resurrects a
+// row a newer DELETE removed. A delta batch is ordered and complete for
+// its range, so "newer than everything this tab applied" is the dedupe
+// condition. Stream records go through acceptStreamRecord instead (they
+// can arrive out of order). The bootstrap snapshot carries a local 1..N
+// counter, not the watermark, so it applies unconditionally.
 export function dedupeLiveRecords(
   data: SyncActionRecord[],
 ): SyncActionRecord[] {
@@ -88,6 +175,9 @@ export function dedupeLiveRecords(
   }
   const fresh: SyncActionRecord[] = [];
   for (const record of data) {
+    if (record.skip) {
+      continue;
+    }
     const seq = Number(record.sequenceId);
     if (!Number.isFinite(seq) || seq <= 0) {
       fresh.push(record); // synthetic or unknown sequence: apply
@@ -100,6 +190,7 @@ export function dedupeLiveRecords(
     // else: this tab already applied newer state for this workspace;
     // the record is a duplicate or a rewind — drop it.
   }
+  prunePending();
   return fresh;
 }
 

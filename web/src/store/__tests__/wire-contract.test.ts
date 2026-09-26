@@ -17,7 +17,10 @@ import { describe, it } from 'node:test';
 import { safePriorityIndex } from 'common/priority';
 import type { SyncActionRecord } from 'common/types';
 import {
+  acceptDeltaBatch,
+  acceptStreamRecord,
   dedupeLiveRecords,
+  hasSequenceGap,
   liveIdsByModel,
   pruneStaleLocalRecords,
   seedTabHighWater,
@@ -901,6 +904,87 @@ describe('dedupeLiveRecords (the SWR-51 idempotency guard)', () => {
     const before = tabHighWater();
     assert.equal(seedTabHighWater(String(Math.max(0, before - 1))), before);
     assert.equal(tabHighWater(), before);
+  });
+});
+
+describe('acceptStreamRecord (the contiguous stream cursor)', () => {
+  // Shared module state: each case seeds a fresh, higher baseline.
+  const seqs = (records: SyncActionRecord[]) =>
+    records.map((r) => r.sequenceId);
+
+  it('applies the next sequence and advances by one', () => {
+    seedTabHighWater('10000');
+    const out = acceptStreamRecord(
+      rec('Issue', 'i1', 'U', '10001') as unknown as SyncActionRecord,
+    );
+    assert.deepEqual(seqs(out.ready), ['10001']);
+    assert.equal(out.gap, false);
+    assert.equal(tabHighWater(), 10001);
+  });
+
+  it('holds a record that arrives before its predecessor, then releases both in order', () => {
+    seedTabHighWater('11000');
+    const early = acceptStreamRecord(
+      rec('Issue', 'i2', 'U', '11002') as unknown as SyncActionRecord,
+    );
+    assert.deepEqual(early.ready, []);
+    assert.equal(early.gap, true);
+    assert.equal(tabHighWater(), 11000, 'the cursor must not jump the hole');
+    assert.equal(hasSequenceGap(), true);
+    const late = acceptStreamRecord(
+      rec('Issue', 'i1', 'U', '11001') as unknown as SyncActionRecord,
+    );
+    assert.deepEqual(seqs(late.ready), ['11001', '11002']);
+    assert.equal(late.gap, false);
+    assert.equal(tabHighWater(), 11002);
+    assert.equal(hasSequenceGap(), false);
+  });
+
+  it('advances past a skip marker without applying it', () => {
+    seedTabHighWater('12000');
+    const marker = {
+      sequenceId: '12001',
+      skip: true,
+    } as unknown as SyncActionRecord;
+    assert.deepEqual(acceptStreamRecord(marker).ready, []);
+    assert.equal(tabHighWater(), 12001);
+    const next = acceptStreamRecord(
+      rec('Issue', 'i1', 'U', '12002') as unknown as SyncActionRecord,
+    );
+    assert.deepEqual(seqs(next.ready), ['12002']);
+  });
+
+  it('drops a duplicate at or below the cursor', () => {
+    seedTabHighWater('13000');
+    const out = acceptStreamRecord(
+      rec('Issue', 'i1', 'U', '13000') as unknown as SyncActionRecord,
+    );
+    assert.deepEqual(out.ready, []);
+    assert.equal(out.gap, false);
+  });
+
+  it('a delta closes the gap: its watermark covers the hole and buffered records beyond it follow', () => {
+    seedTabHighWater('14000');
+    // 14001 was lost on the stream; 14002 (covered by the delta) and
+    // 14004 (beyond it) arrived.
+    acceptStreamRecord(
+      rec('Issue', 'i2', 'U', '14002') as unknown as SyncActionRecord,
+    );
+    acceptStreamRecord(
+      rec('Issue', 'i4', 'U', '14004') as unknown as SyncActionRecord,
+    );
+    // The delta carries 14001-14002 (14003 is another member's inbox row,
+    // withheld) and reports it scanned through 14003.
+    const ready = acceptDeltaBatch(
+      [
+        rec('Issue', 'i1', 'U', '14001'),
+        rec('Issue', 'i2', 'U', '14002'),
+      ] as unknown as SyncActionRecord[],
+      '14003',
+    );
+    assert.deepEqual(seqs(ready), ['14001', '14002', '14004']);
+    assert.equal(tabHighWater(), 14004);
+    assert.equal(hasSequenceGap(), false);
   });
 });
 

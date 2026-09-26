@@ -4,7 +4,7 @@ import getConfig from 'next/config';
 import * as React from 'react';
 
 import { hash } from 'common/common-utils';
-import type { BootstrapResponse } from 'common/types';
+import type { BootstrapResponse, SyncActionRecord } from 'common/types';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
 
@@ -15,10 +15,20 @@ import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
 
 import {
-  saveLiveSocketData,
+  acceptDeltaBatch,
+  acceptStreamRecord,
+  dedupeLiveRecords,
+  hasSequenceGap,
+  saveSocketData,
   seedTabHighWater,
   tabHighWater,
 } from './socket-data-util';
+
+// How long a stream record may wait for the sequence before it. Commits
+// publish from separate goroutines, so small reorderings resolve within
+// milliseconds; a hole that lasts longer is a lost record, repaired by a
+// delta from the cursor.
+const GAP_GRACE_MS = 1500;
 
 interface Props {
   children: React.ReactElement;
@@ -47,22 +57,27 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
     const user = React.useContext(UserContext);
     const hashKey = `${workspace.id}__${user.id}`;
 
-    // R-8: realtime is an SSE stream, not socket.io. The EventSource is
-    // kept under the `socket` name to minimize the diff; it is a hint —
-    // the delta endpoint remains authoritative (refetch-after-gap).
-    const [socket, setSocket] = React.useState<EventSource | undefined>(
+    // R-8: realtime is an SSE stream, not socket.io. It is a hint — the
+    // delta endpoint remains authoritative (refetch-after-gap). Refs, not
+    // state: the effect cleanup must see the live stream and timer, not
+    // the values captured by the render that started them.
+    const socketRef = React.useRef<EventSource | undefined>(undefined);
+    const gapTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(
       undefined,
     );
 
     const { publicRuntimeConfig } = getConfig();
 
     React.useEffect(() => {
-      if (!socket && workspaceStore.workspace?.id) {
+      if (!socketRef.current && workspaceStore.workspace?.id) {
         initSocket();
       }
 
       return () => {
-        socket && socket.close();
+        socketRef.current?.close();
+        socketRef.current = undefined;
+        clearTimeout(gapTimerRef.current);
+        gapTimerRef.current = undefined;
       };
 
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +95,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       seedTabHighWater(localStorage.getItem(`lastSequenceId_${hash(hashKey)}`));
       const url = `${base}/api/v1/sync_actions/stream?workspaceId=${workspaceStore.workspace.id}&userId=${user.id}`;
       const socket = new EventSource(url, { withCredentials: true });
-      setSocket(socket);
+      socketRef.current = socket;
 
       // The shared watermark is max-only: another tab may have advanced
       // it, and this tab may have applied past it — a backwards write
@@ -111,53 +126,98 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         [MODELS.Notification]: notificationsStore,
       };
 
-      socket.onmessage = async (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-
-        // The live-record path: the idempotency guard drops a record this
-        // tab already applied (stream/delta double delivery, SWR-51).
-        await saveLiveSocketData([data], MODEL_STORE_MAP);
-        advanceShared(Number(data.sequenceId) || 0);
+      // Applies run one at a time in cursor order: two overlapping saves
+      // for the same row could otherwise land out of order.
+      let applyQueue: Promise<void> = Promise.resolve();
+      const apply = (records: SyncActionRecord[]) => {
+        if (records.length > 0) {
+          applyQueue = applyQueue
+            .then(() => saveSocketData(records, MODEL_STORE_MAP))
+            .catch((err: unknown) => {
+              console.warn('[converge] sync: apply failed', err);
+            });
+        }
+        return applyQueue;
       };
 
-      // Realtime is a hint, the delta endpoint is authoritative. The
-      // stream is now long-lived (the 60s write-timeout cap is gone), but
-      // the EventSource still flaps on session-cookie expiry and tab
-      // suspension; onopen fires on every (re)connect, so re-run the delta
-      // to cover whatever happened during the gap.
-      socket.onopen = () => {
-        void (async () => {
-          if (!workspaceStore.workspace?.id) {
-            return;
-          }
+      // Once the server says the feed was trimmed past our cursor, no
+      // delta can close the gap; only the next full load can.
+      let feedStale = false;
+      let reconciling = false;
+      let rerun = false;
+
+      // Realtime is a hint, the delta endpoint is authoritative. It runs
+      // on every (re)connect — the EventSource flaps on session-cookie
+      // expiry and tab suspension — and when a stream gap outlives its
+      // grace period. Single-flight: overlapping deltas would race the
+      // cursor, so a request during a run queues one more run (a reconnect
+      // mid-flight may postdate the running delta's snapshot).
+      const reconcile = async () => {
+        if (feedStale || !workspaceStore.workspace?.id) {
+          return;
+        }
+        if (reconciling) {
+          rerun = true;
+          return;
+        }
+        reconciling = true;
+        try {
           // Fetch from this tab's own cursor (SWR-51): whatever another
           // tab wrote to the shared key cannot make this tab skip or
-          // rewind; the guard below dedupes the overlap either way.
-          const last = String(Math.max(tabHighWater(), 0)) || '0';
-          try {
-            const resp: BootstrapResponse = await getDeltaRecords(
-              workspaceStore.workspace.id,
-              Object.values(MODELS),
-              last,
-              user.id,
-            );
-            await saveLiveSocketData(resp.syncActions, MODEL_STORE_MAP);
-            if (resp.stale) {
-              // The delta is incomplete: the server's change feed was
-              // trimmed past our cursor. Forget the watermark so the next
-              // load takes a full snapshot (which re-seeds the tab cursor
-              // from the new watermark); don't advance past the gap.
-              localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
-              return;
-            }
-            seedTabHighWater(resp.lastSequenceId);
-            advanceShared(Number(resp.lastSequenceId) || 0);
-          } catch {
-            // Reconciliation failed (session expired mid-flight, etc.).
-            // The next successful reconnect retries; a page reload always
-            // re-syncs from scratch.
+          // rewind.
+          const resp: BootstrapResponse = await getDeltaRecords(
+            workspaceStore.workspace.id,
+            Object.values(MODELS),
+            String(tabHighWater()),
+            user.id,
+          );
+          if (resp.stale) {
+            // The delta is incomplete: forget the watermark so the next
+            // load takes a full snapshot; don't advance past the gap.
+            await apply(dedupeLiveRecords(resp.syncActions));
+            localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
+            feedStale = true;
+            return;
           }
-        })();
+          await apply(acceptDeltaBatch(resp.syncActions, resp.lastSequenceId));
+          advanceShared(tabHighWater());
+        } catch {
+          // Reconciliation failed (session expired mid-flight, etc.).
+          // The next reconnect or gap retries; a reload re-syncs.
+        } finally {
+          reconciling = false;
+          if (rerun) {
+            rerun = false;
+            void reconcile();
+          } else if (hasSequenceGap()) {
+            scheduleGapRepair();
+          }
+        }
+      };
+
+      const scheduleGapRepair = () => {
+        if (gapTimerRef.current || feedStale) {
+          return;
+        }
+        gapTimerRef.current = setTimeout(() => {
+          gapTimerRef.current = undefined;
+          void reconcile();
+        }, GAP_GRACE_MS);
+      };
+
+      socket.onmessage = (event: MessageEvent) => {
+        const { ready, gap } = acceptStreamRecord(JSON.parse(event.data));
+        void apply(ready).then(() => advanceShared(tabHighWater()));
+        if (gap) {
+          scheduleGapRepair();
+        } else {
+          clearTimeout(gapTimerRef.current);
+          gapTimerRef.current = undefined;
+        }
+      };
+
+      socket.onopen = () => {
+        void reconcile();
       };
 
       // EventSource reconnects automatically on drop.
