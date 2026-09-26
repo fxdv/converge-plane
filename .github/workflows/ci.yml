@@ -5,36 +5,86 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   server:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: converge
+          POSTGRES_PASSWORD: converge
+          POSTGRES_DB: converge_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U converge -d converge_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Enables the database-backed tests (auth sessions, migrations, seed).
+      CONVERGE_TEST_DATABASE_URL: postgresql://converge:converge@localhost:5432/converge_test?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          go-version: "1.24"
+          persist-credentials: false
+      # go.mod's `go` line is the minimum language version; builds use the
+      # newest supported release so govulncheck judges a patched stdlib.
+      # Keep in step with server/Dockerfile.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          check-latest: true
           cache-dependency-path: server/go.sum
+      - name: Format
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed:"; echo "$unformatted"; exit 1
+          fi
       - name: Build
         run: go build ./...
       - name: Vet
         run: go vet ./...
+      # -p 1: the database-backed packages share one database.
       - name: Test
-        run: go test ./...
+        run: go test -race -p 1 ./...
+      - name: Vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
           cache: pnpm
       - name: Install
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+      - name: Audit
+        run: pnpm audit --audit-level high
+      - name: Typecheck
+        run: pnpm turbo run typecheck
+      # next build also runs ESLint and fails on errors.
       - name: Build
         run: pnpm turbo run build --filter=web
         env:
@@ -42,3 +92,48 @@ jobs:
           NEXT_PUBLIC_BASE_HOST: http://localhost:3000
       - name: Wire contract (client MST models)
         run: pnpm --filter=web test
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build API image
+        run: docker build -t converge-api:ci server
+      - name: Build web image
+        run: docker build -f web/Dockerfile -t converge-web:ci .
+      # Fails on HIGH/CRITICAL findings that have a released fix.
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: converge-api:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan web image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: converge-web:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Images run as non-root
+        run: |
+          test "$(docker run --rm --entrypoint id converge-api:ci -u)" != "0"
+          test "$(docker run --rm --entrypoint id converge-web:ci -u)" != "0"
+      - name: Web image serves
+        run: |
+          docker run -d --name web -p 3000:3000 converge-web:ci
+          for _ in $(seq 1 30); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/auth || true)"
+            [ "$code" = "200" ] && break
+            sleep 1
+          done
+          if [ "$code" != "200" ]; then docker logs web; exit 1; fi
+          if curl -sI http://localhost:3000/auth | grep -qi '^x-powered-by'; then
+            echo "X-Powered-By must not be sent"; exit 1
+          fi
