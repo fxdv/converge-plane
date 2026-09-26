@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# The Go toolchain must satisfy the version directive in go.mod.
-FROM golang:1.25-alpine AS build
+# The Go toolchain must satisfy the version directive in go.mod and be a
+# supported release (security fixes land only in the two newest). Keep in
+# step with .github/workflows/ci.yml.
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 ARG VERSION=0.1.0-dev
 ARG COMMIT=dev
@@ -12,7 +14,7 @@ RUN CGO_ENABLED=0 go build \
     -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/converge ./cmd/converge
 
-FROM alpine:3.20
+FROM alpine:3.22
 RUN adduser -D -u 10001 converge
 USER converge
 COPY --from=build /out/converge /usr/local/bin/converge

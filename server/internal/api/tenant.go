@@ -127,8 +127,16 @@ func PrincipalFromContext(ctx context.Context) *Principal {
 	return p
 }
 
-// Mount registers all application routes on r.
+// Mount registers all application routes on r. Every one of them refuses
+// cookie-authenticated writes from a foreign origin.
 func (a *API) Mount(r chi.Router) {
+	r.Group(func(r chi.Router) {
+		r.Use(a.auth.RequireSameOrigin)
+		a.routes(r)
+	})
+}
+
+func (a *API) routes(r chi.Router) {
 	a.auth.Mount(r)
 
 	r.Route("/api/v1", func(r chi.Router) {

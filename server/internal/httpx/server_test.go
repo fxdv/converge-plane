@@ -21,6 +21,32 @@ func testLogger(buf *bytes.Buffer) *slog.Logger {
 	return slog.New(slog.NewTextHandler(buf, nil))
 }
 
+// The route label must be the pattern, never the raw path, and junk
+// methods must not mint series: either would let clients grow memory.
+func TestMetricsLabelsByRoutePattern(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(Metrics())
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/issues/{id}", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	})
+	before := httpRequests.With("GET", "/api/v1/issues/{id}", "418").Value()
+	for _, id := range []string{"a", "b", "c"} {
+		r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/v1/issues/"+id, nil))
+	}
+	if got := httpRequests.With("GET", "/api/v1/issues/{id}", "418").Value() - before; got != 3 {
+		t.Fatalf("pattern series grew by %v, want 3", got)
+	}
+
+	unmatched := httpRequests.With("OTHER", "unmatched", "405").Value()
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("BREW", "/api/v1/issues/a", nil))
+	if got := httpRequests.With("OTHER", "unmatched", "405").Value() - unmatched; got != 1 {
+		t.Fatalf("unknown method counted %v times under OTHER, want 1", got)
+	}
+	if httpInFlight.Value() != 0 {
+		t.Fatalf("in-flight = %d after all requests finished", httpInFlight.Value())
+	}
+}
+
 func TestRecovererPanicsTo500(t *testing.T) {
 	var buf bytes.Buffer
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -150,6 +176,13 @@ func TestCORSMatchingOrigin(t *testing.T) {
 	if w.Header().Get("Access-Control-Max-Age") == "" {
 		t.Fatal("max-age missing")
 	}
+	if got := w.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "anti-csrf") {
+		t.Fatalf("allow-headers = %q, the refresh call sends anti-csrf", got)
+	}
+	exposed := w.Header().Get("Access-Control-Expose-Headers")
+	if !strings.Contains(exposed, "st-front-token") || strings.Contains(exposed, "st-access-token") || strings.Contains(exposed, "st-refresh-token") {
+		t.Fatalf("expose-headers = %q, want the front token and never the access/refresh tokens", exposed)
+	}
 }
 
 func TestCORSPreFlightShortCircuits(t *testing.T) {
@@ -208,53 +241,6 @@ func TestStatusRecorderCatchesStatusAndFlush(t *testing.T) {
 }
 
 type nopFlusher struct{ http.ResponseWriter }
-
-func TestClientIP(t *testing.T) {
-	cases := []struct {
-		name       string
-		remoteAddr string
-		forwarded  string
-		want       string
-	}{
-		{"plain", "203.0.113.5:443", "", "203.0.113.5"},
-		{"xff from public ignored", "203.0.113.5:443", "10.1.2.3", "203.0.113.5"},
-		{"xff from loopback trusted", "127.0.0.1:5000", "203.0.113.5, 10.1.2.3", "203.0.113.5"},
-		{"xff from v6 loopback trusted", "[::1]:5000", "203.0.113.5", "203.0.113.5"},
-		{"xff from 10/8 trusted", "10.0.0.2:8443", "203.0.113.5", "203.0.113.5"},
-		{"first of a list wins", "192.168.1.10:80", "  a , b ", "a"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, "/x", nil)
-			r.RemoteAddr = c.remoteAddr
-			if c.forwarded != "" {
-				r.Header.Set("X-Forwarded-For", c.forwarded)
-			}
-			if got := clientIP(r); got != c.want {
-				t.Fatalf("clientIP = %q, want %q", got, c.want)
-			}
-		})
-	}
-}
-
-// TestClientIP172Range pins the CURRENT 172/8 trust boundary: only
-// 172.16.* is treated as local. The full RFC1918 172.16/12 span
-// (172.16.0.0-172.31.255.255) is partially untrusted — 172.20.x falls
-// through to the connection IP. The under-trust direction is safe (logs
-// record the proxy instead of the client); if this widens, the tests must
-// move with it.
-func TestClientIP172Range(t *testing.T) {
-	for _, trusted := range []string{"127.0.0.1", "::1", "10.1.1.1", "192.168.1.1", "172.16.5.5"} {
-		if !isLocal(trusted) {
-			t.Fatalf("%s not treated as local", trusted)
-		}
-	}
-	for _, untrusted := range []string{"8.8.8.8", "172.20.5.5", "172.31.255.255"} {
-		if isLocal(untrusted) {
-			t.Fatalf("%s treated as local (X-Forwarded-For would be trusted)", untrusted)
-		}
-	}
-}
 
 func TestWriteJSON(t *testing.T) {
 	w := httptest.NewRecorder()

@@ -12,14 +12,21 @@
 //	POST /api/auth/session/refresh
 //	POST /api/auth/signout
 //	GET  /api/auth/session                (debug/compat, unused by v17)
-//	GET  /api/auth/signup/email/exists
+//
+// Every route is rate limited per client IP; issuing a code (create,
+// resend) is additionally limited per email address, so neither a
+// single host nor a distributed sender can mail-bomb an inbox.
 //
 // Tokens are HMAC-signed base64-JSON payloads (see session.go); the
 // client parses them with atob() and treats them opaquely, so the
 // unmodified client signs in against this server.
 //
-// Code and refresh tokens are random high-entropy values whose SHA-256
-// hashes are stored; access tokens are stateless.
+// Codes are random high-entropy values whose SHA-256 hashes are stored.
+// Refresh tokens are checked against their sessions row and rotated on
+// every use (sessions.go); access tokens are stateless.
+//
+// State-changing requests that authenticate with session cookies must
+// come from the web app's origin (RequireSameOrigin).
 package auth
 
 import (
@@ -32,9 +39,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,28 +49,122 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"converge/internal/config"
+	"converge/internal/metrics"
+	"converge/internal/netx"
+	"converge/internal/notify"
 )
+
+// Mailer delivers transactional mail (notify.Service in production).
+type Mailer interface {
+	Send(ctx context.Context, msg notify.Message) error
+}
+
+// mailTimeout bounds one background sign-in mail delivery.
+const mailTimeout = 30 * time.Second
+
+// Auth route limits. Per IP: a burst of 30, then one request every two
+// seconds — far above a person signing in or a client refreshing hourly,
+// far below a credential or email sprayer. Per email: 5 codes, then one
+// every 3 minutes.
+const (
+	authIPRate     = 0.5
+	authIPBurst    = 30
+	authEmailRate  = 1.0 / 180
+	authEmailBurst = 5
+)
+
+// authEvents counts the security-relevant session events. A rise in
+// refresh_reuse means refresh tokens are being stolen and replayed.
+var authEvents = metrics.Default.NewCounterVec("converge_auth_events_total",
+	"Sign-in and session events: signin, refresh, refresh_race, refresh_reuse, signout, "+
+		"rate_limited_ip, rate_limited_email, cross_origin_refused.", "event")
 
 // Service owns session and magic-link code lifecycle.
 type Service struct {
-	pool *pgxpool.Pool
-	cfg  config.Config
-	log  *slog.Logger
+	pool    *pgxpool.Pool
+	cfg     config.Config
+	log     *slog.Logger
+	mailer  Mailer
+	ipLimit *netx.Limiter
+	// emailLimit bounds code issuance per address.
+	emailLimit *netx.Limiter
+	revoked    *revocations
+	origins    map[string]bool
 }
 
-func NewService(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger) *Service {
-	return &Service{pool: pool, cfg: cfg, log: log}
+// NewService builds the auth service. A nil mailer disables sign-in
+// mail (tests); production passes the notify service.
+func NewService(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, mailer Mailer) *Service {
+	return &Service{
+		pool:       pool,
+		cfg:        cfg,
+		log:        log,
+		mailer:     mailer,
+		ipLimit:    netx.NewLimiter(authIPRate, authIPBurst),
+		emailLimit: netx.NewLimiter(authEmailRate, authEmailBurst),
+		revoked:    newRevocations(),
+		origins:    trustedOrigins(cfg.WebOrigin, cfg.PublicURL),
+	}
+}
+
+// limitByIP rejects auth requests from a client IP over its budget.
+func (s *Service) limitByIP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ip := netx.ClientIP(r); !s.ipLimit.Allow(ip) {
+			authEvents.With("rate_limited_ip").Inc()
+			s.log.Warn("auth rate limit", "scope", "ip", "ip", ip, "path", r.URL.Path)
+			writeRateLimited(w, int(1/authIPRate))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// allowEmail consumes one code-issuance token for email, writing the 429
+// when the address is over its budget.
+func (s *Service) allowEmail(w http.ResponseWriter, email string) bool {
+	if s.emailLimit.Allow(email) {
+		return true
+	}
+	authEvents.With("rate_limited_email").Inc()
+	s.log.Warn("auth rate limit", "scope", "email", "email", email)
+	writeRateLimited(w, int(1/authEmailRate))
+	return false
+}
+
+func writeRateLimited(w http.ResponseWriter, retryAfterSeconds int) {
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+	writeError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many requests; try again later")
+}
+
+// sendSignInLink mails a sign-in link off the request path: SMTP latency
+// must neither slow the response nor let response timing distinguish
+// addresses. Failures are logged without the link.
+func (s *Service) sendSignInLink(ctx context.Context, email, link string) {
+	if s.mailer == nil {
+		return
+	}
+	msg := notify.SignInMessage(email, link, s.cfg.CodeTTL)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), mailTimeout)
+	go func() {
+		defer cancel()
+		if err := s.mailer.Send(ctx, msg); err != nil {
+			s.log.Error("sign-in mail failed", "email", email, "error", err)
+		}
+	}()
 }
 
 // Mount registers the Supertokens-compatible routes on r.
 func (s *Service) Mount(r chi.Router) {
-	r.Post("/api/auth/signinup/code", s.handleCreateCode)
-	r.Post("/api/auth/signinup/code/resend", s.handleResendCode)
-	r.Post("/api/auth/signinup/code/consume", s.handleConsumeCode)
-	r.Post("/api/auth/session/refresh", s.handleRefresh)
-	r.Post("/api/auth/signout", s.handleSignout)
-	r.Get("/api/auth/session", s.handleSession)
-	r.Get("/api/auth/signup/email/exists", s.handleEmailExists)
+	r.Group(func(r chi.Router) {
+		r.Use(s.limitByIP)
+		r.Post("/api/auth/signinup/code", s.handleCreateCode)
+		r.Post("/api/auth/signinup/code/resend", s.handleResendCode)
+		r.Post("/api/auth/signinup/code/consume", s.handleConsumeCode)
+		r.Post("/api/auth/session/refresh", s.handleRefresh)
+		r.Post("/api/auth/signout", s.handleSignout)
+		r.Get("/api/auth/session", s.handleSession)
+	})
 }
 
 // ---- magic link ----------------------------------------------------------
@@ -132,6 +232,9 @@ func (s *Service) handleCreateCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_EMAIL", "a valid email is required")
 		return
 	}
+	if !s.allowEmail(w, email) {
+		return
+	}
 
 	// M6: agent identities authenticate with API tokens only; a magic
 	// link for an agent email would hand a human the agent's account.
@@ -149,7 +252,8 @@ func (s *Service) handleCreateCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Info("magic link issued", "email", email, "pre_auth_session_id", preAuthSessionID, "link", s.magicLink(preAuthSessionID, code))
+	s.log.Info("magic link issued", "email", email, "pre_auth_session_id", preAuthSessionID)
+	s.sendSignInLink(r.Context(), email, s.magicLink(preAuthSessionID, code))
 	s.writeCreateCodeResponse(w, preAuthSessionID, deviceID, code)
 }
 
@@ -209,7 +313,8 @@ func (s *Service) writeCreateCodeResponse(w http.ResponseWriter, preAuthSessionI
 }
 
 // handleResendCode implements POST /api/auth/signinup/code/resend:
-// a fresh code for the same pre-auth session (same email).
+// a fresh code for the same pre-auth session (same email). A consumed
+// session cannot be re-armed: the flow restarts from create-code.
 func (s *Service) handleResendCode(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DeviceID         string `json:"deviceId"`
@@ -219,8 +324,28 @@ func (s *Service) handleResendCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "malformed request body")
 		return
 	}
-	if strings.TrimSpace(body.PreAuthSessionID) == "" {
+	preAuthSessionID := strings.TrimSpace(body.PreAuthSessionID)
+	if preAuthSessionID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "preAuthSessionId is required")
+		return
+	}
+	expiredSession := func() {
+		writeError(w, http.StatusBadRequest, "EXPIRED_PRE_AUTH_SESSION", "the sign-in session is no longer active; start again")
+	}
+	// The address is charged before the code rotates, so a throttled
+	// resend leaves the previous link working.
+	var email string
+	if err := s.pool.QueryRow(r.Context(),
+		`select email from auth_codes where pre_auth_session_id = $1 and consumed_at is null`,
+		preAuthSessionID).Scan(&email); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			expiredSession()
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not resend code")
+		return
+	}
+	if !s.allowEmail(w, email) {
 		return
 	}
 	code, err := newCode()
@@ -228,34 +353,28 @@ func (s *Service) handleResendCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not resend code")
 		return
 	}
-	var affected int
 	if err := s.pool.QueryRow(r.Context(), `
 		update auth_codes
 		set token_hash = $1, expires_at = now() + $2::interval
-		where pre_auth_session_id = $3 or device_id = $4
-		returning 1`,
-		hashValue(code), intervalSQL(s.cfg.CodeTTL), body.PreAuthSessionID, body.DeviceID).
-		Scan(&affected); err != nil {
+		where pre_auth_session_id = $3 and consumed_at is null
+		returning email`,
+		hashValue(code), intervalSQL(s.cfg.CodeTTL), preAuthSessionID).
+		Scan(&email); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusBadRequest, "EXPIRED_PRE_AUTH_SESSION", "the sign-in session is no longer active; start again")
+			expiredSession()
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not resend code")
 		return
 	}
-	if affected == 0 {
-		writeError(w, http.StatusBadRequest, "EXPIRED_PRE_AUTH_SESSION", "the sign-in session is no longer active; start again")
-		return
+	link := s.magicLink(preAuthSessionID, code)
+	s.log.Info("magic link reissued", "email", email, "pre_auth_session_id", preAuthSessionID)
+	s.sendSignInLink(r.Context(), email, link)
+	resp := map[string]string{"status": "OK"}
+	if s.cfg.DevMode {
+		resp["devMagicLink"] = link
 	}
-	var email string
-	if err := s.pool.QueryRow(r.Context(),
-		"select email from auth_codes where pre_auth_session_id = $1 or device_id = $2 limit 1",
-		body.PreAuthSessionID, body.DeviceID).Scan(&email); err != nil {
-		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "could not resend code")
-		return
-	}
-	s.log.Info("magic link reissued", "email", email, "pre_auth_session_id", body.PreAuthSessionID, "link", s.magicLink(body.PreAuthSessionID, code))
-	writeJSON(w, http.StatusOK, map[string]string{"status": "OK"})
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // intervalSQL renders a Go duration as a Postgres interval literal (text
@@ -300,72 +419,27 @@ func (s *Service) handleConsumeCode(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
-	// 1. A live, unexpired, unconsumed code must match.
-	q := `
-		select email, expires_at from auth_codes
-		where token_hash = $1`
-	args := []any{hashValue(code)}
-	if strings.TrimSpace(body.PreAuthSessionID) != "" {
-		q += ` and pre_auth_session_id = $2`
-		args = append(args, strings.TrimSpace(body.PreAuthSessionID))
-	}
-	q += ` limit 1`
-	var email string
-	var expiresAt time.Time
-	err := s.pool.QueryRow(ctx, q, args...).Scan(&email, &expiresAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "INVALID_LINK_CODE"})
-		return
-	}
+	accountID, email, created, status, err := s.consumeCode(ctx, code, strings.TrimSpace(body.PreAuthSessionID))
 	if err != nil {
+		s.log.Error("consume sign-in code", "error", err)
 		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
 		return
 	}
-	if expiresAt.Before(time.Now()) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "EXPIRED_LINK_CODE"})
+	if status != "OK" {
+		writeJSON(w, http.StatusOK, map[string]string{"status": status})
 		return
 	}
 
-	// 2. Sign-in/up: create the account if it does not exist yet.
-	name := strings.SplitN(email, "@", 2)[0]
-	var accountID string
-	created := false
-	err = s.pool.QueryRow(ctx, `
-		insert into accounts (email, name) values ($1, $2)
-		on conflict (email) do nothing
-		returning id`, email, name).Scan(&accountID)
-	switch {
-	case err == nil:
-		created = true
-	case errors.Is(err, pgx.ErrNoRows):
-		var kind string
-		err = s.pool.QueryRow(ctx,
-			"select id, kind from accounts where email = $1", email).Scan(&accountID, &kind)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
-			return
-		}
-		// M6: an agent account must never take a browser session.
-		if kind == AccountKindAgent {
-			writeJSON(w, http.StatusOK, map[string]string{"status": "AGENT_ACCOUNT"})
-			return
-		}
-	default:
+	material, err := s.startSession(ctx, accountID, netx.ClientIP(r), r.UserAgent())
+	if err != nil {
+		s.log.Error("start session", "account_id", accountID, "error", err)
 		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
 		return
 	}
-
-	// 3. Consume the code and issue the session.
-	if _, err := s.pool.Exec(ctx,
-		`update auth_codes set consumed_at = now() where token_hash = $1`,
-		hashValue(code)); err != nil {
-		s.log.Error("mark code consumed", "error", err)
-	}
-	material := s.issueSession(accountID)
-	s.auditSession(ctx, accountID, material.AccessToken, clientIP(r), r.UserAgent())
 	s.SetSessionMaterial(w, material)
 
-	s.log.Info("user authenticated", "account_id", accountID, "email", email, "new_user", created)
+	authEvents.With("signin").Inc()
+	s.log.Info("user authenticated", "account_id", accountID, "session_id", material.SessionID, "email", email, "new_user", created)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "OK",
 		"session": s.sessionBody(material),
@@ -378,58 +452,158 @@ func (s *Service) handleConsumeCode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleRefresh implements POST /api/auth/session/refresh. The v17 client
-// presents the refresh token as "Authorization: Bearer <token>" (falling
-// back to accepting an access token keeps manual debugging pleasant).
+// consumeCode claims a live code and resolves (or creates) its account in
+// one transaction. The claim is a single conditional UPDATE, so of two
+// concurrent consumers exactly one wins; a consumed or expired code never
+// matches again. On success every other outstanding code for the address
+// is burned too, so an older link that leaked cannot be used later.
+//
+// status is "OK" or the Supertokens status the verify page keys off;
+// err is reserved for infrastructure failures.
+func (s *Service) consumeCode(ctx context.Context, code, preAuthSessionID string) (accountID, email string, created bool, status string, err error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", "", false, "", err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	match := `token_hash = $1`
+	args := []any{hashValue(code)}
+	if preAuthSessionID != "" {
+		match += ` and pre_auth_session_id = $2`
+		args = append(args, preAuthSessionID)
+	}
+
+	err = tx.QueryRow(ctx, `
+		update auth_codes set consumed_at = now()
+		where `+match+` and consumed_at is null and expires_at > now()
+		returning email`, args...).Scan(&email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var expired bool
+		err = tx.QueryRow(ctx, `
+			select consumed_at is null and expires_at <= now()
+			from auth_codes where `+match+` limit 1`, args...).Scan(&expired)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return "", "", false, "INVALID_LINK_CODE", nil
+		case err != nil:
+			return "", "", false, "", err
+		case expired:
+			return "", "", false, "EXPIRED_LINK_CODE", nil
+		default:
+			return "", "", false, "INVALID_LINK_CODE", nil
+		}
+	}
+	if err != nil {
+		return "", "", false, "", err
+	}
+
+	// Sign-in/up: create the account if it does not exist yet.
+	name := strings.SplitN(email, "@", 2)[0]
+	err = tx.QueryRow(ctx, `
+		insert into accounts (email, name) values ($1, $2)
+		on conflict (email) do nothing
+		returning id`, email, name).Scan(&accountID)
+	switch {
+	case err == nil:
+		created = true
+	case errors.Is(err, pgx.ErrNoRows):
+		var kind, acctStatus string
+		if err := tx.QueryRow(ctx,
+			"select id, kind, status from accounts where email = $1", email).Scan(&accountID, &kind, &acctStatus); err != nil {
+			return "", "", false, "", err
+		}
+		// M6: an agent account must never take a browser session.
+		if kind == AccountKindAgent {
+			return "", "", false, "AGENT_ACCOUNT", nil
+		}
+		if acctStatus != "active" {
+			return "", "", false, "SIGN_IN_UP_NOT_ALLOWED", nil
+		}
+	default:
+		return "", "", false, "", err
+	}
+
+	if _, err := tx.Exec(ctx,
+		`update auth_codes set consumed_at = now() where email = $1 and consumed_at is null`, email); err != nil {
+		return "", "", false, "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", "", false, "", err
+	}
+	return accountID, email, created, "OK", nil
+}
+
+// handleRefresh implements POST /api/auth/session/refresh. The refresh
+// token comes from "Authorization: Bearer <token>" or the refresh cookie;
+// only the cookie path needs the anti-csrf value, since a header is not
+// ambient authority. Access tokens are not accepted here.
 func (s *Service) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	accountID := ""
-	token := bearerToken(r)
+	unauthorized := func() {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "UNAUTHORIZED"})
+	}
+	token, fromCookie := bearerToken(r), false
 	if token == "" {
 		if c, err := r.Cookie(CookieRefreshToken); err == nil {
 			if inner, err := innerFromEnvelope(c.Value); err == nil {
-				token = inner
+				token, fromCookie = inner, true
 			}
 		}
 	}
-	if token != "" {
-		if id, ok := s.ValidateRefresh(token); ok {
-			accountID = id
-		} else if id, ok := s.ValidateAccess(token); ok {
-			accountID = id
-		}
-	}
-	if accountID == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "UNAUTHORIZED"})
+	claims, ok := s.parseToken("refresh", token)
+	if !ok {
+		unauthorized()
 		return
 	}
-	if csrf := r.Header.Get(HeaderAntiCsrf); csrf != "" && !s.ValidateAntiCsrf(accountID, csrf) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "UNAUTHORIZED"})
+	if fromCookie && !s.ValidateAntiCsrf(claims.Account, claims.Session, r.Header.Get(HeaderAntiCsrf)) {
+		unauthorized()
 		return
 	}
-	// The account must still be active (suspended accounts lose sessions).
-	var email string
-	if err := s.pool.QueryRow(r.Context(),
-		"select email from accounts where id = $1 and status = 'active'",
-		accountID).Scan(&email); err != nil {
+
+	material, rotated, err := s.refreshSession(r.Context(), claims, token, netx.ClientIP(r), r.UserAgent())
+	switch {
+	case errors.Is(err, errSessionReused):
+		authEvents.With("refresh_reuse").Inc()
+		s.log.Warn("refresh token reused; session revoked",
+			"account_id", claims.Account, "session_id", claims.Session, "ip", netx.ClientIP(r))
 		s.ClearSessionMaterial(w)
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "UNAUTHORIZED"})
+		unauthorized()
+		return
+	case errors.Is(err, errSessionInvalid):
+		s.ClearSessionMaterial(w)
+		unauthorized()
+		return
+	case err != nil:
+		s.log.Error("refresh session", "session_id", claims.Session, "error", err)
+		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
 		return
 	}
-	material := s.issueSession(accountID)
-	s.auditSession(r.Context(), accountID, material.AccessToken, clientIP(r), r.UserAgent())
-	s.SetSessionMaterial(w, material)
+	if rotated {
+		authEvents.With("refresh").Inc()
+		s.SetSessionMaterial(w, material)
+	} else {
+		authEvents.With("refresh_race").Inc()
+		s.setAccessMaterial(w, material)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "OK",
 		"session": s.sessionBody(material),
 	})
 }
 
-// handleSignout expires all session cookies. Tokens are HMAC-signed and
-// stateless, so revocation is client-side; the account status check in
-// the API middleware still blocks suspended accounts on the next request.
+// handleSignout revokes the request's session server-side and expires
+// every session cookie. The refresh token is dead at once everywhere; its
+// access tokens at once on this instance and within the access TTL after
+// a restart.
 func (s *Service) handleSignout(w http.ResponseWriter, r *http.Request) {
-	if id := s.accountFromRequest(r); id != "" {
-		s.log.Info("user signed out", "account_id", id)
+	if c, ok := s.sessionFromRequest(r); ok {
+		if err := s.revokeSession(r.Context(), c, "signout"); err != nil {
+			s.log.Error("revoke session", "session_id", c.Session, "error", err)
+			writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
+			return
+		}
+		authEvents.With("signout").Inc()
+		s.log.Info("user signed out", "account_id", c.Account, "session_id", c.Session)
 	}
 	s.ClearSessionMaterial(w)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "OK"})
@@ -463,34 +637,6 @@ func (s *Service) handleSession(w http.ResponseWriter, r *http.Request) {
 			LoginMethods: []loginMethod{{EmailID: email, LinkScore: 100}},
 		},
 	})
-}
-
-// handleEmailExists implements GET /api/auth/signup/email/exists
-// (Supertokens EMAIL_EXISTS pre-check used by some auth UIs).
-func (s *Service) handleEmailExists(w http.ResponseWriter, r *http.Request) {
-	email := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("email")))
-	if email == "" {
-		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "email is required")
-		return
-	}
-	var exists bool
-	if err := s.pool.QueryRow(r.Context(),
-		"select exists(select 1 from accounts where email = $1)", email).Scan(&exists); err != nil {
-		writeError(w, http.StatusInternalServerError, "GENERAL_ERROR", "database error")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "OK", "exists": exists})
-}
-
-// auditSession records a session lifecycle event for operator visibility.
-// Failures are logged, never fatal to the auth response.
-func (s *Service) auditSession(ctx context.Context, accountID, accessToken, ip, userAgent string) {
-	if _, err := s.pool.Exec(ctx, `
-		insert into sessions (account_id, token_hash, expires_at, user_agent, ip)
-		values ($1, $2, now() + $3::interval, $4, $5)`,
-		accountID, hashValue(accessToken), intervalSQL(s.cfg.SessionTTL), userAgent, ip); err != nil {
-		s.log.Warn("session audit insert failed", "error", err)
-	}
 }
 
 // sessionBody renders the session object for responses.
@@ -558,25 +704,3 @@ func writeError(w http.ResponseWriter, code int, codeStr, message string) {
 		"message": message,
 	})
 }
-
-// clientIP resolves the client address, trusting X-Forwarded-For only for
-// local proxy connections.
-func clientIP(r *http.Request) string {
-	connIP := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		connIP = host
-	}
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" && isLocal(connIP) {
-		if first := strings.TrimSpace(strings.Split(fwd, ",")[0]); first != "" {
-			return first
-		}
-	}
-	return connIP
-}
-
-func isLocal(ip string) bool {
-	return ip == "127.0.0.1" || ip == "::1" ||
-		strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "172.16.")
-}
-
-var _ = url.QueryEscape

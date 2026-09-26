@@ -13,11 +13,16 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+
+	"converge/internal/broadcast"
 )
 
 // collectOutbox serves the delta endpoint: outbox records for the
-// workspace newer than afterSeq, restricted to the requested models.
-func (a *API) collectOutbox(ctx context.Context, workspaceID string, afterSeq int64, modelNames string) ([]syncActionRecord, error) {
+// workspace newer than afterSeq, restricted to the requested models and
+// to what accountID may see (another member's inbox rows are withheld).
+// scanned is the highest sequence read, delivered or not: the delta is
+// complete up to it.
+func (a *API) collectOutbox(ctx context.Context, workspaceID, accountID string, afterSeq int64, modelNames string) (out []syncActionRecord, scanned int64, err error) {
 	// An empty model list means "no filter" (every record); a non-empty
 	// list restricts delivery to the requested models.
 	allowed := make(map[string]bool)
@@ -27,42 +32,49 @@ func (a *API) collectOutbox(ctx context.Context, workspaceID string, afterSeq in
 		}
 	}
 	rows, err := a.pool.Query(ctx, `
-		select sequence_id, model_name, model_id, action, data
-		from sync_outbox
-		where workspace_id = $1 and sequence_id > $2
-		order by sequence_id`, workspaceID, afterSeq)
+		select sequence_id, model_name, model_id, action,
+		       case when hidden then null else data end,
+		       hidden
+		from (
+			select *, (model_name = $3 and data->>'recipientId' is distinct from $4) as hidden
+			from sync_outbox
+			where workspace_id = $1 and sequence_id > $2
+		) o
+		order by sequence_id`, workspaceID, afterSeq, notifModel, accountID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	// Non-nil: a Go nil slice marshals as JSON null, and the client
 	// contract (SyncActionRecord[]) is an array — null crashes its
 	// iteration in saveSocketData.
-	out := []syncActionRecord{}
+	out = []syncActionRecord{}
 	for rows.Next() {
 		var (
 			seqNum        int64
-			modelID       string
+			modelID       *string
 			model, action string
 			data          json.RawMessage
+			hidden        bool
 		)
-		if err := rows.Scan(&seqNum, &model, &modelID, &action, &data); err != nil {
-			return nil, err
+		if err := rows.Scan(&seqNum, &model, &modelID, &action, &data, &hidden); err != nil {
+			return nil, 0, err
 		}
-		if len(allowed) > 0 && !allowed[model] {
+		scanned = max(scanned, seqNum)
+		if hidden || (len(allowed) > 0 && !allowed[model]) {
 			continue
 		}
 		out = append(out, syncActionRecord{
 			Data:        data,
 			ModelName:   model,
-			ModelID:     strval(&modelID),
+			ModelID:     strval(modelID),
 			Action:      wireAction(action),
 			WorkspaceID: workspaceID,
 			SequenceID:  strconv.FormatInt(seqNum, 10),
 		})
 	}
-	return out, rows.Err()
+	return out, scanned, rows.Err()
 }
 
 // auditTx appends a workspace audit row inside the caller's transaction
@@ -112,6 +124,9 @@ func (a *API) emitChange(ctx context.Context, tx pgx.Tx, workspaceID, model, mod
 		WorkspaceID: workspaceID,
 		SequenceID:  strconv.FormatInt(seq, 10),
 	}
+	if model == notifModel {
+		rec.recipient, _ = data["recipientId"].(string)
+	}
 	// model_id is a *string so an empty id binds as SQL NULL: pgx sends
 	// Go strings as unknown type, and a bare parameter infers the target
 	// uuid type, while nullif() would pin it to text (no implicit
@@ -133,7 +148,7 @@ func (a *API) broadcastRecord(rec syncActionRecord) {
 	if err != nil {
 		return
 	}
-	n := a.bcast.Publish(rec.WorkspaceID, raw)
+	n := a.bcast.Publish(rec.WorkspaceID, broadcast.Event{Data: raw, Seq: rec.SequenceID, To: rec.recipient})
 	a.log.Debug("realtime publish", "workspace", rec.WorkspaceID,
 		"model", rec.ModelName, "action", rec.Action, "delivered", n)
 }

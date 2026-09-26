@@ -1,12 +1,12 @@
-// Package notify delivers transactional mail. v1 has one message type
-// (workspace invitations) and two drivers:
+// Package notify delivers transactional mail: sign-in links and
+// workspace invitations. Two drivers:
 //
 //   - "smtp": real delivery over the SMTP protocol, stdlib only
 //     (net/smtp + crypto/tls). Selected when Config.Host is set.
-//   - "log":  the default when no SMTP host is configured — the full
-//     message (recipient, subject, body) is written to the service log
-//     so a deployment without an email provider stays invite-able and
-//     debuggable (the invite link is in the log line).
+//   - "log":  the default when no SMTP host is configured. Recipient and
+//     subject are logged; the body — which carries a sign-in link, a
+//     bearer credential — is logged only when Config.LogBodies is set
+//     (dev mode, or an operator's explicit opt-in).
 //
 // Messages are plain text. A richer driver (HTML, templating) is a third
 // implementation of the same Send seam when the product grows one.
@@ -50,6 +50,10 @@ type Config struct {
 	// TLS selects the transport: "starttls" (default), "off", or
 	// "implicit" (TLS from the first byte, the port-465 style).
 	TLS string
+	// LogBodies makes the log driver write message bodies (and so the
+	// links inside them) to the log. Anyone who can read the log can
+	// then sign in as the recipient.
+	LogBodies bool
 }
 
 // Service sends messages with the driver named by its configuration.
@@ -82,10 +86,28 @@ func (s *Service) Enabled() bool { return s.cfg.Host != "" }
 // best-effort: the row is committed before mail is attempted).
 func (s *Service) Send(ctx context.Context, msg Message) error {
 	if !s.Enabled() {
-		s.log.Info("email (log driver)", "to", msg.To, "subject", msg.Subject, "body", msg.Body)
+		if s.cfg.LogBodies {
+			s.log.Info("email (log driver)", "to", msg.To, "subject", msg.Subject, "body", msg.Body)
+		} else {
+			s.log.Warn("email not delivered (log driver, bodies withheld; configure CONVERGE_SMTP_HOST)", "to", msg.To, "subject", msg.Subject)
+		}
 		return nil
 	}
 	return s.sendSMTP(ctx, msg)
+}
+
+// SignInMessage renders the magic-link sign-in email.
+func SignInMessage(to, link string, codeTTL time.Duration) Message {
+	return Message{
+		To:      to,
+		Subject: "Your Converge sign-in link",
+		Body: fmt.Sprintf(
+			"Open this link to sign in to Converge:\n\n"+
+				"  %s\n\n"+
+				"The link works once and expires in about %s. "+
+				"If you didn't ask to sign in, ignore this email.",
+			link, humanTTL(codeTTL)),
+	}
 }
 
 // InviteMessage renders the workspace invitation email. The app name is

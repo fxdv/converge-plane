@@ -58,6 +58,9 @@ type issue struct {
 	Assignee  string  `json:"assigneeId"`
 	UpdatedAt string  `json:"updatedAt"`
 	SortOrder float64 `json:"sortOrder"`
+	// Version is sent back as If-Match: the write lands only if the
+	// issue is still the one this cycle read.
+	Version int `json:"version"`
 }
 
 type workflowState struct {
@@ -197,16 +200,26 @@ func (c *client) workCycle(workspaceID string) error {
 		return nil
 	}
 
-	text := fmt.Sprintf("advancing to %s", strings.ToLower(next.Name))
+	// The move goes first: when a human changed the issue since the
+	// bootstrap, the server refuses it (412) and the next cycle re-reads,
+	// with no comment claiming a move that did not happen.
+	if err := c.advance(target, next.ID); err != nil {
+		return fmt.Errorf("state change on %s: %w", target.Title, err)
+	}
+	text := fmt.Sprintf("advanced to %s", strings.ToLower(next.Name))
 	if err := c.comment(target.ID, fmt.Sprintf("%s: %s", c.name, text)); err != nil {
 		return fmt.Errorf("comment on %s: %w", target.Title, err)
 	}
-	payload, _ := json.Marshal(map[string]any{"stateId": next.ID})
-	if _, err := c.post("/api/v1/issues/"+target.ID, payload); err != nil {
-		return fmt.Errorf("state change on %s: %w", target.Title, err)
-	}
 	log.Printf("%s: %s #%d -> %s", c.name, target.Title, target.Number, next.Name)
 	return nil
+}
+
+// advance moves the issue to stateID, conditioned on the version read.
+func (c *client) advance(target issue, stateID string) error {
+	payload, _ := json.Marshal(map[string]any{"stateId": stateID})
+	_, err := c.send(http.MethodPost, "/api/v1/issues/"+target.ID, payload,
+		http.Header{"If-Match": {`"` + strconv.Itoa(target.Version) + `"`}})
+	return err
 }
 
 // nextState returns the state after the current one in the team's ordered
@@ -263,9 +276,16 @@ func (c *client) get(path string) (map[string]any, error) {
 }
 
 func (c *client) post(path string, payload []byte) (map[string]any, error) {
-	req, err := http.NewRequestWithContext(c.ctx, http.MethodPost, c.base+path, bytes.NewReader(payload))
+	return c.send(http.MethodPost, path, payload, nil)
+}
+
+func (c *client) send(method, path string, payload []byte, header http.Header) (map[string]any, error) {
+	req, err := http.NewRequestWithContext(c.ctx, method, c.base+path, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
+	}
+	for k, v := range header {
+		req.Header[k] = v
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
@@ -275,7 +295,7 @@ func (c *client) post(path string, payload []byte) (map[string]any, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s %s: HTTP %d", http.MethodPost, path, resp.StatusCode)
+		return nil, fmt.Errorf("%s %s: HTTP %d", method, path, resp.StatusCode)
 	}
 	var out map[string]any
 	return out, json.NewDecoder(resp.Body).Decode(&out)

@@ -33,9 +33,9 @@ func testService() *Service {
 // to construct expired or tampered material deterministically.
 func mint(kind, account string, ate int64, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(kind + "|" + account + "|" + strconv.FormatInt(ate, 10)))
+	mac.Write([]byte(kind + "|" + account + "|sid-1||" + strconv.FormatInt(ate, 10)))
 	hs := hex.EncodeToString(mac.Sum(nil))
-	payload, _ := json.Marshal(tokenPayload{R: 1, Ate: ate, Up: account, Hs: hs})
+	payload, _ := json.Marshal(tokenPayload{R: 1, Ate: ate, Up: account, Sid: "sid-1", Hs: hs})
 	return base64.StdEncoding.EncodeToString(payload)
 }
 
@@ -54,33 +54,39 @@ func decodePayload(t *testing.T, token string) tokenPayload {
 
 func TestSignPayloadDeterministic(t *testing.T) {
 	s := testService()
-	a := s.signPayload("access", "acct-1", 123)
-	b := s.signPayload("access", "acct-1", 123)
+	a := s.signPayload("access", "acct-1", "sid-1", "", 123)
+	b := s.signPayload("access", "acct-1", "sid-1", "", 123)
 	if a != b {
 		t.Fatalf("signPayload is not deterministic: %q vs %q", a, b)
 	}
-	if s.signPayload("refresh", "acct-1", 123) == a {
+	if s.signPayload("refresh", "acct-1", "sid-1", "", 123) == a {
 		t.Fatal("kind is not part of the signed payload")
 	}
-	if s.signPayload("access", "acct-2", 123) == a {
+	if s.signPayload("access", "acct-2", "sid-1", "", 123) == a {
 		t.Fatal("account is not part of the signed payload")
 	}
-	if s.signPayload("access", "acct-1", 124) == a {
+	if s.signPayload("access", "acct-1", "sid-2", "", 123) == a {
+		t.Fatal("session is not part of the signed payload")
+	}
+	if s.signPayload("access", "acct-1", "sid-1", "n", 123) == a {
+		t.Fatal("nonce is not part of the signed payload")
+	}
+	if s.signPayload("access", "acct-1", "sid-1", "", 124) == a {
 		t.Fatal("ate is not part of the signed payload")
 	}
 	other := &Service{cfg: config.Config{SessionSecret: "other-secret"}}
-	if other.signPayload("access", "acct-1", 123) == a {
+	if other.signPayload("access", "acct-1", "sid-1", "", 123) == a {
 		t.Fatal("signature does not depend on the session secret")
 	}
 }
 
 func TestIssueSession(t *testing.T) {
 	s := testService()
-	m := s.issueSession("acct-1")
+	m := s.issueSession("acct-1", "sid-1")
 	now := time.Now().UnixMilli()
 
 	access := decodePayload(t, m.AccessToken)
-	if access.R != 1 || access.Up != "acct-1" {
+	if access.R != 1 || access.Up != "acct-1" || access.Sid != "sid-1" {
 		t.Fatalf("access payload = %+v", access)
 	}
 	if access.Ate < now || access.Ate > now+time.Hour.Milliseconds() {
@@ -91,11 +97,16 @@ func TestIssueSession(t *testing.T) {
 	}
 
 	refresh := decodePayload(t, m.RefreshToken)
-	if refresh.R != 1 || refresh.Up != "acct-1" {
+	if refresh.R != 1 || refresh.Up != "acct-1" || refresh.Sid != "sid-1" || refresh.Jti == "" {
 		t.Fatalf("refresh payload = %+v", refresh)
 	}
 	if id, ok := s.ValidateRefresh(m.RefreshToken); !ok || id != "acct-1" {
 		t.Fatalf("issued refresh token does not validate: id=%q ok=%v", id, ok)
+	}
+	// The sessions row stores the refresh token's hash, so two rotations
+	// in the same millisecond must still differ.
+	if again := s.issueSession("acct-1", "sid-1"); again.RefreshToken == m.RefreshToken {
+		t.Fatal("two issued refresh tokens are identical")
 	}
 	// The two kinds must not be interchangeable: the HMAC binds the kind.
 	if id, ok := s.ValidateAccess(m.RefreshToken); ok {
@@ -113,14 +124,17 @@ func TestIssueSession(t *testing.T) {
 		t.Fatal("front token carries an hs field; the client ignores it, keep it absent")
 	}
 
-	if want := s.signPayload("csrf", "acct-1", 0)[:32]; m.AntiCsrf != want {
+	if want := s.signPayload("csrf", "acct-1", "sid-1", "", 0)[:32]; m.AntiCsrf != want {
 		t.Fatalf("anti-csrf = %q, want first 32 of %q", m.AntiCsrf, want)
 	}
-	if !s.ValidateAntiCsrf("acct-1", m.AntiCsrf) {
-		t.Fatal("issued anti-csrf value fails validation for its own account")
+	if !s.ValidateAntiCsrf("acct-1", "sid-1", m.AntiCsrf) {
+		t.Fatal("issued anti-csrf value fails validation for its own session")
 	}
-	if s.ValidateAntiCsrf("acct-2", m.AntiCsrf) {
+	if s.ValidateAntiCsrf("acct-2", "sid-1", m.AntiCsrf) {
 		t.Fatal("anti-csrf value validates for a foreign account")
+	}
+	if s.ValidateAntiCsrf("acct-1", "sid-2", m.AntiCsrf) {
+		t.Fatal("anti-csrf value validates for another session of the account")
 	}
 }
 
@@ -144,6 +158,13 @@ func TestValidateAccessRejections(t *testing.T) {
 			p, _ := json.Marshal(tokenPayload{R: 1, Up: "acct-1", Hs: "x"})
 			return base64.StdEncoding.EncodeToString(p)
 		}()},
+		{"pre-session token without sid", func() string {
+			ate := now + 1000
+			mac := hmac.New(sha256.New, []byte("test-secret"))
+			mac.Write([]byte("access|acct-1|" + strconv.FormatInt(ate, 10)))
+			p, _ := json.Marshal(tokenPayload{R: 1, Ate: ate, Up: "acct-1", Hs: hex.EncodeToString(mac.Sum(nil))})
+			return base64.StdEncoding.EncodeToString(p)
+		}()},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -156,7 +177,7 @@ func TestValidateAccessRejections(t *testing.T) {
 
 func TestValidateAccessWhitespaceTolerant(t *testing.T) {
 	s := testService()
-	m := s.issueSession("acct-1")
+	m := s.issueSession("acct-1", "sid-1")
 	if id, ok := s.ValidateAccess("  " + m.AccessToken + " \n"); !ok || id != "acct-1" {
 		t.Fatalf("surrounding whitespace broke validation: id=%q ok=%v", id, ok)
 	}
@@ -207,7 +228,7 @@ func TestBearerToken(t *testing.T) {
 
 func TestAccountFromRequest(t *testing.T) {
 	s := testService()
-	m := s.issueSession("acct-1")
+	m := s.issueSession("acct-1", "sid-1")
 
 	t.Run("bearer session token", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -246,7 +267,7 @@ func TestAccountFromRequest(t *testing.T) {
 
 func TestSetSessionMaterial(t *testing.T) {
 	s := testService()
-	m := s.issueSession("acct-1")
+	m := s.issueSession("acct-1", "sid-1")
 	w := httptest.NewRecorder()
 	s.SetSessionMaterial(w, m)
 
@@ -288,8 +309,16 @@ func TestSetSessionMaterial(t *testing.T) {
 	if got := w.Result().Header.Get(HeaderUserID); got != "acct-1" {
 		t.Fatalf("s-user-id header = %q", got)
 	}
-	if w.Result().Header.Get(HeaderAccessToken) != cookies[CookieAccessToken].Value {
-		t.Fatal("st-access-token header does not mirror the cookie")
+	// The HttpOnly tokens must not leak into script-readable headers.
+	for _, h := range []string{"st-access-token", "st-refresh-token"} {
+		if v := w.Result().Header.Get(h); v != "" {
+			t.Fatalf("response header %s = %q; raw tokens must stay in HttpOnly cookies", h, v)
+		}
+	}
+	// The anti-csrf value must outlive the access token: the refresh that
+	// follows an expired access token presents it.
+	if got, want := cookies[CookieAntiCsrf].MaxAge, cookies[CookieRefreshToken].MaxAge; got != want {
+		t.Fatalf("anti-csrf maxAge = %d, want the refresh lifetime %d", got, want)
 	}
 	// Secure is driven by config.
 	if cookies[CookieAccessToken].Secure {
@@ -300,7 +329,7 @@ func TestSetSessionMaterial(t *testing.T) {
 func TestSetSessionMaterialSecureCookies(t *testing.T) {
 	s := testService()
 	s.cfg.SecureCookies = true
-	m := s.issueSession("acct-1")
+	m := s.issueSession("acct-1", "sid-1")
 	w := httptest.NewRecorder()
 	s.SetSessionMaterial(w, m)
 	for _, c := range w.Result().Cookies() {
@@ -327,17 +356,20 @@ func TestClearSessionMaterial(t *testing.T) {
 	}
 }
 
-func TestValidateAntiCsrfBoundToAccount(t *testing.T) {
+func TestValidateAntiCsrfBoundToSession(t *testing.T) {
 	s := testService()
-	value := s.signPayload("csrf", "acct-1", 0)[:32]
-	if !s.ValidateAntiCsrf("acct-1", value) {
-		t.Fatal("own-account validation failed")
+	value := s.antiCsrfFor("acct-1", "sid-1")
+	if !s.ValidateAntiCsrf("acct-1", "sid-1", value) {
+		t.Fatal("own-session validation failed")
 	}
-	if s.ValidateAntiCsrf("acct-2", value) {
+	if s.ValidateAntiCsrf("acct-2", "sid-1", value) {
 		t.Fatal("foreign-account validation passed")
 	}
-	// Truncation boundary: 31 chars must fail even for the right account.
-	if s.ValidateAntiCsrf("acct-1", value[:31]) {
+	if s.ValidateAntiCsrf("acct-1", "", "") {
+		t.Fatal("missing anti-csrf value accepted")
+	}
+	// Truncation boundary: 31 chars must fail even for the right session.
+	if s.ValidateAntiCsrf("acct-1", "sid-1", value[:31]) {
 		t.Fatal("truncated anti-csrf value accepted")
 	}
 	// Tampered last byte must fail (hmac.Equal is constant-time, but the
@@ -348,15 +380,67 @@ func TestValidateAntiCsrfBoundToAccount(t *testing.T) {
 	} else {
 		tampered = tampered[:len(tampered)-1] + "a"
 	}
-	if s.ValidateAntiCsrf("acct-1", tampered) {
+	if s.ValidateAntiCsrf("acct-1", "sid-1", tampered) {
 		t.Fatal("tampered anti-csrf value accepted")
 	}
+}
+
+func TestRevokedSessionRejectsAccessTokens(t *testing.T) {
+	s := testService()
+	s.revoked = newRevocations()
+	gone := s.issueSession("acct-1", "sid-gone")
+	kept := s.issueSession("acct-1", "sid-kept")
+
+	s.revoked.add("sid-gone", time.Now().Add(time.Hour))
+	if _, ok := s.ValidateAccess(gone.AccessToken); ok {
+		t.Fatal("access token of a revoked session accepted")
+	}
+	if _, ok := s.ValidateAccess(kept.AccessToken); !ok {
+		t.Fatal("revoking one session rejected another")
+	}
+
+	// An entry past its horizon no longer matters and is swept on add.
+	s.revoked.add("sid-old", time.Now().Add(-time.Second))
+	s.revoked.add("sid-new", time.Now().Add(time.Hour))
+	if s.revoked.has("sid-old") {
+		t.Fatal("expired revocation still applies")
+	}
+	if _, ok := s.revoked.until["sid-old"]; ok {
+		t.Fatal("expired revocation not swept")
+	}
+}
+
+func TestSessionFromRequest(t *testing.T) {
+	s := testService()
+	m := s.issueSession("acct-1", "sid-1")
+
+	t.Run("access cookie", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/", nil)
+		r.AddCookie(&http.Cookie{Name: CookieAccessToken, Value: encodeEnvelope(m.AccessToken, "acct-1")})
+		if c, ok := s.sessionFromRequest(r); !ok || c.Session != "sid-1" {
+			t.Fatalf("claims = %+v, %v", c, ok)
+		}
+	})
+	t.Run("refresh cookie once the access token is gone", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/", nil)
+		r.AddCookie(&http.Cookie{Name: CookieRefreshToken, Value: encodeEnvelope(m.RefreshToken, "acct-1")})
+		if c, ok := s.sessionFromRequest(r); !ok || c.Session != "sid-1" || c.Account != "acct-1" {
+			t.Fatalf("claims = %+v, %v", c, ok)
+		}
+	})
+	t.Run("refresh token in the access cookie is refused", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/", nil)
+		r.AddCookie(&http.Cookie{Name: CookieAccessToken, Value: encodeEnvelope(m.RefreshToken, "acct-1")})
+		if _, ok := s.sessionFromRequest(r); ok {
+			t.Fatal("kind confusion across cookies")
+		}
+	})
 }
 
 // lastAccessValue pins the last-access marker format the client echoes back.
 func TestSetSessionMaterialLastAccess(t *testing.T) {
 	s := testService()
-	m := s.issueSession("acct-1")
+	m := s.issueSession("acct-1", "sid-1")
 	w := httptest.NewRecorder()
 	s.SetSessionMaterial(w, m)
 	for _, c := range w.Result().Cookies() {

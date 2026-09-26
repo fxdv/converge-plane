@@ -13,10 +13,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"converge/internal/config"
+	"converge/internal/migrate"
 )
 
-// testServiceWithDB builds a Service against a real database. Tests that
-// use it are gated on CONVERGE_TEST_DATABASE_URL (see apitoken_test.go).
+// testServiceWithDB builds a Service against a real database, applying any
+// pending migrations first. Tests that use it are gated on
+// CONVERGE_TEST_DATABASE_URL (see apitoken_test.go).
 func testServiceWithDB(t *testing.T, dbURL string) (*Service, *pgxpool.Pool, func(), error) {
 	t.Helper()
 	pool, err := pgxpool.New(context.Background(), dbURL)
@@ -28,11 +30,16 @@ func testServiceWithDB(t *testing.T, dbURL string) (*Service, *pgxpool.Pool, fun
 		pool.Close()
 		return nil, nil, nil, fmt.Errorf("ping: %w", err)
 	}
+	if err := migrate.Run(ctx, pool); err != nil {
+		pool.Close()
+		return nil, nil, nil, fmt.Errorf("migrate: %w", err)
+	}
 	s := NewService(pool, config.Config{
 		SessionSecret:   "test-secret",
 		AccessTokenTTL:  time.Hour,
 		RefreshTokenTTL: 720 * time.Hour,
-	}, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		CodeTTL:         15 * time.Minute,
+	}, slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 	return s, pool, func() { pool.Close() }, nil
 }
 

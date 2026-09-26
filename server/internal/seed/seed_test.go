@@ -49,6 +49,9 @@ func TestRunSkipsWhenPresent(t *testing.T) {
 		return n
 	}
 	before := count()
+	if before == 0 {
+		t.Skip("demo workspace not seeded in this database; TestRunSeedsFreshDatabase covers the skip path")
+	}
 	email, err := Run(ctx, pool, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	if err != nil {
 		t.Fatalf("Run on a seeded database: %v", err)
@@ -123,8 +126,15 @@ func TestRunSeedsFreshDatabase(t *testing.T) {
 	beforeTeams, beforeIssues := teams(), issues()
 
 	// The second run must be a no-op: idempotency is the compose contract.
-	if _, err := Run(ctx, pool, slog.New(slog.NewTextHandler(os.Stderr, nil))); err != nil {
+	email, err = Run(ctx, pool, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if err != nil {
 		t.Fatalf("second Run: %v", err)
+	}
+	if email != demoEmail {
+		t.Fatalf("second Run email = %q, want %q", email, demoEmail)
+	}
+	if n := q(`select count(*) from workspaces where slug = $1`, demoSlug); n != 1 {
+		t.Fatalf("demo workspaces = %d after re-run, want 1", n)
 	}
 	if n := teams(); n != beforeTeams {
 		t.Fatalf("teams changed %d -> %d on re-run", beforeTeams, n)

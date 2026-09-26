@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // TestRelationTypeAllowed pins the client enum boundary: the six
@@ -312,6 +314,35 @@ func TestApplyRelationDeleteTx(t *testing.T) {
 		if rels, _ := issue["relations"].([]any); len(rels) != 0 {
 			t.Errorf("%s must refresh with an empty relations array: %v", endpoint, issue["relations"])
 		}
+	}
+}
+
+// TestDeleteIssueRelationPermission pins who may remove an edge: its
+// creator or a workspace owner/admin. workspaceRole uppercases the
+// stored role, so the check must be case-insensitive.
+func TestDeleteIssueRelationPermission(t *testing.T) {
+	const relID = "22222222-2222-2222-2222-222222222222"
+	now := time.Now()
+	relVals := []any{relID, "ws1", "team1", "iss1", "iss2", relBlocks, "creator", now, now}
+	del := func(role string) (*fakePool, int) {
+		pool := &fakePool{t: t, rules: []fakeRule{
+			{frag: "from issue_relations where id = $1", rowVals: relVals},
+			{frag: "select role from workspace_members", rowVals: []any{role}},
+		}}
+		pool.txs = []*fakeTx{{t: t, rules: []fakeRule{
+			{frag: "update issue_relations", rowErr: pgx.ErrNoRows},
+		}}}
+		a := apiForTests(t, pool)
+		rec := record(t, a, requestFor(t, humanPrincipal("someone"), "DELETE", "http://x/api/v1/issue_relation/"+relID, "", "id", relID), a.handleDeleteIssueRelation)
+		return pool, rec.Code
+	}
+	for _, role := range []string{"owner", "admin"} {
+		if pool, code := del(role); code != 200 || pool.begins != 1 {
+			t.Errorf("%s non-creator delete = %d (begins %d), want 200 through the delete tx", role, code, pool.begins)
+		}
+	}
+	if pool, code := del("member"); code != 404 || pool.begins != 0 {
+		t.Errorf("member non-creator delete = %d (begins %d), want 404 before any write", code, pool.begins)
 	}
 }
 

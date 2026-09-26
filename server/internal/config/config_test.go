@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -20,6 +21,7 @@ var allKeys = []string{
 	"CONVERGE_LLM_MODEL", "CONVERGE_LLM_TIMEOUT", "CONVERGE_LLM_MAX_TOKENS",
 	"CONVERGE_SMTP_HOST", "CONVERGE_SMTP_PORT", "CONVERGE_SMTP_USER",
 	"CONVERGE_SMTP_PASS", "CONVERGE_SMTP_FROM", "CONVERGE_SMTP_TLS",
+	"CONVERGE_MAIL_LOG_BODIES", "CONVERGE_TRUSTED_PROXIES", "CONVERGE_METRICS_ADDR",
 }
 
 // loadWith blanks every recognized variable, applies vars, and loads.
@@ -77,7 +79,7 @@ func TestLoadDefaults(t *testing.T) {
 		{cfg.WebOrigin, "http://localhost:3000", "WebOrigin"},
 		{cfg.LogLevel, "info", "LogLevel"},
 		{cfg.SessionCookieName, "sAccessToken", "SessionCookieName"},
-		{cfg.SessionSecret, devSessionSecret, "SessionSecret dev fallback"},
+		{cfg.SessionSecret, "", "SessionSecret (no fallback outside dev mode)"},
 		{cfg.AccessTokenTTL, time.Hour, "AccessTokenTTL"},
 		{cfg.RefreshTokenTTL, 30 * 24 * time.Hour, "RefreshTokenTTL"},
 		{cfg.CodeTTL, 15 * time.Minute, "CodeTTL"},
@@ -267,12 +269,96 @@ func TestLoadBooleanAndLogLevel(t *testing.T) {
 	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_LOG_LEVEL": "trace"}, "invalid CONVERGE_LOG_LEVEL")
 }
 
-func TestOrDevSecret(t *testing.T) {
-	if got := orDevSecret(""); got != devSessionSecret {
-		t.Fatalf("orDevSecret(\"\") = %q", got)
+func TestDevModeSubstitutesDevSecret(t *testing.T) {
+	cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_DEV_MODE": "true"})
+	if cfg.SessionSecret != devSessionSecret {
+		t.Fatalf("dev mode secret = %q, want the dev value", cfg.SessionSecret)
 	}
-	if got := orDevSecret("real"); got != "real" {
-		t.Fatalf("orDevSecret(real) = %q", got)
+	cfg = loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_DEV_MODE": "true", "CONVERGE_SESSION_SECRET": "mine"})
+	if cfg.SessionSecret != "mine" {
+		t.Fatalf("explicit secret overridden in dev mode: %q", cfg.SessionSecret)
+	}
+}
+
+func TestMailLogBodies(t *testing.T) {
+	if cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x"}); cfg.MailLogBodies {
+		t.Fatal("mail bodies (sign-in links) must not be logged by default")
+	}
+	if cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_DEV_MODE": "true"}); !cfg.MailLogBodies {
+		t.Fatal("dev mode logs mail bodies")
+	}
+	if cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_MAIL_LOG_BODIES": "true"}); !cfg.MailLogBodies {
+		t.Fatal("explicit opt-in ignored")
+	}
+}
+
+func TestMetricsAddr(t *testing.T) {
+	if cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x"}); cfg.MetricsAddr != "" {
+		t.Fatalf("metrics must be off by default, got %q", cfg.MetricsAddr)
+	}
+	if cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_METRICS_ADDR": "127.0.0.1:9464"}); cfg.MetricsAddr != "127.0.0.1:9464" {
+		t.Fatalf("MetricsAddr = %q", cfg.MetricsAddr)
+	}
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_METRICS_ADDR": "9464"}, "CONVERGE_METRICS_ADDR")
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_METRICS_ADDR": ":3001"}, "must differ")
+}
+
+func TestTrustedProxies(t *testing.T) {
+	if cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x"}); cfg.TrustedProxies != nil {
+		t.Fatalf("unset must select the defaults (nil), got %v", cfg.TrustedProxies)
+	}
+	cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_TRUSTED_PROXIES": "none"})
+	if cfg.TrustedProxies == nil || len(cfg.TrustedProxies) != 0 {
+		t.Fatalf("none must trust no proxy, got %v", cfg.TrustedProxies)
+	}
+	cfg = loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_TRUSTED_PROXIES": "10.1.2.0/24, 203.0.113.7 ,::1"})
+	got := fmt.Sprint(cfg.TrustedProxies)
+	if want := "[10.1.2.0/24 203.0.113.7/32 ::1/128]"; got != want {
+		t.Fatalf("TrustedProxies = %s, want %s", got, want)
+	}
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_TRUSTED_PROXIES": "10.0.0.0/8,proxy.internal"}, "CONVERGE_TRUSTED_PROXIES")
+}
+
+func TestSecureCookiesDerivedFromWebOrigin(t *testing.T) {
+	cfg := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_WEB_ORIGIN": "https://tracker.example"})
+	if !cfg.SecureCookies {
+		t.Fatal("https web origin must default to Secure cookies")
+	}
+	cfg = loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_WEB_ORIGIN": "https://tracker.example", "CONVERGE_SECURE_COOKIES": "false"})
+	if cfg.SecureCookies {
+		t.Fatal("explicit CONVERGE_SECURE_COOKIES=false must win")
+	}
+}
+
+func TestValidateServe(t *testing.T) {
+	realSecret := "0123456789abcdef0123456789abcdef"
+	ok := []Config{
+		{DevMode: true, PublicURL: "http://localhost:3001", WebOrigin: "http://localhost:3000"},
+		{DevMode: true, PublicURL: "http://127.0.0.1:3001", WebOrigin: "http://app.localhost:3000"},
+		{DevMode: true, PublicURL: "http://[::1]:3001", WebOrigin: "http://localhost:3000"},
+		{SessionSecret: realSecret, PublicURL: "https://api.example", WebOrigin: "https://app.example"},
+	}
+	for _, c := range ok {
+		if err := c.ValidateServe(); err != nil {
+			t.Errorf("ValidateServe(%+v) = %v, want nil", c, err)
+		}
+	}
+	bad := []struct {
+		cfg  Config
+		want string
+	}{
+		{Config{PublicURL: "https://api.example", WebOrigin: "https://app.example"}, "is required outside dev mode"},
+		{Config{SessionSecret: devSessionSecret}, "published development value"},
+		{Config{SessionSecret: "short"}, "at least 32 characters"},
+		{Config{DevMode: true, PublicURL: "https://api.example", WebOrigin: "http://localhost:3000"}, "CONVERGE_PUBLIC_URL"},
+		{Config{DevMode: true, PublicURL: "http://localhost:3001", WebOrigin: "http://192.168.1.5:3000"}, "CONVERGE_WEB_ORIGIN"},
+		{Config{DevMode: true, PublicURL: "http://localhost.evil.example", WebOrigin: "http://localhost:3000"}, "CONVERGE_PUBLIC_URL"},
+	}
+	for _, b := range bad {
+		err := b.cfg.ValidateServe()
+		if err == nil || !contains(err.Error(), b.want) {
+			t.Errorf("ValidateServe(%+v) = %v, want error containing %q", b.cfg, err, b.want)
+		}
 	}
 }
 

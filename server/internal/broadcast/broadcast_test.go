@@ -7,7 +7,7 @@ import (
 
 func TestPublishNoSubscribers(t *testing.T) {
 	b := New()
-	if got := b.Publish("ws1", []byte("x")); got != 0 {
+	if got := b.Publish("ws1", Event{Data: []byte("x")}); got != 0 {
 		t.Fatalf("Publish with no subscribers = %d, want 0", got)
 	}
 }
@@ -19,13 +19,13 @@ func TestPublishSingleSubscriber(t *testing.T) {
 	if got := b.SubscriberCount("ws1"); got != 1 {
 		t.Fatalf("SubscriberCount = %d, want 1", got)
 	}
-	if got := b.Publish("ws1", []byte("payload")); got != 1 {
+	if got := b.Publish("ws1", Event{Data: []byte("payload")}); got != 1 {
 		t.Fatalf("delivered = %d, want 1", got)
 	}
 	select {
 	case got := <-ch:
-		if string(got) != "payload" {
-			t.Fatalf("payload = %q", got)
+		if string(got.Data) != "payload" {
+			t.Fatalf("payload = %q", got.Data)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("subscriber never received the payload")
@@ -34,13 +34,13 @@ func TestPublishSingleSubscriber(t *testing.T) {
 
 func TestPublishFanOut(t *testing.T) {
 	b := New()
-	chs := make([]<-chan []byte, 5)
+	chs := make([]<-chan Event, 5)
 	for i := range chs {
 		ch, cancel := b.Subscribe("ws1")
 		defer cancel()
 		chs[i] = ch
 	}
-	if got := b.Publish("ws1", []byte("x")); got != 5 {
+	if got := b.Publish("ws1", Event{Data: []byte("x")}); got != 5 {
 		t.Fatalf("delivered = %d, want 5", got)
 	}
 	for i, ch := range chs {
@@ -58,7 +58,7 @@ func TestWorkspacesIsolated(t *testing.T) {
 	ch2, cancel2 := b.Subscribe("ws2")
 	defer cancel1()
 	defer cancel2()
-	b.Publish("ws1", []byte("x"))
+	b.Publish("ws1", Event{Data: []byte("x")})
 	select {
 	case <-ch1:
 	case <-time.After(time.Second):
@@ -66,7 +66,7 @@ func TestWorkspacesIsolated(t *testing.T) {
 	}
 	select {
 	case got := <-ch2:
-		t.Fatalf("ws2 subscriber received a ws1 payload: %q", got)
+		t.Fatalf("ws2 subscriber received a ws1 payload: %q", got.Data)
 	case <-time.After(20 * time.Millisecond):
 	}
 }
@@ -78,7 +78,7 @@ func TestCancelStopsDelivery(t *testing.T) {
 	if got := b.SubscriberCount("ws1"); got != 0 {
 		t.Fatalf("SubscriberCount after cancel = %d, want 0", got)
 	}
-	if got := b.Publish("ws1", []byte("x")); got != 0 {
+	if got := b.Publish("ws1", Event{Data: []byte("x")}); got != 0 {
 		t.Fatalf("Publish after cancel = %d, want 0", got)
 	}
 	// Double cancel must be safe and idempotent.
@@ -103,7 +103,7 @@ func TestResubscribeAfterCancel(t *testing.T) {
 	if got := b.SubscriberCount("ws1"); got != 1 {
 		t.Fatalf("SubscriberCount = %d, want 1", got)
 	}
-	if got := b.Publish("ws1", []byte("x")); got != 1 {
+	if got := b.Publish("ws1", Event{Data: []byte("x")}); got != 1 {
 		t.Fatalf("delivered = %d, want 1", got)
 	}
 	select {
@@ -113,10 +113,38 @@ func TestResubscribeAfterCancel(t *testing.T) {
 	}
 }
 
-// TestSlowSubscriberDropped pins the drop-don't-block contract: a full
-// buffer is skipped, Publish returns, and fast subscribers are served.
-// The client resyncs via the delta endpoint (spec R-8), so the drop is by
-// design — but the non-blocking guarantee is what keeps writers safe.
+// TestOverflowDisconnectsSubscriber pins the gap signal: a subscriber
+// that falls a full buffer behind is closed (after its buffered payloads)
+// and unregistered, so its stream ends and the client resyncs from the
+// delta instead of silently missing a record.
+func TestOverflowDisconnectsSubscriber(t *testing.T) {
+	b := New()
+	ch, cancel := b.Subscribe("ws1")
+	defer cancel()
+	for i := 0; i < subscriberBuffer; i++ {
+		if got := b.Publish("ws1", Event{Data: []byte("x")}); got != 1 {
+			t.Fatalf("publish %d within the buffer delivered %d", i+1, got)
+		}
+	}
+	if got := b.Publish("ws1", Event{Data: []byte("overflow")}); got != 0 {
+		t.Fatalf("overflowing publish delivered %d, want 0", got)
+	}
+	if got := b.SubscriberCount("ws1"); got != 0 {
+		t.Fatalf("overflowed subscriber still registered (%d)", got)
+	}
+	n := 0
+	for range ch {
+		n++
+	}
+	if n != subscriberBuffer {
+		t.Fatalf("drained %d buffered payloads before close, want %d", n, subscriberBuffer)
+	}
+	// cancel after the disconnect must not panic (double close).
+	cancel()
+}
+
+// TestSlowSubscriberDropped pins the non-blocking contract: a full
+// buffer never stalls Publish, and fast subscribers are still served.
 func TestSlowSubscriberDropped(t *testing.T) {
 	b := New()
 	_, slowCancel := b.Subscribe("ws1")
@@ -129,7 +157,7 @@ func TestSlowSubscriberDropped(t *testing.T) {
 		defer close(done)
 		// Flood well past the 64 buffer; never drain.
 		for i := 0; i < 200; i++ {
-			b.Publish("ws1", []byte("x"))
+			b.Publish("ws1", Event{Data: []byte("x")})
 		}
 	}()
 	deadline := time.After(2 * time.Second)
@@ -167,14 +195,14 @@ func TestConcurrentSubscribePublish(t *testing.T) {
 				if n%2 == 0 {
 					cancel()
 				} else {
-					go func(c <-chan []byte) {
+					go func(c <-chan Event) {
 						select {
 						case <-c:
 						case <-stop:
 						}
 					}(ch)
 				}
-				b.Publish("ws1", []byte("x"))
+				b.Publish("ws1", Event{Data: []byte("x")})
 				_ = b.SubscriberCount("ws1")
 			}
 		}(i)

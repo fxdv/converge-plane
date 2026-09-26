@@ -62,6 +62,7 @@ func (a *API) issueData(r issueRow) map[string]any {
 		"children":           r.Children,
 		"agentPaused":        r.AgentPaused,
 		"relations":          relations,
+		"version":            r.Version,
 	}
 }
 

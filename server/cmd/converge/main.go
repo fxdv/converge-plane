@@ -24,7 +24,9 @@ import (
 	"converge/internal/db"
 	"converge/internal/httpx"
 	"converge/internal/logging"
+	"converge/internal/metrics"
 	"converge/internal/migrate"
+	"converge/internal/netx"
 	"converge/internal/notify"
 	"converge/internal/seed"
 )
@@ -52,10 +54,17 @@ func main() {
 }
 
 // bootstrap loads config, logging, database, and applies migrations.
-func bootstrap() (config.Config, *slog.Logger, *db.DB, context.Context, context.CancelFunc, error) {
+// serve selects the serving-process checks (config.ValidateServe), which
+// run before the database is touched.
+func bootstrap(serve bool) (config.Config, *slog.Logger, *db.DB, context.Context, context.CancelFunc, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return cfg, nil, nil, nil, nil, fmt.Errorf("load config: %w", err)
+	}
+	if serve {
+		if err := cfg.ValidateServe(); err != nil {
+			return cfg, nil, nil, nil, nil, fmt.Errorf("unsafe config: %w", err)
+		}
 	}
 	logger := logging.New(cfg.LogLevel)
 	slog.SetDefault(logger)
@@ -82,27 +91,34 @@ func bootstrap() (config.Config, *slog.Logger, *db.DB, context.Context, context.
 }
 
 func run() (err error) {
-	cfg, logger, database, ctx, stop, err := bootstrap()
+	cfg, logger, database, ctx, stop, err := bootstrap(true)
 	if err != nil {
 		return err
 	}
 	defer stop()
 	defer database.Close()
-
-	authSvc := auth.NewService(database.Pool, cfg, logger)
-	notifySvc := notify.New(notify.Config{
-		Host: cfg.SMTPHost,
-		Port: cfg.SMTPPort,
-		User: cfg.SMTPUser,
-		Pass: cfg.SMTPPass,
-		From: cfg.SMTPFrom,
-		TLS:  cfg.SMTPTLS,
-	}, logger)
-	if notifySvc.Enabled() {
-		logger.Info("smtp driver active", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom, "tls", cfg.SMTPTLS)
-	} else {
-		logger.Info("mail log driver active (no smtp host; messages incl. links go to the log)")
+	if cfg.DevMode {
+		logger.Warn("DEV MODE: sign-in responses include the magic link; never expose this process")
 	}
+
+	notifySvc := notify.New(notify.Config{
+		Host:      cfg.SMTPHost,
+		Port:      cfg.SMTPPort,
+		User:      cfg.SMTPUser,
+		Pass:      cfg.SMTPPass,
+		From:      cfg.SMTPFrom,
+		TLS:       cfg.SMTPTLS,
+		LogBodies: cfg.MailLogBodies,
+	}, logger)
+	switch {
+	case notifySvc.Enabled():
+		logger.Info("smtp driver active", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom, "tls", cfg.SMTPTLS)
+	case cfg.MailLogBodies:
+		logger.Warn("mail log driver active: sign-in and invite links are written to this log; anyone who reads it can sign in as the recipient")
+	default:
+		logger.Warn("no mail delivery: CONVERGE_SMTP_HOST is unset, so sign-in and invite links reach nobody (set CONVERGE_SMTP_HOST, or CONVERGE_MAIL_LOG_BODIES=true to accept links in the log)")
+	}
+	authSvc := auth.NewService(database.Pool, cfg, logger, notifySvc)
 	apiSvc := api.New(database.Pool, cfg, logger, authSvc, notifySvc)
 
 	// D3: the in-process agent runtime. It needs the database, not the
@@ -116,6 +132,18 @@ func run() (err error) {
 	// clock next to the runtime's fine one.
 	apiSvc.StartInboxRetention(ctx)
 
+	metrics.Default.CollectRuntime(version, commit)
+	metrics.Default.Collect(database.CollectMetrics)
+	metrics.Default.Collect(apiSvc.CollectMetrics)
+	if cfg.MetricsAddr != "" {
+		metricsServer := httpx.NewMetricsServer(logger, metrics.Default.Handler())
+		go func() {
+			if err := metricsServer.Run(ctx, cfg.MetricsAddr); err != nil {
+				logger.Error("metrics server stopped", "error", err)
+			}
+		}()
+	}
+
 	server := httpx.New(httpx.Dependencies{
 		Logger:      logger,
 		Version:     version,
@@ -124,13 +152,14 @@ func run() (err error) {
 		Ready:       database.Healthy,
 		MountApp:    apiSvc.Mount,
 		ReadTimeout: cfg.HTTPTimeout,
+		ClientIP:    netx.NewResolver(cfg.TrustedProxies),
 	})
 
 	return server.Run(ctx, cfg.HTTPAddr)
 }
 
 func runSeed() error {
-	_, logger, database, ctx, stop, err := bootstrap()
+	_, logger, database, ctx, stop, err := bootstrap(false)
 	if err != nil {
 		return err
 	}

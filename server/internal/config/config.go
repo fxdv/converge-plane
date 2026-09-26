@@ -5,15 +5,23 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/netip"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// devSessionSecret substitutes for CONVERGE_SESSION_SECRET in local
-// development. Operators must set a real secret in any real deployment.
+// devSessionSecret substitutes for CONVERGE_SESSION_SECRET in dev mode
+// only. ValidateServe refuses it everywhere else: it is published in
+// this repository, so any session signed with it is forgeable.
 const devSessionSecret = "converge-dev-session-secret-do-not-use-in-prod"
+
+// minSessionSecretLen bounds a production HMAC key (32 bytes = the
+// output of `openssl rand -hex 16`; the docs recommend -hex 32).
+const minSessionSecretLen = 32
 
 // Config is the validated runtime configuration for the Converge API server.
 type Config struct {
@@ -30,10 +38,12 @@ type Config struct {
 	LogLevel string
 	// SessionCookieName is the name of the session cookie.
 	SessionCookieName string
-	// SecureCookies forces Secure cookies (set true behind TLS in prod).
+	// SecureCookies marks session cookies Secure. Defaults to true when
+	// WebOrigin is https; CONVERGE_SECURE_COOKIES=true|false overrides.
 	SecureCookies bool
 	// SessionSecret keys the HMAC signatures inside session tokens.
-	// The dev fallback is substituted when unset.
+	// Required outside dev mode (ValidateServe); dev mode substitutes a
+	// fixed development value when unset.
 	SessionSecret string
 	// SessionTTL bounds the session audit-row lifetime.
 	SessionTTL time.Duration
@@ -48,6 +58,7 @@ type Config struct {
 	// DevMode enables local-development conveniences that must never run
 	// in production: the create-code response then includes devMagicLink
 	// so a deployment without an email provider is still sign-in-able.
+	// ValidateServe refuses it unless PublicURL and WebOrigin are loopback.
 	DevMode bool
 	// HTTPTimeout bounds a single API request.
 	HTTPTimeout time.Duration
@@ -117,6 +128,20 @@ type Config struct {
 	SMTPFrom string
 	// SMTPTLS selects the SMTP transport: starttls, off, implicit.
 	SMTPTLS string
+	// MailLogBodies lets the mail log driver (no SMTP host) write message
+	// bodies — sign-in links — to the log. On in dev mode; otherwise an
+	// explicit operator opt-in (CONVERGE_MAIL_LOG_BODIES=true) for
+	// deployments with no email provider that accept the exposure.
+	MailLogBodies bool
+	// TrustedProxies are the proxy ranges whose X-Forwarded-For entries
+	// are believed when resolving a client IP (rate limits, session
+	// audit, logs). Nil selects loopback plus the private ranges; an
+	// empty non-nil slice ("none") trusts no proxy.
+	TrustedProxies []netip.Prefix
+	// MetricsAddr is the listen address of the Prometheus endpoint
+	// (GET /metrics); empty disables it. It is a separate listener so the
+	// public reverse proxy never exposes it.
+	MetricsAddr string
 	// Version is the build version, injected at link time.
 	Version string
 }
@@ -133,13 +158,13 @@ type Config struct {
 //	CONVERGE_HTTP_TIMEOUT      request timeout, e.g. "30s" (default "30s")
 //	CONVERGE_DB_MIN_CONNS      pool min conns          (default "1")
 //	CONVERGE_DB_MAX_CONNS      pool max conns          (default "20")
-//	CONVERGE_SECURE_COOKIES    force Secure cookies    (default "false")
-//	CONVERGE_SESSION_SECRET    session HMAC key        (dev fallback when unset)
+//	CONVERGE_SECURE_COOKIES    true|false Secure cookies (default: true iff WEB_ORIGIN is https)
+//	CONVERGE_SESSION_SECRET    session HMAC key        (required unless DEV_MODE; >= 32 chars)
 //	CONVERGE_ACCESS_TOKEN_TTL  access token lifetime   (default "1h")
 //	CONVERGE_REFRESH_TOKEN_TTL refresh token lifetime  (default "720h")
 //	CONVERGE_RATE_LIMIT_RPS    per-account rps, 0=off (default "10")
 //	CONVERGE_RATE_LIMIT_BURST  per-account burst      (default "50")
-//	CONVERGE_DEV_MODE          true = dev conveniences (magic link in API)
+//	CONVERGE_DEV_MODE          true = dev conveniences (magic link in API); localhost only
 //	CONVERGE_RUNTIME           agent runtime, on by default ("false" disables)
 //	CONVERGE_RUNTIME_TOPOLOGY   foreman|flat              (default "foreman")
 //	CONVERGE_RUNTIME_TICK       dispatcher backstop tick   (default "5s")
@@ -156,9 +181,14 @@ type Config struct {
 //	CONVERGE_SMTP_PASS         smtp auth password      (default "")
 //	CONVERGE_SMTP_FROM         from address            (default "no-reply@converge.local")
 //	CONVERGE_SMTP_TLS          starttls|off|implicit   (default "starttls")
+//	CONVERGE_MAIL_LOG_BODIES   true = log driver logs mail bodies incl. links (default: dev mode only)
+//	CONVERGE_TRUSTED_PROXIES   CIDRs/IPs whose X-Forwarded-For is believed, comma-separated,
+//	                           "none" trusts no proxy (default: loopback + private ranges)
+//	CONVERGE_METRICS_ADDR      Prometheus listen address, e.g. "127.0.0.1:9464" (default "": off)
 func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:          env("CONVERGE_HTTP_ADDR", ":3001"),
+		MetricsAddr:       strings.TrimSpace(os.Getenv("CONVERGE_METRICS_ADDR")),
 		DatabaseURL:       os.Getenv("CONVERGE_DATABASE_URL"),
 		PublicURL:         strings.TrimRight(env("CONVERGE_PUBLIC_URL", "http://localhost:3001"), "/"),
 		WebOrigin:         strings.TrimRight(env("CONVERGE_WEB_ORIGIN", "http://localhost:3000"), "/"),
@@ -179,11 +209,32 @@ func Load() (Config, error) {
 		SMTPTLS:           "starttls",
 	}
 
-	if v := os.Getenv("CONVERGE_SECURE_COOKIES"); v == "true" {
+	switch os.Getenv("CONVERGE_SECURE_COOKIES") {
+	case "true":
 		cfg.SecureCookies = true
+	case "false":
+		cfg.SecureCookies = false
+	default:
+		cfg.SecureCookies = strings.HasPrefix(strings.ToLower(cfg.WebOrigin), "https://")
 	}
 	if v := os.Getenv("CONVERGE_DEV_MODE"); v == "true" {
 		cfg.DevMode = true
+	}
+	cfg.MailLogBodies = cfg.DevMode || os.Getenv("CONVERGE_MAIL_LOG_BODIES") == "true"
+	if v := strings.TrimSpace(os.Getenv("CONVERGE_TRUSTED_PROXIES")); v != "" {
+		proxies, err := parseTrustedProxies(v)
+		if err != nil {
+			return cfg, err
+		}
+		cfg.TrustedProxies = proxies
+	}
+	if cfg.MetricsAddr != "" {
+		if _, _, err := net.SplitHostPort(cfg.MetricsAddr); err != nil {
+			return cfg, fmt.Errorf("invalid CONVERGE_METRICS_ADDR %q: expected host:port", cfg.MetricsAddr)
+		}
+		if cfg.MetricsAddr == cfg.HTTPAddr {
+			return cfg, fmt.Errorf("CONVERGE_METRICS_ADDR must differ from CONVERGE_HTTP_ADDR: metrics are served on their own listener")
+		}
 	}
 	switch strings.ToLower(os.Getenv("CONVERGE_RUNTIME")) {
 	case "false", "0", "off":
@@ -285,7 +336,9 @@ func Load() (Config, error) {
 		}
 		cfg.RefreshTokenTTL = d
 	}
-	cfg.SessionSecret = orDevSecret(cfg.SessionSecret)
+	if cfg.DevMode && cfg.SessionSecret == "" {
+		cfg.SessionSecret = devSessionSecret
+	}
 
 	if cfg.DatabaseURL == "" {
 		return cfg, fmt.Errorf("CONVERGE_DATABASE_URL is required")
@@ -334,11 +387,71 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-func orDevSecret(secret string) string {
-	if secret == "" {
-		return devSessionSecret
+// ValidateServe enforces the settings that make a serving process safe
+// to expose. It is separate from Load because one-shot subcommands
+// (seed) read the same environment but never issue sessions.
+//
+// Outside dev mode a real session secret is mandatory. Dev mode returns
+// a working sign-in link to any caller for any email, so it is refused
+// unless both the public URL and the web origin are loopback.
+func (c Config) ValidateServe() error {
+	if c.DevMode {
+		for key, raw := range map[string]string{
+			"CONVERGE_PUBLIC_URL": c.PublicURL,
+			"CONVERGE_WEB_ORIGIN": c.WebOrigin,
+		} {
+			if !isLoopbackURL(raw) {
+				return fmt.Errorf("CONVERGE_DEV_MODE=true is refused when %s (%q) is not localhost: dev mode hands a sign-in link for any email to any caller", key, raw)
+			}
+		}
+		return nil
 	}
-	return secret
+	switch {
+	case c.SessionSecret == "":
+		return fmt.Errorf("CONVERGE_SESSION_SECRET is required outside dev mode (generate one: openssl rand -hex 32)")
+	case c.SessionSecret == devSessionSecret:
+		return fmt.Errorf("CONVERGE_SESSION_SECRET is the published development value; generate a real one: openssl rand -hex 32")
+	case len(c.SessionSecret) < minSessionSecretLen:
+		return fmt.Errorf("CONVERGE_SESSION_SECRET must be at least %d characters", minSessionSecretLen)
+	}
+	return nil
+}
+
+// isLoopbackURL reports whether raw is an http(s) URL whose host is
+// localhost, a *.localhost name, or a loopback IP.
+func isLoopbackURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func parseTrustedProxies(v string) ([]netip.Prefix, error) {
+	if strings.EqualFold(v, "none") {
+		return []netip.Prefix{}, nil
+	}
+	var out []netip.Prefix
+	for _, s := range strings.Split(v, ",") {
+		if s = strings.TrimSpace(s); s == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(s); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CONVERGE_TRUSTED_PROXIES entry %q: expected a CIDR or IP", s)
+		}
+		out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
+	}
+	return out, nil
 }
 
 func env(key, fallback string) string {

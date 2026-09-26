@@ -10,12 +10,25 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"converge/internal/metrics"
+	"converge/internal/netx"
+)
+
+var (
+	httpRequests = metrics.Default.NewCounterVec("converge_http_requests_total",
+		"HTTP requests by method, route pattern and status.", "method", "route", "code")
+	httpDuration = metrics.Default.NewHistogramVec("converge_http_request_duration_seconds",
+		"HTTP request latency by method and route pattern; realtime streams last as long as the connection.",
+		metrics.DurationBuckets, "method", "route")
+	httpInFlight = metrics.Default.NewGauge("converge_http_requests_in_flight",
+		"HTTP requests being served, open realtime streams included.")
 )
 
 // Dependencies carries the collaborators the server needs.
@@ -34,12 +47,16 @@ type Dependencies struct {
 	// router after the operator routes. Middleware registered via Use
 	// applies to everything mounted afterwards.
 	MountApp func(r chi.Router)
+	// ClientIP resolves client addresses behind trusted proxies; nil
+	// selects netx's default trusted ranges.
+	ClientIP *netx.Resolver
 }
 
 // Server is the configured HTTP server.
 type Server struct {
-	srv *http.Server
-	log *slog.Logger
+	name string
+	srv  *http.Server
+	log  *slog.Logger
 }
 
 type contextKey string
@@ -48,11 +65,17 @@ const requestIDKey contextKey = "request-id"
 
 // New builds the HTTP server with the operator router mounted.
 func New(d Dependencies) *Server {
+	resolver := d.ClientIP
+	if resolver == nil {
+		resolver = netx.NewResolver(nil)
+	}
 	r := NewRouter()
 	r.Use(
 		Recoverer(d.Logger),
 		RequestID(),
+		resolver.Middleware,
 		RequestLogger(d.Logger),
+		Metrics(),
 		CORS(d.WebOrigin),
 	)
 
@@ -101,7 +124,22 @@ func New(d Dependencies) *Server {
 		// handlers write their whole response in one shot.
 		IdleTimeout: 120 * time.Second,
 	}
-	return &Server{srv: srv, log: d.Logger}
+	return &Server{name: "api", srv: srv, log: d.Logger}
+}
+
+// NewMetricsServer serves the Prometheus scrape endpoint on its own
+// listener, so it is reachable only where the operator binds it and never
+// through the public reverse proxy.
+func NewMetricsServer(log *slog.Logger, h http.Handler) *Server {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", h)
+	return &Server{name: "metrics", log: log, srv: &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}}
 }
 
 // NewRouter returns the base router. Domain modules import httpx and mount
@@ -117,7 +155,7 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		s.log.Info("http server listening", "addr", addr)
+		s.log.Info("http server listening", "server", s.name, "addr", addr)
 		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
@@ -127,7 +165,7 @@ func (s *Server) Run(ctx context.Context, addr string) error {
 
 	select {
 	case <-ctx.Done():
-		s.log.Info("shutting down http server")
+		s.log.Info("shutting down http server", "server", s.name)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := s.srv.Shutdown(shutdownCtx); err != nil {
@@ -208,10 +246,41 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 				"status", rec.status,
 				"duration_ms", time.Since(start).Milliseconds(),
 				"request_id", RequestIDFromContext(r.Context()),
-				"remote_addr", clientIP(r),
+				"remote_addr", netx.ClientIP(r),
 			)
 		})
 	}
+}
+
+// Metrics records request counts and latency per route. The route label
+// is chi's pattern, never the raw path, and unknown methods collapse to
+// OTHER, so no request can mint a new series.
+func Metrics() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			httpInFlight.Add(1)
+			defer httpInFlight.Add(-1)
+			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(rec, r)
+			route := "unmatched"
+			if rc := chi.RouteContext(r.Context()); rc != nil && rc.RoutePattern() != "" {
+				route = rc.RoutePattern()
+			}
+			method := metricMethod(r.Method)
+			httpRequests.With(method, route, strconv.Itoa(rec.status)).Inc()
+			httpDuration.With(method, route).Observe(time.Since(start).Seconds())
+		})
+	}
+}
+
+func metricMethod(m string) string {
+	switch m {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodOptions:
+		return m
+	}
+	return "OTHER"
 }
 
 // CORS allows the web client origin to call the API with credentials.
@@ -229,7 +298,10 @@ func CORS(webOrigin string) func(http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id, If-Match, Idempotency-Key")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id, If-Match, Idempotency-Key, anti-csrf")
+			// The client reads the front token and CSRF token from auth
+			// responses; the access/refresh tokens stay unreadable.
+			w.Header().Set("Access-Control-Expose-Headers", "st-front-token, anti-csrf, s-user-id")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
@@ -263,24 +335,4 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-// clientIP resolves the client IP, trusting X-Forwarded-For only for local
-// proxy connections.
-func clientIP(r *http.Request) string {
-	connIP, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		connIP = r.RemoteAddr
-	}
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" && isLocal(connIP) {
-		if first := strings.TrimSpace(strings.Split(fwd, ",")[0]); first != "" {
-			return first
-		}
-	}
-	return connIP
-}
-
-func isLocal(ip string) bool {
-	return ip == "127.0.0.1" || ip == "::1" ||
-		strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "172.16.")
 }

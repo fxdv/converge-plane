@@ -177,7 +177,8 @@ const issueColumns = `
 		i.agent_paused, i.project_ids,
 		coalesce((select array_agg(il.label_id) from issue_labels il where il.issue_id = i.id), '{}'),
 		coalesce((select array_agg(c.id) from issues c where c.parent_id = i.id and c.status <> 'deleted'), '{}'),
-	` + relationListSQL
+	` + relationListSQL + `,
+		i.version`
 
 // issueRow is one issues-table row with everything the client shape
 // needs, shared by the sync collectors and the mutation handlers.
@@ -202,21 +203,25 @@ type issueRow struct {
 	// (the table constraint is the authority; the API enforces it for a
 	// clean 422). Empty when the issue is not in a project.
 	ProjectIds []string
-	// Version is the row's optimistic-concurrency anchor. Only the
-	// runtime's work cycle scans it (the sync scans and the client
-	// shape do not); every issue mutation bumps it, so equality is a
-	// complete "nothing changed" test.
+	// Version is the row's optimistic-concurrency anchor: every issue
+	// mutation bumps it, so equality is a complete "nothing changed"
+	// test. The runtime's work cycle anchors on it, and API-token
+	// writers send it back as If-Match (precondition.go).
 	Version int
+}
+
+// scanDest lists the scan destinations in issueColumns order.
+func (r *issueRow) scanDest() []any {
+	return []any{&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
+		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
+		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
+		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw, &r.Version}
 }
 
 // issueByID loads one issue (any status) for the mutation handlers.
 func (a *API) issueByID(ctx context.Context, id string) (issueRow, error) {
 	var r issueRow
-	if err := a.pool.QueryRow(ctx, "select "+issueColumns+" from issues i where i.id = $1", id).Scan(
-		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
-		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
-		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
+	if err := a.pool.QueryRow(ctx, "select "+issueColumns+" from issues i where i.id = $1", id).Scan(r.scanDest()...); err != nil {
 		return r, err
 	}
 	return r, nil
@@ -236,10 +241,7 @@ func (a *API) collectIssues(ctx context.Context, workspaceID string, emit emitFn
 	var out []syncActionRecord
 	for rows.Next() {
 		var r issueRow
-		if err := rows.Scan(&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
-			&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
-			&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-			&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw); err != nil {
+		if err := rows.Scan(r.scanDest()...); err != nil {
 			return nil, err
 		}
 		rec, err := emit(r.ID, a.issueData(r))

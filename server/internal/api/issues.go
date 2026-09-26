@@ -8,10 +8,9 @@
 //  3. commit, then broadcast the committed record to realtime subscribers;
 //  4. return the object in the exact shape the client's stores validate.
 //
-// Optimistic concurrency note: the forked client does not send expected
-// versions, so this milestone bumps the row version but does not enforce
-// it (enforcement lands with the client rewrite, spec 08 "Mutation
-// concurrency").
+// Optimistic concurrency: every mutation bumps the row version; writes to
+// an existing issue honour If-Match, which agents must send
+// (precondition.go). The forked client does not send versions yet.
 package api
 
 import (
@@ -258,11 +257,7 @@ func (a *API) insertIssueTx(ctx context.Context, tx pgx.Tx, p *Principal, worksp
 // issueByIDTx loads one issue row from inside the caller's transaction.
 func (a *API) issueByIDTx(ctx context.Context, tx pgx.Tx, id string) (issueRow, error) {
 	var r issueRow
-	err := tx.QueryRow(ctx, "select "+issueColumns+" from issues i where i.id = $1", id).Scan(
-		&r.ID, &r.TeamID, &r.Number, &r.Priority, &r.SortOrder,
-		&r.Title, &r.DescRaw, &r.Status, &r.CreatedAt, &r.UpdatedAt,
-		&r.CreatedByID, &r.AssigneeID, &r.ParentID, &r.StatusID,
-		&r.AgentPaused, &r.ProjectIds, &r.LabelIDs, &r.Children, &r.RelationRaw)
+	err := tx.QueryRow(ctx, "select "+issueColumns+" from issues i where i.id = $1", id).Scan(r.scanDest()...)
 	return r, err
 }
 
@@ -393,6 +388,17 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	version, ok := a.issuePreconditionTx(ctx, tx, w, r, p, id)
+	if !ok {
+		return
+	}
+	// The patch diffs against the row, so it must be the locked version.
+	if version != row.Version {
+		if row, err = a.issueByIDTx(ctx, tx, id); err != nil {
+			a.internalError(w, err)
+			return
+		}
+	}
 
 	changed, historyRecs, err := a.applyIssuePatchTx(ctx, tx, p, workspaceID, row, req)
 	if err != nil {
@@ -422,6 +428,7 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	if !changed && req.IssueRelation == nil {
 		// Nothing to persist; return the current object.
 		_ = tx.Commit(ctx)
+		w.Header().Set("ETag", issueETag(row.Version))
 		writeJSON(w, http.StatusOK, a.issueData(row))
 		return
 	}
@@ -454,6 +461,7 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	// D3 fast path: a reassignment to an agent, or a human mutation that
 	// resumed a paused issue, is new work for the assignee.
 	a.wakeIssueOwner(ctx, workspaceID, id)
+	w.Header().Set("ETag", issueETag(fresh.Version))
 	writeJSON(w, http.StatusOK, a.issueData(fresh))
 }
 
@@ -669,6 +677,9 @@ func (a *API) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, ok := a.issuePreconditionTx(ctx, tx, w, r, p, id); !ok {
+		return
+	}
 	if _, err := tx.Exec(ctx, `update issues set status = 'deleted', version = version + 1, updated_at = now() where id = $1`, id); err != nil {
 		a.internalError(w, err)
 		return
@@ -741,6 +752,9 @@ func (a *API) applyMove(w http.ResponseWriter, r *http.Request, p *Principal, ro
 		a.internalError(w, err)
 		return
 	}
+	if _, ok := a.issuePreconditionTx(ctx, tx, w, r, p, row.ID); !ok {
+		return
+	}
 	// Renumber in the destination team (numbers are unique per team).
 	var number int
 	if err := tx.QueryRow(ctx, `select coalesce(max(number), 0) + 1 from issues where team_id = $1`, destTeamID).Scan(&number); err != nil {
@@ -773,6 +787,7 @@ func (a *API) applyMove(w http.ResponseWriter, r *http.Request, p *Principal, ro
 	// D3 fast path: a team move keeps the assignee; wake when it is an
 	// agent (its team context changed with the move).
 	a.wakeIssueOwner(ctx, workspaceID, row.ID)
+	w.Header().Set("ETag", issueETag(fresh.Version))
 	writeJSON(w, http.StatusOK, a.issueData(fresh))
 }
 

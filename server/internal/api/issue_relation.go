@@ -350,7 +350,7 @@ func (a *API) handleDeleteIssueRelation(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if strval(rel.CreatedBy) != p.AccountID && role != "admin" && role != "owner" {
+	if strval(rel.CreatedBy) != p.AccountID && !adminRole(role) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}

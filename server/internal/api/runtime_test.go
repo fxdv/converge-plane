@@ -1002,7 +1002,11 @@ func (f *fakePool) Exec(ctx context.Context, sql string, args ...any) (pgconn.Co
 	return pgconn.CommandTag{}, nil
 }
 func (f *fakePool) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	return &fakeRows{values: matchRule(f.t, f.rules, sql).rows}, nil
+	r := matchRule(f.t, f.rules, sql)
+	f.mu.Lock()
+	f.rows = append(f.rows, fakeExecCall{sql: sql, args: args})
+	f.mu.Unlock()
+	return &fakeRows{values: r.rows}, nil
 }
 func (f *fakePool) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	r := matchRule(f.t, f.rules, sql)
@@ -1084,13 +1088,13 @@ func newWorkCycleFixture(t *testing.T, opts workCycleOptions) *workCycleFixture 
 		rt:   runtimeForTests(true),
 		stub: &scriptedPolicy{action: Action{Kind: ActionAdvance, StateID: "st3"}, tokens: 123},
 		snapTx: &fakeTx{t: t, rules: append([]fakeRule{
-			{frag: ", i.version from issues", rowVals: issueRowVals(5, "st2")},
+			{frag: "where i.id = $1 for update of i", rowVals: issueRowVals(5, "st2")},
 		}, inputFixture(pgx.ErrNoRows, "", nil).rules...)},
 		sigTx: &fakeTx{t: t, rules: []fakeRule{
 			{frag: "sync_sequences", rowVals: []any{int64(101)}},
 		}},
 		applyTx: &fakeTx{t: t, commitErr: opts.commitErr, rules: []fakeRule{
-			{frag: ", i.version from issues", rowVals: issueRowVals(5, "st2")},
+			{frag: "where i.id = $1 for update of i", rowVals: issueRowVals(5, "st2")},
 			{frag: "lower(name)", rowVals: []any{false}},
 			{frag: "insert into issue_history", rowVals: []any{"h1"}},
 			{frag: "created_at from issue_history", rowVals: []any{time.Now()}},
@@ -1098,7 +1102,7 @@ func newWorkCycleFixture(t *testing.T, opts workCycleOptions) *workCycleFixture 
 			{frag: "from issues i where i.id", rowVals: issueRowVals(6, "st3")[:19]},
 		}},
 		recheckTx: &fakeTx{t: t, rules: []fakeRule{
-			{frag: ", i.version from issues", rowVals: issueRowVals(recheckVersion, recheckStatus)},
+			{frag: "where i.id = $1 for update of i", rowVals: issueRowVals(recheckVersion, recheckStatus)},
 		}},
 	}
 	fx.a = fx.rt.a
@@ -1170,7 +1174,7 @@ func TestWorkCycleCommitLandedAfterLostAck(t *testing.T) {
 	defer cancel()
 	select {
 	case raw := <-ch:
-		t.Fatalf("a landed-after-lost-ack decision broadcast in realtime: %s", raw)
+		t.Fatalf("a landed-after-lost-ack decision broadcast in realtime: %s", raw.Data)
 	default:
 	}
 }
@@ -1221,7 +1225,7 @@ func TestWorkCycleHappyPath(t *testing.T) {
 			var rec struct {
 				ModelName, ModelID, Action string
 			}
-			if err := json.Unmarshal(raw, &rec); err != nil {
+			if err := json.Unmarshal(raw.Data, &rec); err != nil {
 				t.Fatalf("bad realtime payload: %v", err)
 			}
 			// "U" is the wire action (wireAction compresses UPDATE;

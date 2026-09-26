@@ -6,10 +6,20 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
+
+	"converge/internal/broadcast"
+	"converge/internal/metrics"
 )
 
 const ssePingInterval = 15 * time.Second
+
+// CollectMetrics reports the realtime fan-out at scrape time.
+func (a *API) CollectMetrics(e *metrics.Emitter) {
+	e.Gauge("converge_realtime_subscribers", "Open realtime streams across all workspaces.",
+		float64(a.bcast.Subscribers()))
+}
 
 // handleStream implements GET /api/v1/sync_actions/stream?workspaceId=...
 //
@@ -17,6 +27,11 @@ const ssePingInterval = 15 * time.Second
 // response carries explicit CORS headers; the session cookies are
 // SameSite=Lax but localhost:3000 -> localhost:3001 is same-site (site
 // excludes the port), so the browser sends them.
+//
+// The stream is gap-free per workspace: every committed sequence is
+// delivered, in full or — for a record addressed to another account —
+// as a bare {"sequenceId","skip":true} marker, so the client's
+// contiguous cursor can advance without seeing the record.
 func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
@@ -38,6 +53,12 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Subscribe before the client learns the stream is open: its
+	// reconnect delta runs on open, and anything committed between that
+	// delta's snapshot and a later subscription would reach neither.
+	ch, cancel := a.bcast.Subscribe(workspaceID)
+	defer cancel()
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -53,9 +74,6 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "retry: 2000\n: connected\n\n")
 	fl.Flush()
 
-	ch, cancel := a.bcast.Subscribe(workspaceID)
-	defer cancel()
-
 	a.log.Debug("realtime subscriber attached", "workspace", workspaceID,
 		"account", p.AccountID, "subscribers", a.bcast.SubscriberCount(workspaceID))
 
@@ -64,11 +82,15 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case payload, ok := <-ch:
+		case ev, ok := <-ch:
 			if !ok {
+				// The broadcaster closed us for falling behind: ending the
+				// stream makes the client reconnect and resync from the delta.
+				a.log.Info("realtime subscriber disconnected: fell behind",
+					"workspace", workspaceID, "account", p.AccountID)
 				return
 			}
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", payload); err != nil {
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", streamPayload(ev, p.AccountID)); err != nil {
 				return
 			}
 			fl.Flush()
@@ -81,4 +103,13 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// streamPayload is what one subscriber receives for an event: the record
+// itself, or only its sequence when it is addressed to someone else.
+func streamPayload(ev broadcast.Event, accountID string) []byte {
+	if ev.To == "" || ev.To == accountID {
+		return ev.Data
+	}
+	return []byte(`{"sequenceId":` + strconv.Quote(ev.Seq) + `,"skip":true}`)
 }
