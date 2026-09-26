@@ -84,7 +84,7 @@
     "tippy.js": "^6.3.7",
     "tunnel-rat": "^0.1.2",
     "use-debounce": "^10.0.0",
-    "vaul": "^0.8.9",
+    "vaul": "^1.1.2",
     "yet-another-react-lightbox": "^3.21.7"
   },
   "exports": {
