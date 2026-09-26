@@ -7,7 +7,7 @@
     "server.js"
   ],
   "devDependencies": {
-    "eslint-config-turbo": "^2.0.0",
+    "eslint-config-turbo": "^2.11.3",
     "eslint-config-next": "15.5.26",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.29.1",
