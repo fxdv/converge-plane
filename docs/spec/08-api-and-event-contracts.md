@@ -68,7 +68,7 @@ The conventions above are the target; these are the contracts the Go server impl
 
 `412` (not `409`) is used because the failure is the request's own precondition. The web client does not send versions yet, so human edits stay last-writer-wins until it does; `converge_issue_precondition_failures_total{reason="missing"|"stale"}` counts refusals.
 
-**Cookie CSRF.** Every unsafe request (`POST`/`PUT`/`PATCH`/`DELETE`) that carries a session cookie and no `Authorization` header must present an `Origin` — or, when a privacy setting strips it, a `Referer` — matching `CONVERGE_WEB_ORIGIN` or `CONVERGE_PUBLIC_URL`; otherwise `403 CROSS_ORIGIN`. Browsers do this automatically; a non-browser client that authenticates with cookies must send `Origin` itself. Bearer-token clients are unaffected.
+**Cross-site requests.** An unsafe request (`POST`/`PUT`/`PATCH`/`DELETE`) without an `Authorization` header gets `403 CROSS_ORIGIN` when its `Origin` — or, when a privacy setting strips it, its `Referer` — is anything but `CONVERGE_WEB_ORIGIN` or `CONVERGE_PUBLIC_URL`, with or without cookies (a cookie-less cross-site form could otherwise redeem an attacker's sign-in code in the victim's browser, or make the API mail links), and when it carries session cookies but neither header. Browsers send `Origin` automatically; a non-browser client that authenticates with cookies must send it itself. Bearer-token clients, and clients that send neither cookies nor `Origin`, are unaffected. The consume endpoint reads the code from the body only, never the query string.
 
 **Sessions.** Sign-in creates a `sessions` row. Tokens name it (`sid`); access tokens are stateless and short-lived, refresh tokens are single-use:
 

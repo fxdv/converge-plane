@@ -128,7 +128,7 @@ func PrincipalFromContext(ctx context.Context) *Principal {
 }
 
 // Mount registers all application routes on r. Every one of them refuses
-// cookie-authenticated writes from a foreign origin.
+// writes a browser reports as coming from a foreign origin.
 func (a *API) Mount(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(a.auth.RequireSameOrigin)

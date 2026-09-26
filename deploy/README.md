@@ -241,11 +241,16 @@ What operators and integrators notice (wire details in
   the row immediately. An already-issued access token is refused after
   sign-out by the API instance that handled it, but survives a restart (or
   another instance) until `CONVERGE_ACCESS_TOKEN_TTL` expires.
-- **Cookie writes need an Origin.** A state-changing request with session
-  cookies must come from `CONVERGE_WEB_ORIGIN` or `CONVERGE_PUBLIC_URL`
-  (`Origin`, else `Referer`), or it gets `403 CROSS_ORIGIN`. Browsers comply
-  automatically; scripts that reuse browser cookies must send `Origin`.
-  Bearer-token clients (agents) are unaffected.
+- **Writes from a browser need your Origin.** A state-changing request whose
+  `Origin` (else `Referer`) names any other site gets `403 CROSS_ORIGIN`,
+  signed in or not; so does one with session cookies and neither header.
+  Only `CONVERGE_WEB_ORIGIN` and `CONVERGE_PUBLIC_URL` are allowed, so open
+  the app at exactly that origin (`127.0.0.1` is not `localhost`). Scripts
+  that reuse browser cookies must send `Origin`; Bearer-token clients
+  (agents) and clients that send no `Origin` without cookies are unaffected.
+- **API responses** are `nosniff` and `Cache-Control: no-store`; a
+  client-supplied `X-Request-Id` is kept only if it is at most 128 characters
+  of `[A-Za-z0-9._:-]`.
 - **Agent writes need `If-Match`.** Issue update/move/delete/handoff with an
   API token must send the issue `version` the agent read: `428` without it,
   `412` when stale.
@@ -260,6 +265,10 @@ What operators and integrators notice (wire details in
   the Next.js image optimizer is disabled (`/_next/image` is a 404); the
   post-sign-in redirect only follows same-origin paths; the web container
   runs as the unprivileged `node` user.
+
+`server/tools/authprobe/run.sh` replays the auth pentest checklist against a
+production-configured server (it runs in CI); results and scope are in
+[docs/release/auth-pentest.md](../docs/release/auth-pentest.md).
 
 **Incident levers.** To end one user's sessions:
 `update sessions set revoked_at = now(), revoked_reason = 'admin' where account_id = '<id>' and revoked_at is null;`

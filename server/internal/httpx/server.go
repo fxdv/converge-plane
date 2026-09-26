@@ -76,6 +76,7 @@ func New(d Dependencies) *Server {
 		resolver.Middleware,
 		RequestLogger(d.Logger),
 		Metrics(),
+		SecurityHeaders(),
 		CORS(d.WebOrigin),
 	)
 
@@ -201,16 +202,51 @@ func Recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // RequestID ensures every request has a correlation ID. It honours an
-// incoming X-Request-Id header and echoes it back.
+// incoming X-Request-Id header that looks like one (validRequestID) and
+// echoes it back; anything else is replaced, since the id is written to
+// every log line of the request.
 func RequestID() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id := strings.TrimSpace(r.Header.Get("X-Request-Id"))
-			if id == "" {
+			if !validRequestID(id) {
 				id = newRequestID()
 			}
 			w.Header().Set("X-Request-Id", id)
 			next.ServeHTTP(w, r.WithContext(withRequestID(r.Context(), id)))
+		})
+	}
+}
+
+// validRequestID admits the ids proxies and tracing systems send (UUIDs,
+// hex, dotted or colon-separated trace ids) and nothing longer than 128
+// bytes.
+func validRequestID(id string) bool {
+	if id == "" || len(id) > 128 {
+		return false
+	}
+	for _, c := range []byte(id) {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '-' || c == '_' || c == '.' || c == ':':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// SecurityHeaders marks every response nosniff, and keeps /api responses
+// (tokens, tenant data) out of browser and intermediary caches. Handlers
+// may override Cache-Control (the SSE stream does).
+func SecurityHeaders() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				w.Header().Set("Cache-Control", "no-store")
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

@@ -33,7 +33,13 @@ func TestRequireSameOrigin(t *testing.T) {
 		{"no origin and no referer", http.MethodPatch, session, nil, http.StatusForbidden},
 		{"refresh cookie alone still counts", http.MethodPost, &http.Cookie{Name: CookieRefreshToken, Value: "x"}, map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
 		{"safe method", http.MethodGet, session, map[string]string{"Origin": "https://evil.example"}, http.StatusNoContent},
-		{"no session cookie", http.MethodPost, nil, map[string]string{"Origin": "https://evil.example"}, http.StatusNoContent},
+		// Login CSRF: a cookie-less cross-site form POST redeeming the
+		// attacker's sign-in code.
+		{"foreign origin without cookies", http.MethodPost, nil, map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"opaque origin without cookies", http.MethodPost, nil, map[string]string{"Origin": "null"}, http.StatusForbidden},
+		{"foreign referer without cookies", http.MethodPost, nil, map[string]string{"Referer": "https://evil.example/x"}, http.StatusForbidden},
+		{"same-origin write without cookies", http.MethodPost, nil, map[string]string{"Origin": "http://localhost:3000"}, http.StatusNoContent},
+		{"non-browser client: no cookies, no origin", http.MethodPost, nil, nil, http.StatusNoContent},
 		{"authorization header", http.MethodPost, session, map[string]string{"Origin": "https://evil.example", "Authorization": "Bearer cvg_x"}, http.StatusNoContent},
 	}
 	for _, c := range cases {

@@ -121,6 +121,55 @@ func TestRequestIDHonoursIncoming(t *testing.T) {
 	}
 }
 
+// TestRequestIDReplacesUnsafe: an id that is too long or carries markup
+// or non-ASCII is replaced rather than echoed into the response and every
+// log line of the request.
+func TestRequestIDReplacesUnsafe(t *testing.T) {
+	h := RequestID()(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	for _, id := range []string{strings.Repeat("a", 129), "abc<script>", "x y", "id\u202e"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/x", nil)
+		r.Header.Set("X-Request-Id", id)
+		h.ServeHTTP(w, r)
+		if got := w.Header().Get("X-Request-Id"); !hexID.MatchString(got) {
+			t.Errorf("id %q echoed as %q, want a fresh generated id", id, got)
+		}
+	}
+	for _, id := range []string{"0af7651916cd43dd8448eb211c80319c", "00-4bf92f3577b34da6-00f067aa0ba902b7-01", "req:1.2_3"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/x", nil)
+		r.Header.Set("X-Request-Id", id)
+		h.ServeHTTP(w, r)
+		if got := w.Header().Get("X-Request-Id"); got != id {
+			t.Errorf("trace id %q replaced by %q", id, got)
+		}
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	h := SecurityHeaders()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/sync_actions/stream" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+	}))
+	cases := map[string]string{
+		"/api/v1/users":               "no-store",
+		"/api/auth/session":           "no-store",
+		"/api/v1/sync_actions/stream": "no-cache",
+		"/healthz":                    "",
+	}
+	for path, wantCC := range cases {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("%s: X-Content-Type-Options = %q, want nosniff", path, got)
+		}
+		if got := w.Header().Get("Cache-Control"); got != wantCC {
+			t.Errorf("%s: Cache-Control = %q, want %q", path, got, wantCC)
+		}
+	}
+}
+
 func TestRequestIDFromContextEmpty(t *testing.T) {
 	if got := RequestIDFromContext(context.Background()); got != "" {
 		t.Fatalf("= %q, want empty", got)

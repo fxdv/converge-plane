@@ -6,18 +6,22 @@ import (
 	"strings"
 )
 
-// RequireSameOrigin refuses state-changing requests that ride on session
-// cookies unless the browser reports they come from the web app or the
-// API's own origin (Origin, or Referer when a privacy setting strips
-// Origin). SameSite=Lax keeps the cookies off cross-site POSTs, but not
-// off requests from a sibling subdomain, which is same-site.
+// RequireSameOrigin refuses state-changing requests that a browser reports
+// (Origin, or Referer when a privacy setting strips Origin) as coming from
+// anywhere but the web app or the API's own origin. SameSite=Lax keeps the
+// cookies off cross-site POSTs, but not off requests from a sibling
+// subdomain, which is same-site.
 //
-// Requests without session cookies carry no ambient authority and pass,
-// as do requests with an Authorization header: a cross-origin page cannot
-// set one without a CORS preflight, which only the web origin passes.
+// A foreign origin is refused even without cookies: a cookie-less form
+// POST can still redeem the attacker's sign-in code (signing the victim's
+// browser into the attacker's account) or make the API mail a link.
+// Session cookies with no provenance at all are refused too. Requests
+// with an Authorization header pass: a cross-origin page cannot set one
+// without a CORS preflight, which only the web origin passes. Non-browser
+// clients send no Origin and carry no cookies, so they pass as well.
 func (s *Service) RequireSameOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if safeMethod(r.Method) || r.Header.Get("Authorization") != "" || !hasSessionCookie(r) {
+		if safeMethod(r.Method) || r.Header.Get("Authorization") != "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -25,7 +29,7 @@ func (s *Service) RequireSameOrigin(next http.Handler) http.Handler {
 		if origin == "" {
 			origin = r.Header.Get("Referer")
 		}
-		if !s.origins[normalizeOrigin(origin)] {
+		if (origin != "" || hasSessionCookie(r)) && !s.origins[normalizeOrigin(origin)] {
 			authEvents.With("cross_origin_refused").Inc()
 			s.log.Warn("cross-origin request refused",
 				"method", r.Method, "path", r.URL.Path, "origin", origin)
