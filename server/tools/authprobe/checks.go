@@ -46,6 +46,7 @@ func (p *probe) runChecks() {
 
 	p.check("AUTHZ-1", "unauthenticated reads are refused", p.checkUnauthenticated)
 	p.check("AUTHZ-2", "another workspace's data and issues are unreachable", p.checkCrossWorkspace)
+	p.check("AUTHZ-3", "a scoped agent token reaches only its scopes and teams, and dies on revocation", p.checkScopedToken)
 }
 
 // ---- hygiene ---------------------------------------------------------------
@@ -736,50 +737,15 @@ func (p *probe) checkCrossWorkspace() error {
 	if err != nil {
 		return err
 	}
-	res, err := p.do(request{method: "POST", path: "/api/v1/workspaces/onboarding", cookies: owner.all(),
-		json: map[string]string{"workspaceName": "Probe " + randHex(3), "teamName": "Probe", "teamIdentifier": "PRB"}})
+	ws, teamID, stateID, err := p.newWorkspace(owner)
 	if err != nil {
 		return err
-	}
-	if err := expectStatus(res, http.StatusOK); err != nil {
-		return fmt.Errorf("onboarding: %w", err)
-	}
-	ws := res.field("id")
-
-	res, err = p.do(request{method: "GET", cookies: owner.all(),
-		path: "/api/v1/sync_actions/bootstrap?workspaceId=" + ws + "&modelNames=Team,Workflow"})
-	if err != nil {
-		return err
-	}
-	var boot struct {
-		SyncActions []syncRecord `json:"syncActions"`
-	}
-	if err := json.Unmarshal(res.body, &boot); err != nil {
-		return fmt.Errorf("bootstrap: %s", res)
-	}
-	var teamID, stateID string
-	for _, r := range boot.SyncActions {
-		if r.ModelName == "Team" && teamID == "" {
-			teamID, _ = r.Data["id"].(string)
-		}
-	}
-	for _, r := range boot.SyncActions {
-		if r.ModelName == "Workflow" && r.Data["teamId"] == teamID && stateID == "" {
-			stateID, _ = r.Data["id"].(string)
-		}
-	}
-	if teamID == "" || stateID == "" {
-		return fmt.Errorf("bootstrap lacks a team and status: %s", res)
 	}
 	issue := map[string]string{"teamId": teamID, "stateId": stateID, "title": "probe"}
-	res, err = p.do(request{method: "POST", path: "/api/v1/issues", cookies: owner.all(), json: issue})
+	issueID, _, err := p.createIssue(owner, issue)
 	if err != nil {
 		return err
 	}
-	if err := expectStatus(res, http.StatusCreated); err != nil {
-		return fmt.Errorf("create issue: %w", err)
-	}
-	issueID := res.field("id")
 
 	for _, rq := range []request{
 		{method: "GET", path: "/api/v1/sync_actions/bootstrap?workspaceId=" + ws + "&modelNames=Issue,Team"},
@@ -803,7 +769,187 @@ func (p *probe) checkCrossWorkspace() error {
 	return nil
 }
 
+// checkScopedToken: an agent token issued with scopes and a team grant
+// reaches its own lane and nothing else, and dies when revoked.
+func (p *probe) checkScopedToken() error {
+	owner, err := p.signIn()
+	if err != nil {
+		return err
+	}
+	ws, team1, state1, err := p.newWorkspace(owner)
+	if err != nil {
+		return err
+	}
+	res, err := p.do(request{method: "POST", path: "/api/v1/teams", cookies: owner.all(),
+		json: map[string]string{"name": "Other", "identifier": "OTH", "workspaceId": ws}})
+	if err != nil {
+		return err
+	}
+	if res.status != http.StatusOK && res.status != http.StatusCreated {
+		return fmt.Errorf("create team: %s", res)
+	}
+	team2 := res.field("id")
+	res, err = p.do(request{method: "POST", path: "/api/v1/" + team2 + "/workflows", cookies: owner.all(),
+		json: map[string]any{"name": "Todo", "category": "UNSTARTED", "color": "#888888", "position": 1}})
+	if err != nil {
+		return err
+	}
+	if res.status != http.StatusOK && res.status != http.StatusCreated {
+		return fmt.Errorf("create status: %s", res)
+	}
+	state2 := res.field("id")
+
+	res, err = p.do(request{method: "POST", path: "/api/v1/workspaces/" + ws + "/agents", cookies: owner.all(),
+		json: map[string]any{
+			"name": "coder", "teamIds": []string{team1, team2}, "driver": "external",
+			"token": map[string]any{"scopes": []string{"work", "issues:write"}, "teamIds": []string{team1}, "ttlHours": 1},
+		}})
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(res, http.StatusCreated); err != nil {
+		return fmt.Errorf("create agent: %w", err)
+	}
+	agentID, token := res.field("id"), res.field("token")
+	if !strings.HasPrefix(token, "conv_agent_") {
+		return fmt.Errorf("create agent returned no token: %s", res)
+	}
+	inLane, _, err := p.createIssue(owner, map[string]string{"teamId": team1, "stateId": state1, "title": "lane", "assigneeId": agentID})
+	if err != nil {
+		return err
+	}
+	offLane, _, err := p.createIssue(owner, map[string]string{"teamId": team2, "stateId": state2, "title": "off", "assigneeId": agentID})
+	if err != nil {
+		return err
+	}
+
+	res, err = p.do(request{method: "POST", path: "/api/v1/issues/" + inLane + "/claim", bearer: token})
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(res, http.StatusOK); err != nil {
+		return fmt.Errorf("claim in lane: %w", err)
+	}
+	etag := res.header.Get("ETag")
+	res, err = p.do(request{method: "POST", path: "/api/v1/issues/" + inLane, bearer: token,
+		header: map[string]string{"If-Match": etag}, json: map[string]string{"title": "worked"}})
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(res, http.StatusOK); err != nil {
+		return fmt.Errorf("write in lane with the claim's ETag: %w", err)
+	}
+
+	for _, c := range []struct {
+		rq   request
+		want int
+	}{
+		{request{method: "POST", path: "/api/v1/issues/" + offLane + "/claim"}, http.StatusNotFound},
+		{request{method: "POST", path: "/api/v1/issues/" + offLane, header: map[string]string{"If-Match": "0"}, json: map[string]string{"title": "x"}}, http.StatusNotFound},
+		{request{method: "GET", path: "/api/v1/sync_actions/bootstrap?workspaceId=" + ws}, http.StatusForbidden},
+		{request{method: "DELETE", path: "/api/v1/issues/" + inLane}, http.StatusForbidden},
+		{request{method: "POST", path: "/api/v1/issue_comments?issueId=" + inLane, json: map[string]string{"body": "x"}}, http.StatusForbidden},
+		{request{method: "GET", path: "/api/v1/workspaces/" + ws + "/agents"}, http.StatusForbidden},
+		{request{method: "POST", path: "/api/v1/workspaces/" + ws + "/agents", json: map[string]string{"name": "escalate"}}, http.StatusForbidden},
+	} {
+		c.rq.bearer = token
+		res, err := p.do(c.rq)
+		if err != nil {
+			return fmt.Errorf("%s %s: %w", c.rq.method, c.rq.path, err)
+		}
+		if res.status != c.want {
+			return fmt.Errorf("scoped token %s %s: %s, want %d", c.rq.method, c.rq.path, res, c.want)
+		}
+	}
+
+	res, err = p.do(request{method: "POST", path: "/api/v1/workspaces/" + ws + "/agents/" + agentID + "/token/revoke",
+		cookies: owner.all(), json: map[string]string{}})
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(res, http.StatusOK); err != nil {
+		return fmt.Errorf("revoke: %w", err)
+	}
+	res, err = p.do(request{method: "GET", path: "/api/v1/agent/queue", bearer: token})
+	if err != nil {
+		return err
+	}
+	if res.status != http.StatusUnauthorized {
+		return fmt.Errorf("revoked token: %s, want 401", res)
+	}
+	return nil
+}
+
 // ---- helpers ---------------------------------------------------------------
+
+// newWorkspace onboards a workspace for the session and returns it with
+// its first team and one of that team's statuses.
+func (p *probe) newWorkspace(s *session) (ws, teamID, stateID string, err error) {
+	res, err := p.do(request{method: "POST", path: "/api/v1/workspaces/onboarding", cookies: s.all(),
+		json: map[string]string{"workspaceName": "Probe " + randHex(3), "teamName": "Probe", "teamIdentifier": "PRB"}})
+	if err != nil {
+		return "", "", "", err
+	}
+	if err := expectStatus(res, http.StatusOK); err != nil {
+		return "", "", "", fmt.Errorf("onboarding: %w", err)
+	}
+	ws = res.field("id")
+	boot, err := p.bootstrap(s, ws, "Team,Workflow")
+	if err != nil {
+		return "", "", "", err
+	}
+	for _, r := range boot {
+		if r.ModelName == "Team" && teamID == "" {
+			teamID, _ = r.Data["id"].(string)
+		}
+	}
+	stateID, err = p.firstState(s, ws, teamID)
+	return ws, teamID, stateID, err
+}
+
+// firstState returns one workflow status of the team.
+func (p *probe) firstState(s *session, ws, teamID string) (string, error) {
+	boot, err := p.bootstrap(s, ws, "Workflow")
+	if err != nil {
+		return "", err
+	}
+	for _, r := range boot {
+		if r.ModelName == "Workflow" && r.Data["teamId"] == teamID {
+			if id, _ := r.Data["id"].(string); id != "" {
+				return id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("team %s has no status", teamID)
+}
+
+func (p *probe) bootstrap(s *session, ws, models string) ([]syncRecord, error) {
+	res, err := p.do(request{method: "GET", cookies: s.all(),
+		path: "/api/v1/sync_actions/bootstrap?workspaceId=" + ws + "&modelNames=" + models})
+	if err != nil {
+		return nil, err
+	}
+	var boot struct {
+		SyncActions []syncRecord `json:"syncActions"`
+	}
+	if err := json.Unmarshal(res.body, &boot); err != nil {
+		return nil, fmt.Errorf("bootstrap: %s", res)
+	}
+	return boot.SyncActions, nil
+}
+
+// createIssue creates an issue as the session and returns its id and
+// ETag.
+func (p *probe) createIssue(s *session, issue map[string]string) (id, etag string, err error) {
+	res, err := p.do(request{method: "POST", path: "/api/v1/issues", cookies: s.all(), json: issue})
+	if err != nil {
+		return "", "", err
+	}
+	if err := expectStatus(res, http.StatusCreated); err != nil {
+		return "", "", fmt.Errorf("create issue: %w", err)
+	}
+	return res.field("id"), res.header.Get("ETag"), nil
+}
 
 func isPrintableASCII(s string) bool {
 	for _, r := range s {
