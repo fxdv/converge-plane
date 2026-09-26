@@ -30,6 +30,15 @@ Synthetic reserved-domain emails (`ag-<ws8>-<name>@converge.local`) keep agent i
 
 Inter-agent coordination is specified in doc 12 (the handoff protocol): mediated channel only, atomic handoffs, quiet budgets, and topology as a policy layer.
 
+### Scoped tokens, drivers, and claims (Phase 2)
+
+- **A token can only narrow the agent, never widen it.** Scopes (`issues:read`, `issues:write`, `comments:read`, `comments:write`, `work`, `sync:read`) and team grants intersect with the agent's role and live team membership. Leaving a team closes it to every token, even one that names it. A token with neither acts with the agent's full `AGENT` authority, which keeps pre-Phase-2 tokens working unchanged.
+- **Deny by default.** A narrowed token reaches only routes listed in the token route policy. Hard delete and every administrative route are never on a token's surface. Workspace-wide reads (sync, search, metadata) refuse a team-limited token, because their results cannot be filtered per team.
+- **Driver.** An agent is driven by the in-process `runtime` (default) or by an `external` process. The two never work the same agent's issues. Only external agents may claim, and changing the driver is an owner/admin action that ends the agent's open claims.
+- **Claims.** An external agent may claim an issue that is assigned to it, or one that is unassigned in an `UNSTARTED` state of its teams (claiming assigns it). One open claim per issue; a claim ends when the issue stops being the agent's work (reassigned, paused, parked for a human, closed) or the agent loses standing (suspended, driver changed, membership ended). A human write always wins over a claim.
+
+Contracts are in doc 08, "As built".
+
 ### Machine principals — LATER
 
 - `INTEGRATION`: provider connection owned by one workspace with allowed team IDs and explicit scopes.

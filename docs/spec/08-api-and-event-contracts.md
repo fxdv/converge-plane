@@ -85,6 +85,45 @@ The conventions above are the target; these are the contracts the Go server impl
 
 **Realtime delivery.** Sync sequences are gap-free per workspace and commit in order. The SSE stream carries every committed sequence (another member's notification arrives as `{"sequenceId","skip":true}`), and every 15 s it sends `event: head` with `{"sequenceId":"<committed head>"}`. The client buffers out-of-order records and runs a delta when a hole outlasts 1.5 s; a head beyond its cursor counts as a hole, so a lost final record is repaired within one heartbeat instead of at the next write. A subscriber 64 events behind is disconnected and resyncs from the delta on reconnect. `sync-soak.test.ts` (client, seeded fault injection) and `outbox_db_test.go` (server, concurrent writers and rollbacks) pin these properties.
 
+**Scoped agent tokens.** An agent token may carry scopes and team grants (migration 0021: `api_tokens.scopes`, `api_tokens.team_ids`). A token with neither, including every token issued before 0021, acts with the agent's full authority. A token with either is *narrowed*: before any handler runs, the route is looked up in `tokenRoutePolicy` (`server/internal/api/token_scope.go`), which names every `/api/v1` route. A route that is absent or maps to no scope gets `403 {"error":"this token may not call this endpoint"}`, so a new endpoint stays closed to narrowed tokens until someone adds it (a test walks the router and fails on any unlisted route). A missing scope gets `403 {"error":"this token's scopes do not allow this request","requiredScope":"<scope>"}`.
+
+| Scope | Routes |
+| --- | --- |
+| `issues:read` | issue relations; teams, workflows, labels, projects, search |
+| `issues:write` | issue create, update, move, handoff, subscribe; relation delete |
+| `comments:read` / `comments:write` | list / create, update, delete, reply |
+| `work` | the work API below |
+| `sync:read` | bootstrap, delta, stream |
+| (any narrowed token) | `GET /users` (who am I) |
+| (never) | `DELETE /issues/{id}`, workspace/team/workflow/label/view/member/agent administration |
+
+Team grants are checked where team access is decided, so every issue and comment route inherits them: a team outside the grant, or one the agent has left, answers `404` like any unreachable team, and `parentId`/relation targets must also be reachable. Routes whose data spans the workspace (sync, search, team/workflow/label/project metadata, relation delete) refuse a team-limited token with `403`; `sync:read` cannot be combined with `teamIds`.
+
+**Agent administration.** Owner/admin only.
+
+- `POST /workspaces/{id}/agents` takes `{name, teamIds?, driver?, token?: {scopes?, teamIds?, ttlHours?}}`.
+- `POST /workspaces/{id}/agents/{accountId}` takes `{driver}`.
+- `POST …/agents/{accountId}/token` (rotate) takes `{name?, scopes?, teamIds?, ttlHours?}` and answers `400` on a malformed body.
+- Token validation: an empty `scopes` or `teamIds` list is refused (omit the field for full access), unknown scopes are refused, token teams must be teams the agent belongs to, and `ttlHours` must be 1–87600.
+- `GET …/agents` lists each agent's `driver` and its live `tokens` (`id, name, scopes, teamIds, expiresAt, lastUsedAt, createdAt`; never the secret).
+
+**Drivers.** `accounts.agent_driver` is `runtime` (default: the in-process swarm works the agent's issues) or `external` (an outside process works them through the work API, and the runtime never schedules, wakes, or counts that agent). Switching an agent back to `runtime` ends its open claims (`revoked`).
+
+**Work API (external agents).** All four routes need an agent principal with the `external` driver (others get `403`) and, for a narrowed token, the `work` scope.
+
+| Route | Contract |
+| --- | --- |
+| `GET /agent/queue` | `{workspaceId, assigned, available, claims}`: open issues assigned to the agent (not paused, not in Human Review, not completed/canceled; at most 100), unassigned issues in an `UNSTARTED` state of its teams with no live claim (by priority; at most 50), and its open claims. Team grants filter both lists. |
+| `POST /issues/{id}/claim` `{ttlSeconds?}` | TTL 30–900 s (default 300; `422` otherwise). The issue must be assigned to the agent, or unassigned in an `UNSTARTED` state of one of its teams (claiming it assigns it). `409` if closed, waiting for a human, not the agent's, or held by another agent's live claim (`{"error","claimedById"}`). A claim the agent already holds is superseded. `200 {claim, packet}` with `ETag: "<version>"`. |
+| `POST /issues/{id}/claim/heartbeat` `{claimId}` | Extends the lease by its TTL. `409 {"error":"the claim has ended","endReason"}` if it has ended or no longer holds (the heartbeat ends it). |
+| `POST /issues/{id}/claim/release` `{claimId}` | Ends the claim; `200 {released:true}`, or `200 {released:false, endReason}` if it had already ended. Release does not unassign. |
+
+A claim that is missing, belongs to another agent, or names another issue answers `404 "claim not found"`. `claim` is `{id, issueId, agentId, mode: "assigned"|"pool", claimedAt, expiresAt, ttlSeconds, heartbeatIntervalSeconds}`. The agent heartbeats every `heartbeatIntervalSeconds` (a third of the TTL, at least 10). The `packet` bundles what the agent needs to start without further reads: the issue, its description as plain text, team, the team's states, labels, the last 20 comments (oldest first), and the latest handoff to it.
+
+A claim ends as `released`, `expired`, `superseded`, `reassigned`, `paused` (paused or parked in Human Review), `closed`, or `revoked` (agent suspended, driver changed, membership ended). A sweeper ends lapsed and invalidated claims every 10 s, even when the runtime is disabled. At most one claim per issue is open (a partial unique index, under the team advisory lock and a row lock). Opening or ending a claim bumps the issue `version` and emits an Issue update; heartbeats do neither. Holding a claim is not required to write an issue. The claim coordinates who works it, and a process whose claim ended is fenced by the version: its next `If-Match` write gets `412`.
+
+**Claim on the wire.** Every Issue payload (bootstrap, delta, stream, responses) carries `claimedById` and `claimedAt`, the open claim's agent and start time, and explicit `null`s when there is none. The board shows a "claimed" chip on a card an external agent holds.
+
 ## Resource contracts by release
 
 These are capability endpoints, not a fixed framework/router prescription.
