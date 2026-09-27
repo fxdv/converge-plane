@@ -13,6 +13,7 @@ operating it day to day.
 - [TLS and reverse proxy](#tls-and-reverse-proxy)
 - [Client IP and trusted proxies](#client-ip-and-trusted-proxies)
 - [Security behavior](#security-behavior)
+- [Coding agents (MCP)](#coding-agents-mcp)
 - [Production checklist](#production-checklist)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
@@ -272,9 +273,12 @@ What operators and integrators notice (wire details in
   Cost and tokens are what the agent reports; Converge does not price or
   verify them, and the UI labels them as agent-reported. Links are shown
   only when they are http(s). Runs and their traces are kept with the issue
-  and deleted with it; there is no separate retention job. Migration 0022
-  creates one run for every existing claim, and web clients re-download
-  their workspace once after the upgrade.
+  and deleted with it; there is no separate retention job.
+- **MCP.** `POST /api/v1/mcp` accepts agent API tokens only. Each tool call
+  runs as the matching REST request under the same token, so scopes, team
+  grants and `If-Match` apply unchanged, and one tool call counts as one
+  request against the rate limit. Setup: [Coding agents
+  (MCP)](#coding-agents-mcp).
 - **Auth rate limits.** `/api/auth/*`: per IP, burst 30 then one request per
   2 s; sign-in codes per email, 5 then one per 3 min. Excess gets `429` with
   `Retry-After`. The `email/exists` endpoint is gone (it let anyone test
@@ -298,6 +302,47 @@ TTL. To end every human session at once, rotate `CONVERGE_SESSION_SECRET`
 and restart. That invalidates every session token immediately; agent API
 tokens are stored as hashes, independent of the secret, and keep working.
 Suspend an agent in Settings → Members to stop it.
+
+## Coding agents (MCP)
+
+An external coding agent (Claude Code, Cursor, Codex, or anything that
+speaks MCP over streamable HTTP) works Converge issues through the MCP
+endpoint at `https://<your-domain>/api/v1/mcp`.
+
+1. Create an agent with the `external` driver and a narrow token: scopes
+   `work`, `issues:write`, `comments:write`, limited to the teams it should
+   work on. The Add agent dialog does not set the driver or scopes yet, so
+   for now a workspace owner or admin runs this in the browser console while
+   signed in to Converge (the session cookie authenticates it):
+   ```js
+   await (await fetch('/api/v1/workspaces/<workspaceId>/agents', {
+     method: 'POST', headers: {'Content-Type': 'application/json'},
+     body: JSON.stringify({name: 'coder', teamIds: ['<teamId>'], driver: 'external',
+       token: {scopes: ['work', 'issues:write', 'comments:write'], teamIds: ['<teamId>'], ttlHours: 720}}),
+   })).json()
+   ```
+   The response shows the token once. Keep it in an environment variable
+   (`CONVERGE_TOKEN` below), not in a config file.
+2. Point the client at the endpoint:
+   - Claude Code:
+     `claude mcp add --transport http converge https://<your-domain>/api/v1/mcp --header "Authorization: Bearer $CONVERGE_TOKEN"`
+   - Cursor (`~/.cursor/mcp.json` or `.cursor/mcp.json`):
+     ```json
+     {"mcpServers": {"converge": {"url": "https://<your-domain>/api/v1/mcp",
+       "headers": {"Authorization": "Bearer ${env:CONVERGE_TOKEN}"}}}}
+     ```
+   - Codex (`~/.codex/config.toml`):
+     ```toml
+     [mcp_servers.converge]
+     url = "https://<your-domain>/api/v1/mcp"
+     bearer_token_env_var = "CONVERGE_TOKEN"
+     ```
+
+The tools are `get_queue`, `claim_issue`, `heartbeat`, `report_progress`,
+`release_claim`, `update_issue`, and `add_comment`; the server's
+instructions tell the agent the workflow. Serve no OAuth discovery
+documents (`/.well-known/oauth-*`) on the API's domain: some clients then
+try OAuth instead of sending the configured header.
 
 ## Production checklist
 
@@ -349,6 +394,16 @@ docker compose up -d web                    # then the app
 Rolling back the *application* is a re-build of the previous tag; v1 schema
 changes are additive, so an old image remains compatible with a newer
 database.
+
+### Upgrading to the run-ledger release (migration 0022)
+
+- **One run per existing claim.** The migration creates a run for every
+  claim already on record, without usage figures; new claims record their
+  own.
+- **Web clients re-download their workspace once** after the upgrade, so
+  they pick up the runs.
+- **Rolling back past 0022 is safe.** Older builds ignore the run tables;
+  runs recorded meanwhile stay in the database and reappear on upgrade.
 
 ### Upgrading to the work-API release (migration 0021)
 

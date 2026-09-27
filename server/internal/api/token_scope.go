@@ -71,6 +71,10 @@ var tokenRoutePolicy = map[string]routePolicy{
 	"POST /issues/{id}/claim/release":   {scope: auth.ScopeWork},
 	"POST /issues/{id}/claim/report":    {scope: auth.ScopeWork},
 
+	// Each MCP tool call is re-dispatched to its REST route and held to
+	// that route's policy.
+	"POST /mcp": {scope: scopeIdentity},
+
 	// Outside the token surface: hard delete (spec 07 keeps it out of
 	// issues:write), profile and workspace administration, taxonomy and
 	// view writes, the member-facing planes, and agent administration.

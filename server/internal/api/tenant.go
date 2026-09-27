@@ -55,6 +55,8 @@ type API struct {
 	sweeperDone chan struct{}
 	// startedAt is the process birth (the metrics plane's uptime source).
 	startedAt time.Time
+	// root is the router Mount was given; MCP tool calls re-enter it.
+	root http.Handler
 }
 
 func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.Service, notifySvc *notify.Service) *API {
@@ -146,6 +148,7 @@ func PrincipalFromContext(ctx context.Context) *Principal {
 // Mount registers all application routes on r. Every one of them refuses
 // writes a browser reports as coming from a foreign origin.
 func (a *API) Mount(r chi.Router) {
+	a.root = r
 	r.Group(func(r chi.Router) {
 		r.Use(a.auth.RequireSameOrigin)
 		a.routes(r)
@@ -248,6 +251,8 @@ func (a *API) routes(r chi.Router) {
 		r.Post("/issues/{id}/claim/release", a.handleClaimRelease)
 		r.Post("/issues/{id}/claim/report", a.handleClaimReport)
 		r.Get("/issues/{id}/runs/{runId}/events", a.handleRunEvents)
+		// Phase 2: the MCP endpoint (tools over the routes above).
+		r.Post("/mcp", a.handleMCP)
 	})
 }
 
