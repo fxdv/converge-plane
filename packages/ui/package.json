@@ -9,14 +9,14 @@
     "lint": "eslint . --fix"
   },
   "peerDependencies": {
-    "react": "^18"
+    "react": "^19"
   },
   "devDependencies": {
     "@converge/eslint-config": "workspace:*",
     "@converge/typescript-config": "workspace:*",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20",
-    "@types/react": "^18",
+    "@types/react": "^19",
     "autoprefixer": "^10.6.1",
     "postcss": "^8.5.28",
     "postcss-load-config": "^6.0.1",
