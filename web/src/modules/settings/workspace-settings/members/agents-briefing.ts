@@ -25,7 +25,7 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
   },
   {
     title: 'Bring your own coding agent',
-    body: 'Pick "External tool" when you add an agent, and a coding agent you run — Claude Code, Cursor, Codex, or a script — works its issues over MCP or the API. The swarm leaves that agent alone; its claims, cost, and trace land on the ticket like any other run.',
+    body: 'Pick "External tool" when you add an agent, and a coding agent you run — Claude Code, Cursor, Codex, or a script — works its issues over MCP or the API. The swarm leaves that agent alone; its claims, cost, and trace land on the ticket like any other run. Pull requests it opens in repositories your server tracks show their state on the card and move the issue to Done when they merge.',
     status: 'live',
   },
   {

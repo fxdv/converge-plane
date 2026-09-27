@@ -11,7 +11,7 @@ import { useUsersData } from 'hooks/users';
 import { useContextStore } from 'store/global-context-provider';
 
 import { ActivityItem } from './activity-item';
-import { getUserDetails } from './user-activity-utils';
+import { getUserDetails, systemUserDetails } from './user-activity-utils';
 
 enum ActivityType {
   Comment = 'Comment',
@@ -80,19 +80,24 @@ export const IssueActivity = observer(() => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           activities.map((activity: any) => {
             if (activity.type === ActivityType.Default) {
-              const sourceMetadata = activity.userId
-                ? undefined
-                : JSON.parse(activity.sourceMetadata);
+              const sourceMetadata =
+                activity.userId || !activity.sourceMetadata
+                  ? undefined
+                  : JSON.parse(activity.sourceMetadata);
 
               return (
                 <ActivityItem
                   issueHistory={activity}
                   key={activity.id}
                   issue={issue}
-                  user={getUserDetails(
-                    sourceMetadata,
-                    getUserData(activity.userId),
-                  )}
+                  user={
+                    activity.userId || sourceMetadata?.userDisplayName
+                      ? getUserDetails(
+                          sourceMetadata,
+                          getUserData(activity.userId),
+                        )
+                      : systemUserDetails()
+                  }
                 />
               );
             }

@@ -7,6 +7,7 @@ import { saveCommentsData } from 'store/comments';
 import { convergeDatabase } from 'store/database';
 import { saveIssueArtifactsData } from 'store/issue-artifacts';
 import { saveIssueHistoryData } from 'store/issue-history';
+import { saveIssuePullRequestsData } from 'store/issue-pull-requests';
 import { saveIssuesData } from 'store/issues';
 import { saveLabelData } from 'store/labels';
 import { MODELS } from 'store/models';
@@ -35,6 +36,7 @@ const SAVE_HANDLERS: Record<string, Function> = {
   [MODELS.IssueComment]: saveCommentsData,
   [MODELS.IssueArtifact]: saveIssueArtifactsData,
   [MODELS.AgentRun]: saveAgentRunsData,
+  [MODELS.IssuePullRequest]: saveIssuePullRequestsData,
   [MODELS.View]: saveViewData,
   [MODELS.Project]: saveProjectData,
   [MODELS.SwarmActivity]: saveSwarmActivityData,
@@ -385,6 +387,7 @@ function inDomain(
     case MODELS.IssueHistory:
     case MODELS.IssueArtifact:
     case MODELS.AgentRun:
+    case MODELS.IssuePullRequest:
       // Same typeof predicate as the team case above.
       return (
         typeof row.issueId === 'string' && domain.issueIds.has(row.issueId)
@@ -498,6 +501,13 @@ async function localRowsForModel(
     case MODELS.AgentRun:
       return domain.issueIds.size
         ? db.agentRuns
+            .where('issueId')
+            .anyOf([...domain.issueIds])
+            .toArray()
+        : [];
+    case MODELS.IssuePullRequest:
+      return domain.issueIds.size
+        ? db.issuePullRequests
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()

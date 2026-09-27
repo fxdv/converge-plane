@@ -23,6 +23,10 @@ export enum MODELS {
   // external agent's claim, with its reported cost and evidence.
   AgentRun = 'AgentRun',
 
+  // Phase 2: GitHub pull requests linked from run evidence (spec
+  // cs:agents:prlinks), with the state the server last saw on GitHub.
+  IssuePullRequest = 'IssuePullRequest',
+
   // Swarm: the in-flight work signal (one record per agent; the
   // board's live chip and the swarm panel's real-time state).
   SwarmActivity = 'SwarmActivity',

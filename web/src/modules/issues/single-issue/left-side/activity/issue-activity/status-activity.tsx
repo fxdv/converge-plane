@@ -69,6 +69,12 @@ export const StatusActivity = observer(
             <span className="text-foreground mx-2">{toWorkflow?.name}</span>
           </div>
         </div>
+        {/* Why the server moved it (a system row), e.g. the merged PR. */}
+        {issueHistory.summary ? (
+          <p className="mt-1 ml-7 text-xs text-muted-foreground break-words">
+            {issueHistory.summary}
+          </p>
+        ) : null}
       </TimelineItem>
     );
   },

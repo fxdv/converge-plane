@@ -7,6 +7,7 @@ import { CommentsStore } from './comments';
 import { CommonStore, defaultCommonStoreValue } from './common';
 import { IssueArtifactsStore } from './issue-artifacts';
 import { IssueHistoryStore } from './issue-history';
+import { IssuePullRequestsStore } from './issue-pull-requests';
 import { IssuesStore } from './issues';
 import { LabelsStore } from './labels';
 import { NotificationsStore } from './notifications';
@@ -28,6 +29,7 @@ const StoreContextModel = types.model({
   notificationsStore: NotificationsStore,
   issueArtifactsStore: IssueArtifactsStore,
   issuesHistoryStore: IssueHistoryStore,
+  issuePullRequestsStore: IssuePullRequestsStore,
   swarmActivityStore: SwarmActivityStore,
   issuesStore: IssuesStore,
   workflowsStore: WorkflowsStore,
@@ -56,6 +58,9 @@ export const storeContextStore = StoreContextModel.create({
   },
   issuesHistoryStore: {
     issueHistories: {},
+  },
+  issuePullRequestsStore: {
+    pullRequests: {},
   },
   swarmActivityStore: {
     activities: {},

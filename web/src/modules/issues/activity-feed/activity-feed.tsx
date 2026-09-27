@@ -23,6 +23,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
+import { SYSTEM_ACTOR_NAME } from 'common/user-util';
+
 import { IssueViewContext } from 'components/side-issue-view';
 
 import { useGetUsersQuery } from 'services/users';
@@ -59,6 +61,8 @@ interface FeedEntry {
   issueRef: string; // "ENG-23"
   actorName: string;
   actorIsAgent: boolean;
+  // The server's own change (no account): shown under All only.
+  actorIsSystem?: boolean;
   text: string;
   live?: boolean; // in-flight signal (SwarmActivity): pulsing, no archive
 }
@@ -178,9 +182,14 @@ export const ActivityFeed = observer(() => {
         actorIsAgent: false,
         text: '',
       };
-      const actor = actorName(row.userId);
-      entry.actorName = actor.name;
-      entry.actorIsAgent = actor.isAgent;
+      if (row.userId) {
+        const actor = actorName(row.userId);
+        entry.actorName = actor.name;
+        entry.actorIsAgent = actor.isAgent;
+      } else {
+        entry.actorName = SYSTEM_ACTOR_NAME;
+        entry.actorIsSystem = true;
+      }
 
       const stateName = (stateId?: string | null): string =>
         stateId
@@ -212,6 +221,9 @@ export const ActivityFeed = observer(() => {
         entry.kind = 'status';
         const to = stateName(row.toStateId);
         entry.text = to ? `moved to ${to}` : 'moved states';
+        if (row.summary) {
+          entry.text += ` (${row.summary})`;
+        }
       } else if (
         (row.fromAssigneeId ?? null) !== (row.toAssigneeId ?? null) &&
         (row.fromAssigneeId || row.toAssigneeId)
@@ -301,7 +313,7 @@ export const ActivityFeed = observer(() => {
         ? true
         : filter === 'agents'
           ? entry.actorIsAgent
-          : !entry.actorIsAgent,
+          : !entry.actorIsAgent && !entry.actorIsSystem,
     )
     .slice(0, FEED_LIMIT);
 

@@ -38,6 +38,9 @@ import { IssueArtifact } from 'store/issue-artifacts/models';
 import { IssueArtifactsStore } from 'store/issue-artifacts/store';
 import { IssueHistory } from 'store/issue-history/models';
 import { IssueHistoryStore } from 'store/issue-history/store';
+import { IssuePullRequest } from 'store/issue-pull-requests/models';
+import { pullRequestFromRecord } from 'store/issue-pull-requests/save-data';
+import { IssuePullRequestsStore } from 'store/issue-pull-requests/store';
 import { Issue } from 'store/issues/models';
 import { IssuesStore } from 'store/issues/store';
 import { Label } from 'store/labels/models';
@@ -342,6 +345,33 @@ describe('IssueHistory model', () => {
     } as never);
     assert.equal(node.action, 'handoff');
     assert.equal(node.summary, 'found the bug');
+  });
+  it('accepts a system status move (no account, a summary)', () => {
+    const node = IssueHistory.create({
+      id: 'h8',
+      createdAt: stamp,
+      updatedAt: stamp,
+      userId: null,
+      issueId: 'i1',
+      action: 'updated',
+      summary: 'acme/app#12 merged on GitHub',
+      addedLabelIds: [],
+      removedLabelIds: [],
+      fromPriority: null,
+      toPriority: null,
+      fromStateId: 's2',
+      toStateId: 's4',
+      fromEstimate: null,
+      toEstimate: null,
+      fromAssigneeId: null,
+      toAssigneeId: null,
+      fromParentId: null,
+      toParentId: null,
+      relationChanges: null,
+      sourceMetadata: null,
+    } as never);
+    assert.equal(node.userId, null);
+    assert.equal(node.summary, 'acme/app#12 merged on GitHub');
   });
   it('accepts a fully-null transition (every field present, null)', () => {
     const node = IssueHistory.create({
@@ -1537,5 +1567,110 @@ describe('AgentRun model', () => {
     assert.deepEqual(staleIdsForModel('AgentRun', domain(), rows, live), [
       'run2',
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GitHub pull requests (spec cs:agents:prlinks): server/internal/api/
+// pullrequests.go pullRequestData.
+// ---------------------------------------------------------------------------
+
+describe('IssuePullRequest model', () => {
+  const at = '2026-09-27T10:00:00Z';
+  const wirePR = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'pr1',
+    createdAt: at,
+    updatedAt: at,
+    issueId: 'i1',
+    repo: 'acme/app',
+    number: 12,
+    url: 'https://github.com/acme/app/pull/12',
+    state: 'pending',
+    draft: false,
+    title: null,
+    mergedAt: null,
+    linkedById: 'ag1',
+    runId: null,
+    ...over,
+  });
+
+  it('accepts a new link with every optional field null', () => {
+    const node = IssuePullRequest.create(pullRequestFromRecord(wirePR()));
+    assert.equal(node.state, 'pending');
+    assert.equal(node.title, null);
+    assert.equal(node.runId, null);
+  });
+
+  it('accepts a merged PR and a state a later server adds', () => {
+    const merged = IssuePullRequest.create(
+      pullRequestFromRecord(
+        wirePR({
+          state: 'merged',
+          title: 'Fix the bug',
+          mergedAt: at,
+          runId: 'run1',
+        }),
+      ),
+    );
+    assert.equal(merged.mergedAt, at);
+    const unknown = IssuePullRequest.create(
+      pullRequestFromRecord(wirePR({ state: 'locked' })),
+    );
+    assert.equal(unknown.state, 'locked');
+  });
+
+  it('never crashes on a degraded payload', () => {
+    const node = IssuePullRequest.create(
+      pullRequestFromRecord({
+        id: 'pr2',
+        createdAt: at,
+        updatedAt: at,
+        issueId: 'i1',
+      }),
+    );
+    assert.deepEqual(
+      [node.repo, node.number, node.state, node.draft, node.linkedById],
+      ['', 0, 'pending', false, null],
+    );
+  });
+
+  it('lists an issue’s PRs oldest link first and forgets a deleted one', () => {
+    const store = IssuePullRequestsStore.create({ pullRequests: {} });
+    store.update(
+      pullRequestFromRecord(
+        wirePR({ id: 'b', number: 2, createdAt: '2026-09-27T11:00:00Z' }),
+      ),
+      'b',
+    );
+    store.update(pullRequestFromRecord(wirePR({ id: 'a', number: 1 })), 'a');
+    store.update(
+      pullRequestFromRecord(wirePR({ id: 'c', issueId: 'i2', number: 3 })),
+      'c',
+    );
+    assert.deepEqual(
+      store.getForIssue('i1').map((pr: { id: string }) => pr.id),
+      ['a', 'b'],
+    );
+    assert.deepEqual(store.getForIssue('i9'), []);
+    store.deleteById('a');
+    assert.deepEqual(
+      store.getForIssue('i1').map((pr: { id: string }) => pr.id),
+      ['b'],
+    );
+  });
+
+  it('prunes by issue like the other issue-scoped models', () => {
+    const live = liveIdsByModel([rec('IssuePullRequest', 'pr1', 'I')]);
+    const rows: PruneRow[] = [
+      pruneRow('pr1', { issueId: 'i1' }),
+      pruneRow('pr2', { issueId: 'i1' }),
+      pruneRow('pr3', { issueId: 'i9' }),
+    ];
+    assert.deepEqual(
+      staleIdsForModel('IssuePullRequest', domain(), rows, live),
+      ['pr2'],
+    );
   });
 });
