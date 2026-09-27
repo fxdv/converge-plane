@@ -154,6 +154,9 @@ type Config struct {
 	GitHubToken string
 	// GitHubPollInterval is how often an open pull request is checked.
 	GitHubPollInterval time.Duration
+	// GitHubWebhookSecret verifies GitHub's webhook deliveries
+	// (X-Hub-Signature-256). Empty leaves the receiver unmounted.
+	GitHubWebhookSecret string
 	// GitHubAutoDone moves an issue to its team's first Done state once
 	// a linked pull request merges and none is still open.
 	GitHubAutoDone bool
@@ -205,6 +208,8 @@ type Config struct {
 //	CONVERGE_GITHUB_POLL_INTERVAL
 //	                           how often an open PR is checked, 10s-1h (default "1m")
 //	CONVERGE_GITHUB_AUTO_DONE  move the issue to Done when its PRs merge (default "true")
+//	CONVERGE_GITHUB_WEBHOOK_SECRET
+//	                           webhook secret, >= 32 chars; mounts POST /api/github/webhook (default "": off)
 func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:          env("CONVERGE_HTTP_ADDR", ":3001"),
@@ -443,6 +448,14 @@ func loadGitHub(cfg *Config) error {
 		cfg.GitHubAutoDone = false
 	default:
 		return fmt.Errorf("invalid CONVERGE_GITHUB_AUTO_DONE %q: expected true or false", os.Getenv("CONVERGE_GITHUB_AUTO_DONE"))
+	}
+	cfg.GitHubWebhookSecret = strings.TrimSpace(os.Getenv("CONVERGE_GITHUB_WEBHOOK_SECRET"))
+	switch {
+	case cfg.GitHubWebhookSecret == "":
+	case len(cfg.GitHubRepos) == 0:
+		return fmt.Errorf("CONVERGE_GITHUB_WEBHOOK_SECRET is set but CONVERGE_GITHUB_REPOS is empty: list the repositories whose pull requests to track")
+	case len(cfg.GitHubWebhookSecret) < 32:
+		return fmt.Errorf("CONVERGE_GITHUB_WEBHOOK_SECRET must be at least 32 characters (generate one: openssl rand -hex 32)")
 	}
 	return nil
 }

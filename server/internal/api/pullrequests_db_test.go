@@ -617,6 +617,33 @@ func (f *prFixture) unlinked(linkID string) bool {
 	return gone
 }
 
+func TestPullRequestAllowlistChange(t *testing.T) {
+	f := newPRFixture(t)
+	issue := f.issue(f.t1, f.doing, f.ext1)
+	checkStatus(t, f.linkByHand(issue, "https://github.com/acme/app/pull/96"), http.StatusCreated)
+	checkStatus(t, f.linkByHand(issue, "https://github.com/labs/tool/pull/97"), http.StatusCreated)
+	f.gh.queue("/repos/acme/app/pulls/96", pullJSON("open", false, "Still read"))
+	f.gh.queue("/repos/labs/tool/pulls/97", pullJSON("open", false, "Not read"))
+
+	f.a.cfg.GitHubRepos = []string{"acme/app"}
+	f.poll(f.poller(), issue)
+	if len(f.gh.requests("/repos/labs/tool/pulls/97")) != 0 {
+		t.Fatal("the poller read a repository taken off the allowlist")
+	}
+	if s := f.link(issue, 97); s.state != "pending" || !f.dueNow(issue, 97) {
+		t.Fatalf("a link to a repository off the allowlist changed: %+v", s)
+	}
+	if f.link(issue, 96).title != "Still read" {
+		t.Fatal("the repository still on the allowlist was not read")
+	}
+
+	f.a.cfg.GitHubRepos = []string{"acme/app", "labs/*"}
+	f.poll(f.poller(), issue)
+	if f.link(issue, 97).title != "Not read" {
+		t.Fatal("checks must resume when the repository comes back")
+	}
+}
+
 func TestPullRequestManualLinks(t *testing.T) {
 	f := newPRFixture(t)
 
