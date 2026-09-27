@@ -103,7 +103,7 @@ export function NewIssueTitle({ form, index }: NewIssueTitleProps) {
             <FormControl>
               <div className="flex items-center gap-1">
                 <AdjustableTextArea
-                  className="border-0 py-0 resize-none bg-transparent no-scrollbar overflow-hidden outline-none focus-visible:ring-0 w-fit"
+                  className="border-0 py-0 resize-none bg-transparent no-scrollbar overflow-hidden outline-hidden focus-visible:ring-0 w-fit"
                   placeholderClassName="font-medium"
                   placeholder="Issue title"
                   {...field}

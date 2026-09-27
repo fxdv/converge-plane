@@ -1,1 +1,1 @@
-export * from '@converge/ui/tailwind.config';
+export { default } from '@converge/ui/tailwind.config';

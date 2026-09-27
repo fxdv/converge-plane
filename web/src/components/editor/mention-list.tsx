@@ -64,7 +64,7 @@ export const MentionList = forwardRef(
     }));
 
     return (
-      <div className="bg-popover border border-border rounded shadow flex flex-col gap-0.5 overflow-auto p-1 relative">
+      <div className="bg-popover border border-border rounded shadow-sm flex flex-col gap-0.5 overflow-auto p-1 relative">
         {props.items.length > 0 ? (
           props.items.map((item, index) => (
             <button

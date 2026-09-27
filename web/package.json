@@ -11,13 +11,13 @@
     "test": "bash scripts/wire-contract.sh"
   },
   "dependencies": {
+    "@converge/services": "workspace:*",
+    "@converge/types": "workspace:*",
+    "@converge/ui": "workspace:*",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "5.9.1",
     "@remixicon/react": "^4.2.0",
     "@tanstack/react-table": "^8.20.5",
-    "@converge/services": "workspace:*",
-    "@converge/types": "workspace:*",
-    "@converge/ui": "workspace:*",
     "@tiptap/core": "^2.27.3",
     "@tiptap/extension-mention": "^2.27.3",
     "@tiptap/react": "^2.27.3",
@@ -58,6 +58,7 @@
   "devDependencies": {
     "@converge/eslint-config": "workspace:*",
     "@converge/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/lodash.isequal": "^4.5.8",
     "@types/node": "^26.6.2",
     "@types/pluralize": "^0.0.33",
@@ -71,7 +72,7 @@
     "eslint-config-next": "16.3.6",
     "postcss": "^8",
     "prettier": "^3.9.9",
-    "tailwindcss": "^3.4.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.4.3"
   }
 }

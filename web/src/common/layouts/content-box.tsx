@@ -23,7 +23,7 @@ export const ContentBox = observer(
       >
         <div
           className={cn(
-            'context-box bg-background-2 h-full rounded-lg overflow-hidden shadow',
+            'context-box bg-background-2 h-full rounded-lg overflow-hidden shadow-sm',
 
             innerClassName,
           )}

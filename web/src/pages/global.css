@@ -1,6 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@config '../../tailwind.config.ts';
+@plugin 'tailwindcss-animate';
+@plugin 'tailwind-scrollbar';
+@import 'tailwind-scrollbar-hide/v4';
+/* v3's darkMode: ['class'] */
+@custom-variant dark (&:is(.dark *));
 
 .text-primary {
   color: #1a89c5;
