@@ -87,7 +87,9 @@ jobs:
         run: pnpm audit --audit-level high
       - name: Typecheck
         run: pnpm turbo run typecheck
-      # next build also runs ESLint and fails on errors.
+      # next build stopped running ESLint in Next 16.
+      - name: Lint
+        run: pnpm --filter=web --filter=@converge/ui --filter=@converge/types exec eslint .
       - name: Build
         run: pnpm turbo run build --filter=web
         env:

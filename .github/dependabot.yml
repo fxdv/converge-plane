@@ -20,6 +20,13 @@ updates:
       npm-minor-patch:
         update-types: [minor, patch]
         exclude-patterns: [next, eslint-config-next, "@next/*"]
+    ignore:
+      # The react plugin and babel parser bundled with eslint-config-next 16
+      # crash on ESLint 10.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

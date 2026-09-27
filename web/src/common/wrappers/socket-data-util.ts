@@ -24,7 +24,7 @@ import { saveWorkspaceData } from 'store/workspace';
 // reuses the exact same handlers for its synthetic DELETE records — one
 // code path for "this row is gone" whether the server said so or the
 // snapshot reconciliation found out.
-// eslint-disable-next-line @typescript-eslint/ban-types
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 const SAVE_HANDLERS: Record<string, Function> = {
   [MODELS.Label]: saveLabelData,
   [MODELS.Team]: saveTeamData,
@@ -221,7 +221,7 @@ export function dedupeLiveRecords(
 // Saves the data from the socket and call explicitly functions from individual models
 export async function saveSocketData(
   data: SyncActionRecord[],
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MODEL_STORE_MAP: Record<string, any>,
 ): Promise<void> {
   // Defensive: a server may serialize an empty record list as null;
@@ -282,7 +282,7 @@ export async function saveSocketData(
 // full-state reconciliation the prune that follows depends on.
 export async function saveLiveSocketData(
   data: SyncActionRecord[],
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MODEL_STORE_MAP: Record<string, any>,
 ): Promise<void> {
   await saveSocketData(dedupeLiveRecords(data), MODEL_STORE_MAP);
@@ -437,7 +437,7 @@ export function staleIdsForModel(
 async function localRowsForModel(
   modelName: string,
   domain: PruneDomain,
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MODEL_STORE_MAP: Record<string, any>,
 ): Promise<PruneRow[]> {
   const db = convergeDatabase;
@@ -534,7 +534,7 @@ async function localRowsForModel(
 export async function pruneStaleLocalRecords(
   snapshot: SyncActionRecord[],
   workspaceId: string,
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   MODEL_STORE_MAP: Record<string, any>,
   recipientId?: string,
 ): Promise<void> {
