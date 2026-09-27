@@ -8,4 +8,5 @@ export * from './agents';
 export * from './swarm';
 export * from './update-swarm-settings';
 export * from './metrics';
+export * from './run-events';
 export * from './notifications';

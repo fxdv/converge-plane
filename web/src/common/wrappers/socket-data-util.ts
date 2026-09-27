@@ -2,6 +2,7 @@ import { runInAction } from 'mobx';
 
 import type { SyncActionRecord } from 'common/types';
 
+import { saveAgentRunsData } from 'store/agent-runs';
 import { saveCommentsData } from 'store/comments';
 import { convergeDatabase } from 'store/database';
 import { saveIssueArtifactsData } from 'store/issue-artifacts';
@@ -33,6 +34,7 @@ const SAVE_HANDLERS: Record<string, Function> = {
   [MODELS.IssueHistory]: saveIssueHistoryData,
   [MODELS.IssueComment]: saveCommentsData,
   [MODELS.IssueArtifact]: saveIssueArtifactsData,
+  [MODELS.AgentRun]: saveAgentRunsData,
   [MODELS.View]: saveViewData,
   [MODELS.Project]: saveProjectData,
   [MODELS.SwarmActivity]: saveSwarmActivityData,
@@ -382,6 +384,7 @@ function inDomain(
     case MODELS.IssueComment:
     case MODELS.IssueHistory:
     case MODELS.IssueArtifact:
+    case MODELS.AgentRun:
       // Same typeof predicate as the team case above.
       return (
         typeof row.issueId === 'string' && domain.issueIds.has(row.issueId)
@@ -488,6 +491,13 @@ async function localRowsForModel(
     case MODELS.IssueArtifact:
       return domain.issueIds.size
         ? db.issueArtifacts
+            .where('issueId')
+            .anyOf([...domain.issueIds])
+            .toArray()
+        : [];
+    case MODELS.AgentRun:
+      return domain.issueIds.size
+        ? db.agentRuns
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()

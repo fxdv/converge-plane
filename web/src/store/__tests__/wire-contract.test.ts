@@ -30,6 +30,9 @@ import {
   type PruneRow,
 } from 'common/wrappers/socket-data-util';
 
+import { AgentRun } from 'store/agent-runs/models';
+import { agentRunFromRecord } from 'store/agent-runs/save-data';
+import { AgentRunsStore } from 'store/agent-runs/store';
 import { Comment } from 'store/comments/models';
 import { IssueArtifact } from 'store/issue-artifacts/models';
 import { IssueArtifactsStore } from 'store/issue-artifacts/store';
@@ -1392,5 +1395,147 @@ describe('NotificationsStore (addressed delivery)', () => {
       staleIdsForModel('Notification', domain(), rows, empty),
       [],
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The run ledger (spec cs:agents:runs): server/internal/api/runs.go runData.
+// ---------------------------------------------------------------------------
+
+describe('AgentRun model', () => {
+  const stamp = '2026-09-27T10:00:00Z';
+  const wireRun = (
+    over: Record<string, unknown> = {},
+  ): Record<string, unknown> => ({
+    id: 'run1',
+    createdAt: stamp,
+    updatedAt: stamp,
+    issueId: 'i1',
+    agentId: 'ag1',
+    claimId: 'run1',
+    startedAt: stamp,
+    endedAt: null,
+    endReason: null,
+    outcome: null,
+    summary: null,
+    model: null,
+    inputTokens: 0,
+    outputTokens: 0,
+    costMicros: 0,
+    eventCount: 0,
+    evidence: [],
+    ...over,
+  });
+
+  it('accepts an open run with every optional field null', () => {
+    const node = AgentRun.create(agentRunFromRecord(wireRun()));
+    assert.equal(node.endedAt, null);
+    assert.equal(node.evidence.length, 0);
+  });
+
+  it('accepts an ended run with usage, outcome, and evidence', () => {
+    const node = AgentRun.create(
+      agentRunFromRecord(
+        wireRun({
+          endedAt: stamp,
+          endReason: 'released',
+          outcome: 'done',
+          summary: 'Fixed.\nPR is up.',
+          model: 'claude-x',
+          inputTokens: 1000,
+          outputTokens: 200,
+          costMicros: 4200,
+          eventCount: 3,
+          evidence: [
+            {
+              kind: 'pull_request',
+              url: 'https://github.com/o/r/pull/7',
+              title: 'fix',
+            },
+            { kind: 'ci_run', url: 'https://ci.example/1', title: null },
+          ],
+        }),
+      ),
+    );
+    assert.equal(node.costMicros, 4200);
+    assert.equal(node.evidence[1].title, null);
+  });
+
+  it('never crashes on a degraded payload (missing evidence and totals)', () => {
+    const run = agentRunFromRecord({
+      id: 'r2',
+      createdAt: stamp,
+      updatedAt: stamp,
+      issueId: 'i1',
+      agentId: 'ag1',
+      startedAt: stamp,
+    });
+    const node = AgentRun.create(run);
+    assert.deepEqual(
+      [node.inputTokens, node.costMicros, node.evidence.length],
+      [0, 0, 0],
+    );
+    assert.equal(node.claimId, null);
+  });
+
+  it('totals an issue across runs and orders runs oldest first', () => {
+    const store = AgentRunsStore.create({ runs: {} });
+    store.update(
+      agentRunFromRecord(
+        wireRun({
+          id: 'b',
+          startedAt: '2026-09-27T11:00:00Z',
+          costMicros: 500,
+          inputTokens: 10,
+        }),
+      ),
+      'b',
+    );
+    store.update(
+      agentRunFromRecord(
+        wireRun({
+          id: 'a',
+          endedAt: stamp,
+          endReason: 'released',
+          costMicros: 1500,
+          outputTokens: 5,
+        }),
+      ),
+      'a',
+    );
+    store.update(
+      agentRunFromRecord(wireRun({ id: 'c', issueId: 'i2', costMicros: 99 })),
+      'c',
+    );
+    assert.deepEqual(store.getIssueTotals('i1'), {
+      runs: 2,
+      costMicros: 2000,
+      tokens: 15,
+      running: true,
+    });
+    assert.deepEqual(
+      store.getRunsForIssue('i1').map((r: { id: string }) => r.id),
+      ['a', 'b'],
+    );
+    assert.equal(store.getIssueTotals('i9'), undefined);
+    store.deleteById('b');
+    assert.deepEqual(store.getIssueTotals('i1'), {
+      runs: 1,
+      costMicros: 1500,
+      tokens: 5,
+      running: false,
+    });
+  });
+
+  it('prunes by issue like the other issue-scoped models', () => {
+    const live = liveIdsByModel([rec('AgentRun', 'run1', 'I')]);
+    const rows: PruneRow[] = [
+      pruneRow('run1', { issueId: 'i1' }),
+      pruneRow('run2', { issueId: 'i1' }),
+      pruneRow('run3', { issueId: 'i9' }),
+    ];
+    assert.deepEqual(staleIdsForModel('AgentRun', domain(), rows, live), [
+      'run2',
+    ]);
   });
 });

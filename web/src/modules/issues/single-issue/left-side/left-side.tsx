@@ -22,6 +22,7 @@ import { IssueSubIssueSelector } from './issue-sub-issue-selector';
 import { IssueTitle } from './issue-title';
 import { ParentIssueView } from './parent-issue-view';
 import { RelatedIssueView } from './related-issue-view';
+import { RunListView } from './run-list-view';
 import { SubIssueView } from './sub-issue-view';
 
 export const LeftSide = observer(() => {
@@ -81,6 +82,8 @@ export const LeftSide = observer(() => {
             <RelatedIssueView issue={issue} />
 
             <ArtifactListView />
+
+            <RunListView />
 
             <Activity />
           </div>
