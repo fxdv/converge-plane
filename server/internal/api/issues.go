@@ -479,6 +479,9 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 // transaction and writes activity history for user-visible changes.
 // It reports whether anything changed.
 func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, workspaceID string, row issueRow, req issueRequest) (bool, []syncActionRecord, error) {
+	// The notifier diffs the request against the issue as it was; row
+	// tracks the patch as it applies.
+	before := row
 	changed := false
 	historyRecs := make([]syncActionRecord, 0, 4)
 	if req.Title != nil && strings.TrimSpace(*req.Title) != "" && len(*req.Title) <= 255 && *req.Title != row.Title {
@@ -622,7 +625,7 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 	// The inbox (docs/spec 12): the patch's triggers — assign/reassign,
 	// state change, terminal "closed" — fire inside the same transaction
 	// as the mutation, so the nudge and the change commit as one fact.
-	if nrecs, err := a.notifyIssuePatchTx(ctx, tx, p, workspaceID, row, req); err != nil {
+	if nrecs, err := a.notifyIssuePatchTx(ctx, tx, p, workspaceID, before, req); err != nil {
 		return false, nil, err
 	} else if len(nrecs) > 0 {
 		historyRecs = append(historyRecs, nrecs...)
