@@ -85,6 +85,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Audit
         run: pnpm audit --audit-level high
+      # Two copies of prosemirror-model break the editor at runtime.
+      - name: One ProseMirror model
+        run: test "$(grep -oE '^  prosemirror-model@[0-9.]+' pnpm-lock.yaml | sort -u | wc -l)" -eq 1
       - name: Typecheck
         run: pnpm turbo run typecheck
       # next build stopped running ESLint in Next 16.
