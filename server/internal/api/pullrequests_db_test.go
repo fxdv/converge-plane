@@ -85,6 +85,14 @@ func pullJSON(state string, merged bool, title string) fakeReply {
 			state, title, merged, mergedAt, strings.Repeat("x", 100))}
 }
 
+// pullJSONAt answers for a PR GitHub files under repo, as it does once
+// the repository the link names was renamed or moved.
+func pullJSONAt(repo string, number int, state, title string) fakeReply {
+	return fakeReply{status: http.StatusOK, header: map[string]string{"ETag": `W/"at"`},
+		body: fmt.Sprintf(`{"number":%d,"state":%q,"draft":false,"title":%q,"merged":false,"merged_at":null,"html_url":"https://github.com/%s/pull/%d"}`,
+			number, state, title, repo, number)}
+}
+
 const testGitHubToken = "github_pat_TEST_do_not_log_1234567890"
 
 type prFixture struct {
@@ -142,6 +150,48 @@ func (f *prFixture) link(issueID string, number int) linkState {
 	}
 	s.title, s.etag = strval(title), strval(etag)
 	return s
+}
+
+// repos lists the repositories the issue's links to PR number name.
+func (f *prFixture) repos(issueID string, number int) []string {
+	f.t.Helper()
+	rows, err := f.pool.Query(context.Background(),
+		`select repo from issue_pull_requests where issue_id = $1 and number = $2 order by repo`, issueID, number)
+	if err != nil {
+		f.t.Fatalf("read repos: %v", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var repo string
+		if err := rows.Scan(&repo); err != nil {
+			f.t.Fatalf("read repos: %v", err)
+		}
+		out = append(out, repo)
+	}
+	return out
+}
+
+func (f *prFixture) linkID(issueID, repo string, number int) string {
+	f.t.Helper()
+	var id string
+	if err := f.pool.QueryRow(context.Background(),
+		`select id from issue_pull_requests where issue_id = $1 and repo = $2 and number = $3`,
+		issueID, repo, number).Scan(&id); err != nil {
+		f.t.Fatalf("read link %s#%d: %v", repo, number, err)
+	}
+	return id
+}
+
+func (f *prFixture) lastAction(id string) string {
+	f.t.Helper()
+	var action string
+	if err := f.pool.QueryRow(context.Background(), `
+		select action from sync_outbox where workspace_id = $1 and model_name = $2 and model_id = $3
+		order by sequence_id desc limit 1`, f.ws, modelPullRequest, id).Scan(&action); err != nil {
+		f.t.Fatalf("read outbox for %s: %v", id, err)
+	}
+	return action
 }
 
 func (f *prFixture) linkCount(issueID string) int {
@@ -403,6 +453,59 @@ func TestPullRequestLinks(t *testing.T) {
 		f.poll(g, issue)
 		if f.link(issue, 51).state != "open" {
 			t.Fatal("the reopened PR was not picked up")
+		}
+	})
+
+	t.Run("a renamed repository: the link takes the new name", func(t *testing.T) {
+		issue := f.issue(f.t1, f.doing, f.ext1)
+		f.claimAndReport(issue, "https://github.com/labs/tool/pull/71")
+		id := f.linkID(issue, "labs/tool", 71)
+		f.gh.queue("/repos/labs/tool/pulls/71", fakeReply{status: http.StatusMovedPermanently,
+			header: map[string]string{"Location": f.srv.URL + "/repositories/4242/pulls/71"}})
+		f.gh.queue("/repositories/4242/pulls/71", pullJSONAt("labs/tool-next", 71, "open", "Renamed repo"))
+		f.poll(f.poller(), issue)
+		if got := f.repos(issue, 71); len(got) != 1 || got[0] != "labs/tool-next" {
+			t.Fatalf("repos = %v, want the new name", got)
+		}
+		if s := f.link(issue, 71); s.state != "open" || !s.due {
+			t.Fatalf("after the rename = %+v", s)
+		}
+		recs, err := f.a.collectModel(context.Background(), modelPullRequest, f.ws, f.owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rec := range recs {
+			if rec.ModelID == id && !strings.Contains(string(rec.Data), `"url":"https://github.com/labs/tool-next/pull/71"`) {
+				t.Fatalf("the record still names the old repository: %s", rec.Data)
+			}
+		}
+	})
+
+	t.Run("a renamed repository the issue already links under the new name keeps one link", func(t *testing.T) {
+		issue := f.issue(f.t1, f.doing, f.ext1)
+		f.claimAndReport(issue, "https://github.com/labs/old/pull/72", "https://github.com/labs/new/pull/72")
+		oldID := f.linkID(issue, "labs/old", 72)
+		f.gh.queue("/repos/labs/old/pulls/72", pullJSONAt("labs/new", 72, "open", "Same PR"))
+		f.gh.queue("/repos/labs/new/pulls/72", pullJSONAt("labs/new", 72, "open", "Same PR"))
+		f.poll(f.poller(), issue)
+		if got := f.repos(issue, 72); len(got) != 1 || got[0] != "labs/new" {
+			t.Fatalf("repos = %v, want only labs/new", got)
+		}
+		if a := f.lastAction(oldID); a != "DELETE" {
+			t.Fatalf("the merged-away link's last record = %s, want DELETE", a)
+		}
+	})
+
+	t.Run("a repository moved off the allowlist is not followed", func(t *testing.T) {
+		issue := f.issue(f.t1, f.doing, f.ext1)
+		f.claimAndReport(issue, "https://github.com/labs/tool/pull/73")
+		f.gh.queue("/repos/labs/tool/pulls/73", pullJSONAt("elsewhere/tool", 73, "open", "Moved away"))
+		f.poll(f.poller(), issue)
+		if got := f.repos(issue, 73); len(got) != 1 || got[0] != "labs/tool" {
+			t.Fatalf("repos = %v, want the tracked name kept", got)
+		}
+		if s := f.link(issue, 73); s.state != "unavailable" || s.due || s.title != "" {
+			t.Fatalf("after a move off the allowlist = %+v, want unavailable and no longer checked", s)
 		}
 	})
 
