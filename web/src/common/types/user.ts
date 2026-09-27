@@ -28,4 +28,8 @@ export interface User {
   // responses and treats the user as human.
   kind?: 'human' | 'agent';
   image?: string;
+  // Optional server features; absent on older servers.
+  features?: {
+    githubPullRequests?: boolean;
+  };
 }
