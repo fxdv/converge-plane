@@ -21,8 +21,9 @@ const defaultState: State = {
 export function GlobalShortcuts() {
   const [state, setState] = React.useState<State>(defaultState);
 
+  // react-hotkeys-hook matches key codes, and the "/" key's code is Slash.
   useHotkeys(
-    [`${Key.Meta}+/`, `${Key.Control}+/`],
+    [`${Key.Meta}+slash`, `${Key.Control}+slash`],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (e: any) => {
       stateChange(true, 'search');
