@@ -2,11 +2,13 @@ import {
   createAgent,
   deleteAgent,
   getAgents,
+  issueAgentToken,
   revokeAgentToken,
   rotateAgentToken,
   type AgentData,
   type AgentDriver,
   type AgentListEntry,
+  type AgentTokenRotation,
   type AgentTokenSpec,
 } from '@converge/services';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
@@ -76,21 +78,62 @@ export function useGetAgentsQuery(
   });
 }
 
+export function useIssueAgentTokenMutation({
+  onMutate,
+  onSuccess,
+  onError,
+}: Omit<MutationParams, 'onSuccess'> & {
+  onSuccess?: (data: Awaited<ReturnType<typeof issueAgentToken>>) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation(
+    ({
+      workspaceId,
+      accountId,
+      ...data
+    }: {
+      workspaceId: string;
+      accountId: string;
+      name?: string;
+    } & AgentTokenSpec) => issueAgentToken(workspaceId, accountId, data),
+    {
+      onMutate: () => onMutate && onMutate(),
+      onError: (
+        e: {
+          response?: { data?: { error?: string } };
+        } & Error,
+      ) => onError && onError(errorText(e)),
+      onSuccess: (data, params) => {
+        queryClient.invalidateQueries({
+          queryKey: ['agents', params.workspaceId],
+        });
+        onSuccess && onSuccess(data);
+      },
+    },
+  );
+}
+
 export function useRotateAgentTokenMutation({
   onMutate,
   onSuccess,
   onError,
-}: MutationParams & {
-  onSuccess?: (data: {
-    tokenId: string;
-    token: string;
-    tokenPrefix: string;
-    tokenExpiresAt: string;
-  }) => void;
+}: Omit<MutationParams, 'onSuccess'> & {
+  onSuccess?: (data: AgentTokenRotation) => void;
 }) {
+  const queryClient = useQueryClient();
+
   return useMutation(
-    (params: { workspaceId: string; accountId: string; name?: string }) =>
-      rotateAgentToken(params.workspaceId, params.accountId, params),
+    (params: {
+      workspaceId: string;
+      accountId: string;
+      tokenId: string;
+      graceHours: number;
+    }) =>
+      rotateAgentToken(params.workspaceId, params.accountId, {
+        tokenId: params.tokenId,
+        graceHours: params.graceHours,
+      }),
     {
       onMutate: () => onMutate && onMutate(),
       onError: (
@@ -99,7 +142,12 @@ export function useRotateAgentTokenMutation({
           response?: { data?: { error?: string } };
         } & Error,
       ) => onError && onError(errorText(e)),
-      onSuccess: (data) => onSuccess && onSuccess(data),
+      onSuccess: (data, params) => {
+        queryClient.invalidateQueries({
+          queryKey: ['agents', params.workspaceId],
+        });
+        onSuccess && onSuccess(data);
+      },
     },
   );
 }
@@ -108,9 +156,11 @@ export function useRevokeAgentTokenMutation({
   onMutate,
   onSuccess,
   onError,
-}: MutationParams & {
+}: Omit<MutationParams, 'onSuccess'> & {
   onSuccess?: (data: { revoked: number }) => void;
 }) {
+  const queryClient = useQueryClient();
+
   return useMutation(
     (params: { workspaceId: string; accountId: string; tokenId?: string }) =>
       revokeAgentToken(
@@ -126,7 +176,12 @@ export function useRevokeAgentTokenMutation({
           response?: { data?: { error?: string } };
         } & Error,
       ) => onError && onError(errorText(e)),
-      onSuccess: (data) => onSuccess && onSuccess(data),
+      onSuccess: (data, params) => {
+        queryClient.invalidateQueries({
+          queryKey: ['agents', params.workspaceId],
+        });
+        onSuccess && onSuccess(data);
+      },
     },
   );
 }

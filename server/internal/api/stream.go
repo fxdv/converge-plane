@@ -14,7 +14,8 @@ import (
 	"converge/internal/metrics"
 )
 
-const ssePingInterval = 15 * time.Second
+// ssePingInterval is a var so tests can shorten it.
+var ssePingInterval = 15 * time.Second
 
 // headReadTimeout bounds the heartbeat's head read: the stream loop waits
 // on it, so a slow database must not hold back the events queued behind.
@@ -102,6 +103,11 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 			}
 			fl.Flush()
 		case <-ping.C:
+			if p.Token != nil && !a.tokenStillLive(r.Context(), p.Token.ID) {
+				a.log.Info("realtime subscriber disconnected: token no longer live",
+					"workspace", workspaceID, "account", p.AccountID)
+				return
+			}
 			if _, err := fmt.Fprint(w, a.streamHeartbeat(r.Context(), workspaceID)); err != nil {
 				return
 			}
@@ -110,6 +116,14 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// tokenStillLive re-checks an API token on an open stream, so a revoked
+// or expired token stops receiving within one heartbeat.
+func (a *API) tokenStillLive(ctx context.Context, tokenID string) bool {
+	ctx, cancel := context.WithTimeout(ctx, headReadTimeout)
+	defer cancel()
+	return a.auth.APITokenLive(ctx, tokenID)
 }
 
 // streamHeartbeat is the keep-alive frame: a `head` event with the

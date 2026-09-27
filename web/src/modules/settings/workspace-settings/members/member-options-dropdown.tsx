@@ -8,18 +8,22 @@ import {
 } from '@converge/ui/components/dropdown-menu';
 import { useToast } from '@converge/ui/components/use-toast';
 import { CanceledLine, DeleteLine, MoreLine } from '@converge/ui/icons';
+import { RiKey2Line } from '@remixicon/react';
 import React from 'react';
+
+import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
 
 import { useRemoveTeamMemberMutation } from 'services/team';
 import { useSuspendUserMutation } from 'services/workspace';
 
-import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
+import { AgentTokensDialog } from './agent-tokens-dialog';
 
 interface MemberOptionsDropdownProps {
   userId: string;
   teamId: string;
   isAdmin: boolean;
   isSuspended: boolean;
+  isAgent?: boolean;
 }
 
 export function MemberOptionsDropdown({
@@ -27,9 +31,11 @@ export function MemberOptionsDropdown({
   teamId,
   isAdmin,
   isSuspended,
+  isAgent,
 }: MemberOptionsDropdownProps) {
   const { toast } = useToast();
   const workspace = useCurrentWorkspace();
+  const [tokensDialog, setTokensDialog] = React.useState(false);
   const { mutate: removeMember } = useRemoveTeamMemberMutation({
     onError: (err: string) => {
       toast({
@@ -69,6 +75,13 @@ export function MemberOptionsDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
+            {isAgent && (
+              <DropdownMenuItem onClick={() => setTokensDialog(true)}>
+                <div className="flex items-center gap-1">
+                  <RiKey2Line size={16} /> API tokens
+                </div>
+              </DropdownMenuItem>
+            )}
             {isAdmin && (
               <>
                 <DropdownMenuItem
@@ -102,6 +115,13 @@ export function MemberOptionsDropdown({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      {tokensDialog && (
+        <AgentTokensDialog
+          agentId={userId}
+          open={tokensDialog}
+          onOpenChange={setTokensDialog}
+        />
+      )}
     </div>
   );
 }

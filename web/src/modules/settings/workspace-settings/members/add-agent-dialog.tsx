@@ -47,11 +47,9 @@ import {
   accessProblem,
   agentDefaults,
   agentRequest,
-  grantSummary,
-  mcpEndpoint,
-  mcpSnippets,
   type AgentAccessValues,
 } from './agent-access';
+import { TokenScreen } from './token-screen';
 
 interface AddAgentDialogProps {
   setDialogOpen: (value: boolean) => void;
@@ -154,20 +152,6 @@ export function AddAgentDialog({ setDialogOpen }: AddAgentDialogProps) {
     form.clearErrors('scopes');
   };
 
-  // navigator.clipboard is undefined outside secure contexts (plain http
-  // off localhost), so a failed copy points at manual selection instead.
-  const copy = async (text: string, what: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast({ title: `${what} copied` });
-    } catch {
-      toast({
-        title: `Could not copy the ${what.toLowerCase()}`,
-        description: 'Select the text and copy it manually',
-      });
-    }
-  };
-
   const teamName = (id: string) =>
     teamsStore.teams.find((team: TeamType) => team.id === id)?.name ?? id;
 
@@ -189,9 +173,15 @@ export function AddAgentDialog({ setDialogOpen }: AddAgentDialogProps) {
 
         {created?.token ? (
           <TokenScreen
-            created={created}
+            shown={{
+              token: created.token,
+              agentName: created.name,
+              scopes: created.tokenScopes,
+              teamIds: created.tokenTeamIds,
+              expiresAt: created.tokenExpiresAt,
+              external: created.driver === 'external',
+            }}
             teamName={teamName}
-            copy={copy}
             onClose={onClose}
           />
         ) : (
@@ -419,86 +409,5 @@ export function AddAgentDialog({ setDialogOpen }: AddAgentDialogProps) {
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function TokenScreen({
-  created,
-  teamName,
-  copy,
-  onClose,
-}: {
-  created: AgentData;
-  teamName: (id: string) => string;
-  copy: (text: string, what: string) => Promise<void>;
-  onClose: () => void;
-}) {
-  const grant = grantSummary(created, teamName);
-  const expires = created.tokenExpiresAt
-    ? new Date(created.tokenExpiresAt).toLocaleDateString()
-    : null;
-  const snippets =
-    created.driver === 'external' && typeof window !== 'undefined'
-      ? mcpSnippets(mcpEndpoint(window.location.origin))
-      : [];
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="bg-grayAlpha-100 rounded-md p-3 text-sm font-mono break-all select-all">
-        {created.token}
-      </div>
-      <div className="text-muted-foreground text-sm">
-        Token for &ldquo;{created.name}&rdquo;: {grant.scopes}; {grant.teams}
-        {expires && <>; expires {expires}</>}.
-      </div>
-
-      {snippets.length > 0 && (
-        <div className="flex flex-col gap-2 mt-1">
-          <div className="text-sm">Connect a coding agent</div>
-          <div className="text-muted-foreground text-sm">
-            Put the token in the{' '}
-            <span className="font-mono">CONVERGE_TOKEN</span> environment
-            variable, then add the server to your client:
-          </div>
-          {snippets.map((snippet) => (
-            <div key={snippet.client} className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-sm">
-                <span>
-                  {snippet.client}
-                  {snippet.where && (
-                    <span className="text-muted-foreground font-mono">
-                      {' '}
-                      {snippet.where}
-                    </span>
-                  )}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copy(snippet.text, `${snippet.client} setup`)}
-                >
-                  Copy
-                </Button>
-              </div>
-              <pre className="bg-grayAlpha-100 rounded-md p-2 text-xs font-mono whitespace-pre-wrap break-all">
-                {snippet.text}
-              </pre>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-end gap-2 justify-end w-full">
-        <Button variant="ghost" onClick={onClose}>
-          Done
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => copy(created.token ?? '', 'Token')}
-        >
-          Copy token
-        </Button>
-      </div>
-    </div>
   );
 }

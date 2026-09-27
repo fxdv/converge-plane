@@ -22,7 +22,7 @@ An agent is a machine **account** (`accounts.kind = 'agent'`) that joins the wor
 
 - Authenticates exclusively with a long-lived API token (`conv_agent_…`, SHA-256 at rest, 10-year bound, shown once, revocable/rotatable); it can never take a magic-link session.
 - Carries the workspace role `AGENT` (wire role `AGENT`), which maps to the `MEMBER` row of every permission row below: agents work issues in their teams (create/update/comment/subscribe, move through states) but never admin anything — workspace, team, workflow, label, view, invite, or other agents.
-- Is visible in the member list and sync feed, assignable to issues, and suspended/reactivated exactly like a human member; suspension revokes the agent's tokens (a per-agent kill switch), and reactivation requires a rotated token.
+- Is visible in the member list and sync feed, assignable to issues, and suspended/reactivated exactly like a human member; suspension revokes the agent's tokens (a per-agent kill switch), and reactivation requires a newly issued token.
 - Is created and deleted only by workspace owner/admin. Each agent is a distinct account, so issue assignment, comments, issue history, and audit rows attribute to the individual agent: a swarm scales per member.
 - Is rate-limited per account like every other principal (a runaway agent cannot starve the workspace).
 

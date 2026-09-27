@@ -1480,14 +1480,13 @@ var rtRouteCases = []routeCase{
 		},
 	},
 
-	// POST /workspaces/{id}/agents/{accountId}/token — the rotation:
-	// one additional live token (the old stays valid until revoked, so
-	// a rotation never drops an agent mid-swarm).
+	// POST /workspaces/{id}/agents/{accountId}/token — one additional
+	// live token (the others stay valid until revoked).
 	{
 		route: "POST /api/v1/workspaces/{id}/agents/{accountId}/token", method: "POST",
 		path:      "/api/v1/workspaces/" + rtWS + "/agents/" + rtAgent + "/token",
 		urlParams: []string{"id", rtWS, "accountId", rtAgent},
-		handler:   (*API).handleRotateAgentToken,
+		handler:   (*API).handleIssueAgentToken,
 		pool: &fakePool{
 			rules: []fakeRule{
 				rtRole("owner"),
@@ -1506,7 +1505,44 @@ var rtRouteCases = []routeCase{
 			}
 			decodeBody(t, rec, &v)
 			if v.Token == "" || v.TokenPrefix == "" {
-				t.Fatalf("rotation = token %q prefix %q, want the plaintext shown once", v.Token, v.TokenPrefix)
+				t.Fatalf("issue = token %q prefix %q, want the plaintext shown once", v.Token, v.TokenPrefix)
+			}
+		},
+	},
+
+	// POST /workspaces/{id}/agents/{accountId}/token/rotate — one token
+	// replaced by one of the same grant; the old dies now or after a grace.
+	{
+		route: "POST /api/v1/workspaces/{id}/agents/{accountId}/token/rotate", method: "POST",
+		path:      "/api/v1/workspaces/" + rtWS + "/agents/" + rtAgent + "/token/rotate",
+		urlParams: []string{"id", rtWS, "accountId", rtAgent},
+		handler:   (*API).handleRotateAgentToken,
+		body:      `{"tokenId":"` + rtToken + `"}`,
+		pool: &fakePool{
+			rules: []fakeRule{
+				rtRole("owner"),
+				rtMemberRow(rtMemberID, "agent", "active", rtAgent, rtWS, rtTeam),
+				{frag: "select kind from accounts where id = $1", rowVals: []any{"agent"}},
+				{frag: "from team_members tm join teams t", rowVals: []any{[]string{rtTeam}}},
+			},
+			txs: []*fakeTx{{rules: []fakeRule{
+				{frag: "for update", rowVals: []any{"ci", []string{"work"}, []string{rtTeam},
+					wireNow.Add(-720 * time.Hour), wireNow}},
+				{frag: "set revoked_at = now() where id = $1", rowVals: []any{wireNow}},
+				{frag: "insert into api_tokens (account_id, name", rowVals: []any{"tok2"}},
+			}}},
+		},
+		code: 201,
+		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
+			var v struct {
+				Token   string   `json:"token"`
+				Name    string   `json:"name"`
+				Scopes  []string `json:"scopes"`
+				TeamIDs []string `json:"teamIds"`
+			}
+			decodeBody(t, rec, &v)
+			if v.Token == "" || v.Name != "ci" || len(v.Scopes) != 1 || len(v.TeamIDs) != 1 {
+				t.Fatalf("rotation = %s, want the old grant under a new token", rec.Body.String())
 			}
 		},
 	},
@@ -1672,7 +1708,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 70 // the v1 surface: every route in Mount, one entry each
+	const want = 71 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}

@@ -49,7 +49,7 @@ func (p *probe) runChecks() {
 
 	p.check("AUTHZ-1", "unauthenticated reads are refused", p.checkUnauthenticated)
 	p.check("AUTHZ-2", "another workspace's data and issues are unreachable", p.checkCrossWorkspace)
-	p.check("AUTHZ-3", "a scoped agent token reaches only its scopes and teams, and dies on revocation", p.checkScopedToken)
+	p.check("AUTHZ-3", "a scoped agent token reaches only its scopes and teams, keeps them through an admin's rotation, and dies on revocation", p.checkScopedToken)
 	p.check("AUTHZ-4", "MCP tool calls are held to the token's scopes and teams; sessions and foreign origins are refused", p.checkMCPScopes)
 
 	if p.webhookSecret != "" {
@@ -781,7 +781,8 @@ func (p *probe) checkCrossWorkspace() error {
 }
 
 // checkScopedToken: an agent token issued with scopes and a team grant
-// reaches its own lane and nothing else, and dies when revoked.
+// reaches its own lane and nothing else, keeps that lane through a
+// rotation only its workspace's admin may make, and dies when revoked.
 func (p *probe) checkScopedToken() error {
 	owner, err := p.signIn()
 	if err != nil {
@@ -821,10 +822,11 @@ func (p *probe) checkScopedToken() error {
 	if err := expectStatus(res, http.StatusCreated); err != nil {
 		return fmt.Errorf("create agent: %w", err)
 	}
-	agentID, token := res.field("id"), res.field("token")
+	agentID, tokenID, token := res.field("id"), res.field("tokenId"), res.field("token")
 	if !strings.HasPrefix(token, "conv_agent_") {
 		return fmt.Errorf("create agent returned no token: %s", res)
 	}
+	rotatePath := "/api/v1/workspaces/" + ws + "/agents/" + agentID + "/token/rotate"
 	inLane, _, err := p.createIssue(owner, map[string]string{"teamId": team1, "stateId": state1, "title": "lane", "assigneeId": agentID})
 	if err != nil {
 		return err
@@ -862,6 +864,7 @@ func (p *probe) checkScopedToken() error {
 		{request{method: "POST", path: "/api/v1/issue_comments?issueId=" + inLane, json: map[string]string{"body": "x"}}, http.StatusForbidden},
 		{request{method: "GET", path: "/api/v1/workspaces/" + ws + "/agents"}, http.StatusForbidden},
 		{request{method: "POST", path: "/api/v1/workspaces/" + ws + "/agents", json: map[string]string{"name": "escalate"}}, http.StatusForbidden},
+		{request{method: "POST", path: rotatePath, json: map[string]string{"tokenId": tokenID}}, http.StatusForbidden},
 	} {
 		c.rq.bearer = token
 		res, err := p.do(c.rq)
@@ -872,6 +875,47 @@ func (p *probe) checkScopedToken() error {
 			return fmt.Errorf("scoped token %s %s: %s, want %d", c.rq.method, c.rq.path, res, c.want)
 		}
 	}
+
+	intruder, err := p.signIn()
+	if err != nil {
+		return err
+	}
+	res, err = p.do(request{method: "POST", path: rotatePath, cookies: intruder.all(), json: map[string]string{"tokenId": tokenID}})
+	if err != nil {
+		return err
+	}
+	if res.status != http.StatusNotFound {
+		return fmt.Errorf("intruder rotation: %s, want 404", res)
+	}
+
+	// The owner's rotation without grace: the old token dies at once and
+	// the replacement keeps its lane.
+	res, err = p.do(request{method: "POST", path: rotatePath, cookies: owner.all(),
+		json: map[string]any{"tokenId": tokenID, "graceHours": 0}})
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(res, http.StatusCreated); err != nil {
+		return fmt.Errorf("rotate: %w", err)
+	}
+	rotated := res.field("token")
+	for _, c := range []struct {
+		what, bearer, path string
+		want               int
+	}{
+		{"rotated-out token", token, "/api/v1/agent/queue", http.StatusUnauthorized},
+		{"replacement", rotated, "/api/v1/agent/queue", http.StatusOK},
+		{"replacement", rotated, "/api/v1/sync_actions/bootstrap?workspaceId=" + ws, http.StatusForbidden},
+	} {
+		res, err := p.do(request{method: "GET", path: c.path, bearer: c.bearer})
+		if err != nil {
+			return err
+		}
+		if res.status != c.want {
+			return fmt.Errorf("%s GET %s: %s, want %d", c.what, c.path, res, c.want)
+		}
+	}
+	token = rotated
 
 	res, err = p.do(request{method: "POST", path: "/api/v1/workspaces/" + ws + "/agents/" + agentID + "/token/revoke",
 		cookies: owner.all(), json: map[string]string{}})

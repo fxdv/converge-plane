@@ -174,3 +174,21 @@ func (s *Service) ValidateAPIToken(ctx context.Context, token string) (*APIToken
 	}
 	return &t, true
 }
+
+// APITokenLive reports whether a token ValidateAPIToken accepted would
+// still be accepted: for connections that outlive the request that
+// authenticated them. A failed read reports false.
+func (s *Service) APITokenLive(ctx context.Context, id string) bool {
+	var live bool
+	if err := s.pool.QueryRow(ctx, `
+		select exists (
+			select 1 from api_tokens t
+			join accounts a on a.id = t.account_id and a.status = 'active'
+			where t.id = $1
+			  and t.revoked_at is null
+			  and (t.expires_at is null or t.expires_at > now()))`,
+		id).Scan(&live); err != nil {
+		return false
+	}
+	return live
+}

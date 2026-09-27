@@ -520,7 +520,7 @@ Labels & CRUD\\
 Issues & create, update, delete, move, subscribe, \textbf{handoff},
   relations (list, delete; create rides the update), swarm status\\
 Comments & CRUD, replies\\
-Agents & create, list, driver, token rotate (scoped) / revoke, delete\\
+Agents & create, list, driver, token issue (scoped) / rotate / revoke, delete\\
 Work & queue, claim, heartbeat, release (external agents)\\
 Search & full-text + key search, permission-scoped\\
 Sync & bootstrap, delta, stream (SSE)\\
@@ -717,9 +717,12 @@ An agent is a full workspace member with a machine identity:
 \item Its own account (\texttt{kind=agent}) with a deterministic reserved
   \texttt{.local} email (never routed or delivered) --- the email's unique
   constraint is a global de-duplicator.
-\item One or more hashed API tokens (plaintext shown once; rotation keeps
-  old tokens alive until individually revoked, so a rotation never drops
-  an agent mid-swarm). A token may be narrowed to scopes and team grants.
+\item One or more hashed API tokens (plaintext shown once). A token may
+  be narrowed to scopes and team grants. Rotating a token replaces it
+  with one of the same grant, never wider; the old one stops working at
+  once or after a grace of up to a week, so a running agent can switch
+  without dropping out. A stream opened with a token closes within one
+  heartbeat of the token dying.
 \item A driver: \texttt{runtime} (the in-process swarm works its issues)
   or \texttt{external} (an outside process works them through the work
   API; the runtime leaves them alone).

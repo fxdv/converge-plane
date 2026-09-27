@@ -85,17 +85,50 @@ export async function getAgents(workspaceId: string) {
   return response.data;
 }
 
-export async function rotateAgentToken(
+// A new token beside the agent's others; it gets the full authority unless
+// the spec narrows it.
+export async function issueAgentToken(
   workspaceId: string,
   accountId: string,
-  data?: { name?: string },
+  data?: { name?: string } & AgentTokenSpec,
 ) {
   const response = await axios.post<{
     tokenId: string;
+    // Shown exactly once.
     token: string;
     tokenPrefix: string;
     tokenExpiresAt: string;
+    scopes: AgentScope[] | null;
+    teamIds: string[] | null;
   }>(`/api/v1/workspaces/${workspaceId}/agents/${accountId}/token`, data);
+
+  return response.data;
+}
+
+export interface AgentTokenRotation {
+  tokenId: string;
+  // Shown exactly once.
+  token: string;
+  tokenPrefix: string;
+  tokenExpiresAt: string;
+  name: string;
+  scopes: AgentScope[] | null;
+  teamIds: string[] | null;
+  oldTokenId: string;
+  oldTokenEndsAt: string;
+}
+
+// Replaces one token with one of the same name, scopes and lifetime. The
+// old token stops working now (graceHours 0) or after graceHours.
+export async function rotateAgentToken(
+  workspaceId: string,
+  accountId: string,
+  data: { tokenId: string; graceHours: number },
+) {
+  const response = await axios.post<AgentTokenRotation>(
+    `/api/v1/workspaces/${workspaceId}/agents/${accountId}/token/rotate`,
+    data,
+  );
 
   return response.data;
 }

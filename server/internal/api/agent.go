@@ -34,6 +34,7 @@ var (
 	errAgentExists     = errors.New("an agent with this name already exists in the workspace")
 	errAgentSuspended  = errors.New("the agent is suspended; reactivate it first")
 	errAgentEmailTaken = errors.New("the reserved agent email is already taken by a human account")
+	errAgentNotFound   = errors.New("agent not found")
 	errTokenNotFound   = errors.New("token not found for this agent")
 )
 
@@ -523,32 +524,42 @@ func (a *API) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 // workspace admin and the account must be an agent member of it.
 func (a *API) agentTarget(ctx context.Context, p *Principal, workspaceID, accountID string) (memberRow, error) {
 	if !isUUID(workspaceID) || !isUUID(accountID) {
-		return memberRow{}, errAgentExists
+		return memberRow{}, errAgentNotFound
 	}
 	role, ok := a.workspaceRole(ctx, p, workspaceID)
 	if !ok || !adminRole(role) {
-		return memberRow{}, errAgentExists
+		return memberRow{}, errAgentNotFound
 	}
 	target, err := a.memberByAccount(ctx, workspaceID, accountID)
 	if err != nil {
-		return memberRow{}, errAgentExists
+		return memberRow{}, errAgentNotFound
 	}
 	var kind string
 	if err := a.pool.QueryRow(ctx, "select kind from accounts where id = $1", accountID).Scan(&kind); err != nil {
-		return memberRow{}, errAgentExists
+		return memberRow{}, errAgentNotFound
 	}
 	if kind != "agent" {
-		return memberRow{}, errAgentExists
+		return memberRow{}, errAgentNotFound
 	}
 	return target, nil
 }
 
-// handleRotateAgentToken implements
+// agentTeams lists the teams of the workspace the agent belongs to.
+func (a *API) agentTeams(ctx context.Context, workspaceID, accountID string) ([]string, error) {
+	var teams []string
+	err := a.pool.QueryRow(ctx, `
+		select coalesce(array_agg(tm.team_id::text), '{}')
+		from team_members tm join teams t on t.id = tm.team_id
+		where tm.account_id = $1 and t.workspace_id = $2`,
+		accountID, workspaceID).Scan(&teams)
+	return teams, err
+}
+
+// handleIssueAgentToken implements
 // POST /api/v1/workspaces/{id}/agents/{accountId}/token (workspace
 // admin only): mints one additional live token for the agent. Older
-// tokens keep working until individually revoked, so a rotation never
-// drops an agent mid-swarm.
-func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
+// tokens keep working until individually revoked.
+func (a *API) handleIssueAgentToken(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -579,18 +590,15 @@ func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "token name must be 1-64 characters")
 		return
 	}
-	var agentTeams []string
+	var teams []string
 	if req.TeamIDs != nil {
-		if err := a.pool.QueryRow(ctx, `
-			select coalesce(array_agg(tm.team_id::text), '{}')
-			from team_members tm join teams t on t.id = tm.team_id
-			where tm.account_id = $1 and t.workspace_id = $2`,
-			accountID, r.PathValue("id")).Scan(&agentTeams); err != nil {
+		var err error
+		if teams, err = a.agentTeams(ctx, r.PathValue("id"), accountID); err != nil {
 			a.internalError(w, err)
 			return
 		}
 	}
-	spec, problem := req.tokenSpec.validate(agentTeams)
+	spec, problem := req.tokenSpec.validate(teams)
 	if problem != "" {
 		writeError(w, http.StatusUnprocessableEntity, problem)
 		return
@@ -622,6 +630,148 @@ func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
 		"tokenExpiresAt": tok.ExpiresAt,
 		"scopes":         tok.Scopes,
 		"teamIds":        tok.TeamIDs,
+	})
+}
+
+// maxRotationGraceHours bounds how long a rotated-out token keeps working.
+const maxRotationGraceHours = 168
+
+// handleRotateAgentToken implements
+// POST /api/v1/workspaces/{id}/agents/{accountId}/token/rotate
+// (workspace admin only): replaces one live token with a new one of the
+// same name, scopes and lifetime length, counted from now. A team grant
+// narrows to the teams the agent still belongs to and is never widened.
+// The old token stops working now (graceHours 0) or when the grace runs
+// out, never later than it would have.
+func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	workspaceID := r.PathValue("id")
+	accountID := r.PathValue("accountId")
+	if _, err := a.agentTarget(ctx, p, workspaceID, accountID); err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	var req struct {
+		TokenID    string `json:"tokenId"`
+		GraceHours int    `json:"graceHours"`
+	}
+	if err := jsonDecode(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !isUUID(req.TokenID) {
+		writeError(w, http.StatusNotFound, errTokenNotFound.Error())
+		return
+	}
+	if req.GraceHours < 0 || req.GraceHours > maxRotationGraceHours {
+		writeError(w, http.StatusUnprocessableEntity, "graceHours must be between 0 and 168")
+		return
+	}
+	teams, err := a.agentTeams(ctx, workspaceID, accountID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var (
+		name       string
+		oldTeamIDs []string
+		createdAt  time.Time
+		expiresAt  *time.Time
+		spec       tokenSpec
+	)
+	err = tx.QueryRow(ctx, `
+		select name, scopes, team_ids::text[], created_at, expires_at
+		from api_tokens
+		where id = $1 and account_id = $2 and revoked_at is null
+		  and (expires_at is null or expires_at > now())
+		for update`, req.TokenID, accountID).Scan(&name, &spec.Scopes, &oldTeamIDs, &createdAt, &expiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, errTokenNotFound.Error())
+		return
+	}
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if oldTeamIDs != nil {
+		member := map[string]bool{}
+		for _, id := range teams {
+			member[id] = true
+		}
+		spec.TeamIDs = []string{}
+		for _, id := range oldTeamIDs {
+			if member[id] {
+				spec.TeamIDs = append(spec.TeamIDs, id)
+			}
+		}
+		if len(spec.TeamIDs) == 0 {
+			writeError(w, http.StatusUnprocessableEntity,
+				"the agent has left every team this token was limited to: revoke it and issue a new token")
+			return
+		}
+	}
+	if expiresAt != nil {
+		hours := int(expiresAt.Sub(createdAt).Round(time.Hour) / time.Hour)
+		hours = max(1, min(hours, int(auth.MaxAPITokenTTL/time.Hour)))
+		spec.TTLHours = &hours
+	}
+	spec, problem := spec.validate(teams)
+	if problem != "" {
+		writeError(w, http.StatusUnprocessableEntity, problem)
+		return
+	}
+
+	var oldEndsAt time.Time
+	if req.GraceHours == 0 {
+		err = tx.QueryRow(ctx,
+			"update api_tokens set revoked_at = now() where id = $1 returning revoked_at",
+			req.TokenID).Scan(&oldEndsAt)
+	} else {
+		err = tx.QueryRow(ctx, `
+			update api_tokens
+			set expires_at = least(coalesce(expires_at, 'infinity'), now() + make_interval(hours => $2::int))
+			where id = $1
+			returning expires_at`, req.TokenID, req.GraceHours).Scan(&oldEndsAt)
+	}
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	tok, err := a.insertTokenTx(ctx, tx, accountID, p.AccountID, name, spec)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := a.auditTx(ctx, tx, workspaceID, p.AccountID, "agent.token.rotated", "Agent", accountID); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"tokenId":        tok.ID,
+		"token":          tok.Plaintext,
+		"tokenPrefix":    auth.APITokenPrefix,
+		"tokenExpiresAt": tok.ExpiresAt,
+		"name":           name,
+		"scopes":         tok.Scopes,
+		"teamIds":        tok.TeamIDs,
+		"oldTokenId":     req.TokenID,
+		"oldTokenEndsAt": oldEndsAt,
 	})
 }
 
