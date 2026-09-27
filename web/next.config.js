@@ -48,6 +48,8 @@ module.exports = {
     position: 'bottom-right',
   },
   output: 'standalone',
+  // Otherwise next dev writes AGENTS.md and CLAUDE.md into web/.
+  agentRules: false,
 };
 
 // Pin react-day-picker to its ESM entry. The package is dual-format
