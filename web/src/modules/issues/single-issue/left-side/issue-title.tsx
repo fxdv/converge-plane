@@ -23,7 +23,7 @@ export function IssueTitle({ value, onChange }: IssueTitleProps) {
 
   return (
     <AdjustableTextArea
-      className="border-0 px-6 py-0 font-medium resize-none bg-transparent no-scrollbar overflow-hidden outline-none focus-visible:ring-0 text-xl"
+      className="border-0 px-6 py-0 font-medium resize-none bg-transparent no-scrollbar overflow-hidden outline-hidden focus-visible:ring-0 text-xl"
       value={inputValue}
       placeholder="Issue title"
       onChange={onInputChange}

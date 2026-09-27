@@ -14,16 +14,18 @@
   "devDependencies": {
     "@converge/eslint-config": "workspace:*",
     "@converge/typescript-config": "workspace:*",
+    "@tailwindcss/cli": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^26",
     "@types/react": "^19",
     "autoprefixer": "^10.6.1",
+    "eslint": "^9.39.5",
     "postcss": "^8.5.28",
     "postcss-load-config": "^6.0.1",
-    "tailwind-scrollbar": "^3.1.0",
-    "tailwindcss": "^3.4.4",
-    "typescript": "^5.4.5",
-    "eslint": "^9.39.5"
+    "tailwind-scrollbar": "^4.0.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -79,7 +81,7 @@
     "react-resizable-panels": "^1.0.9",
     "react-time-ago": "^7.3.1",
     "tailwind-merge": "^3.7.0",
-    "tailwind-scrollbar-hide": "^1.1.7",
+    "tailwind-scrollbar-hide": "^4.0.0",
     "tailwindcss-animate": "^1.0.7",
     "tippy.js": "^6.3.7",
     "tunnel-rat": "^0.1.2",

@@ -85,7 +85,7 @@ export function MultiSelect({
                   <Badge key={option.value} variant="secondary" className="h-6">
                     {option.label}
                     <button
-                      className="rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      className="rounded-full outline-hidden ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           handleUnselect(option);
@@ -110,7 +110,7 @@ export function MultiSelect({
                 onBlur={() => setOpen(false)}
                 onFocus={() => setOpen(true)}
                 placeholder={placeholder}
-                className="ml-2 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+                className="ml-2 flex-1 bg-transparent outline-hidden placeholder:text-muted-foreground"
               />
             </div>
           </div>
@@ -118,7 +118,7 @@ export function MultiSelect({
         <PopoverContent className="p-0" align="start">
           <CommandList>
             {open && options.length > 0 ? (
-              <div className="mt-2 top-0 z-10 w-full rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in">
+              <div className="mt-2 top-0 z-10 w-full rounded-md border bg-popover text-popover-foreground shadow-md outline-hidden animate-in">
                 <CommandGroup className="h-full overflow-auto">
                   {options.map((option) => {
                     return (
