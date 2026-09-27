@@ -5,6 +5,11 @@ import type { User } from 'common/types';
 
 import { getBotIcon } from './icon-utils';
 
+// A history row with no account is the server's own change (a GitHub
+// merge moving the issue): issue_history.actor_id cannot outlive its
+// account, so a null actor never means a deleted user.
+export const SYSTEM_ACTOR_NAME = 'Converge';
+
 export function getUserFromUsersData(usersData: User[], userId: string) {
   return usersData.find((userData: User) => userData.id === userId);
 }

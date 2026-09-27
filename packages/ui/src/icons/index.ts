@@ -46,6 +46,7 @@ export * from './heading-line';
 export * from './numbered-list-line';
 export * from './coding-line';
 export * from './link-line';
+export * from './pull-request-line';
 export * from './bold-line';
 export * from './italic-line';
 export * from './strike-line';

@@ -145,6 +145,28 @@ export interface AgentRunType {
   evidence: RunEvidenceType[];
 }
 
+// spec cs:agents:prlinks — a GitHub pull request an agent reported,
+// tracked by the server. state and title are GitHub's, as last checked;
+// pending means not checked yet, unavailable means GitHub would not show it.
+export type PullRequestState =
+  'pending' | 'open' | 'merged' | 'closed' | 'unavailable';
+
+export interface IssuePullRequestType {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  issueId: string;
+  repo: string;
+  number: number;
+  url: string;
+  state: string;
+  draft: boolean;
+  title: string | null;
+  mergedAt: string | null;
+  linkedById: string | null;
+  runId: string | null;
+}
+
 export enum SubscribeType {
   SUBSCRIBE = 'SUBSCRIBE',
   UNSUBSCRIBE = 'UNSUBSCRIBE',

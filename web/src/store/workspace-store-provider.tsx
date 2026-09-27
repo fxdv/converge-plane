@@ -19,6 +19,7 @@ export const WorkspaceStoreInit = observer(
       workflowsStore,
       viewsStore,
       agentRunsStore,
+      issuePullRequestsStore,
     } = useContextStore();
 
     const currentWorkspace = useCurrentWorkspace();
@@ -43,6 +44,7 @@ export const WorkspaceStoreInit = observer(
         issuesStore.load(),
         viewsStore.load(),
         agentRunsStore.load(),
+        issuePullRequestsStore.load(),
       ]);
 
       // eslint-disable-next-line react-hooks/exhaustive-deps

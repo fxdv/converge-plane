@@ -12,6 +12,7 @@ import {
   BlockedFill,
   BlocksFill,
   ChevronDown,
+  PullRequestLine,
   Warning,
 } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
@@ -29,10 +30,17 @@ import {
 import { projectFocusKind } from 'modules/issues/project-rail/project-focus';
 import { ProjectFocusContext } from 'modules/issues/project-rail/project-focus-context';
 
+import {
+  PULL_REQUEST_LABEL,
+  PULL_REQUEST_STYLE,
+  pullRequestDisplay,
+  pullRequestHeadline,
+} from 'common/lib/pull-request-format';
 import { formatCost, formatTokens } from 'common/lib/run-format';
 import {
   IssueRelationEnum,
   type IssueHistoryType,
+  type IssuePullRequestType,
   type IssueRelationType,
   type ProjectType,
 } from 'common/types';
@@ -85,6 +93,7 @@ export const BoardIssueItem = observer(
       workflowsStore,
       projectsStore,
       agentRunsStore,
+      issuePullRequestsStore,
     } = useContextStore();
     const {
       openIssue,
@@ -110,6 +119,9 @@ export const BoardIssueItem = observer(
     // carries — full disclosure lives in the activity feed.
     const liveActivity = swarmActivityStore.forIssue(issue.id);
     const runTotals = agentRunsStore.getIssueTotals(issue.id);
+    const pullRequests: IssuePullRequestType[] =
+      issuePullRequestsStore.getForIssue(issue.id);
+    const prHeadline = pullRequestHeadline(pullRequests);
     const showLiveChip =
       !!liveActivity &&
       liveActivity.issueId === issue.id &&
@@ -261,6 +273,27 @@ export const BoardIssueItem = observer(
                 {runTotals.costMicros > 0
                   ? formatCost(runTotals.costMicros)
                   : `${formatTokens(runTotals.tokens)} tok`}
+              </span>
+            )}
+            {/* Tracked GitHub PRs (spec cs:agents:prlinks): the state
+                that still needs work, as GitHub last reported it. */}
+            {prHeadline && (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-0.5 text-[10px] font-medium tabular-nums',
+                  PULL_REQUEST_STYLE[prHeadline],
+                )}
+                title={pullRequests
+                  .map(
+                    (pr) =>
+                      `${pr.repo}#${pr.number} · ${PULL_REQUEST_LABEL[pullRequestDisplay(pr)]}${pr.title ? ` · ${pr.title}` : ''}`,
+                  )
+                  .join('\n')}
+              >
+                <PullRequestLine size={12} />
+                {pullRequests.length === 1
+                  ? `#${pullRequests[0].number}`
+                  : pullRequests.length}
               </span>
             )}
             <div className="text-muted-foreground font-mono">{`${team?.identifier ?? ''}-${issue.number}`}</div>

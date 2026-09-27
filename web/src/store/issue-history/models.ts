@@ -39,7 +39,8 @@ export const IssueHistory = types.model({
   // discriminator for summary-carrying rows. Optional: payloads
   // retained before D1 predate the field.
   action: types.union(types.string, types.null, types.undefined),
-  // D1: handoff summary note (null on every non-handoff row).
+  // D1: the handoff note, the pause reason, or why the system moved the
+  // issue (a status row with userId null); null on every other row.
   summary: types.union(types.string, types.null, types.undefined),
   relationChanges: types.union(types.null, RelationChangeModel),
   sourceMetadata: types.union(types.null, types.string, types.undefined),
