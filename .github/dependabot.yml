@@ -27,6 +27,9 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@eslint/js"
         update-types: ["version-update:semver-major"]
+      # The editor is built on novel, which is still on Tiptap 2.
+      - dependency-name: "@tiptap/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
