@@ -4,11 +4,7 @@ import { ArrowDownRight, DeleteLine, IssuesLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
-import {
-  useWatch,
-  type UseFormReturn,
-  type UseFieldArrayRemove,
-} from 'react-hook-form';
+import { useWatch, type UseFieldArrayRemove } from 'react-hook-form';
 
 import { getWorkflowColor } from 'common/status-color';
 import type { WorkflowType } from 'common/types';
@@ -19,10 +15,12 @@ import { useUsersData } from 'hooks/users';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import { type IssueDraftForm } from './new-issues-type';
+
 interface IssueCollapseViewProps {
   isSubIssue: boolean;
   index: number;
-  form: UseFormReturn;
+  form: IssueDraftForm;
   subIssueOperations: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     append: any;
