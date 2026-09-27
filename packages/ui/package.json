@@ -75,7 +75,7 @@
     "prosemirror-view": "1.42.5",
     "react-day-picker": "8.10.1",
     "react-hook-form": "7.88.0",
-    "react-markdown": "^9.0.1",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^1.0.9",
     "react-time-ago": "^7.3.1",
     "tailwind-merge": "^2.3.0",
