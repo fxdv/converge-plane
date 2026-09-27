@@ -5,9 +5,10 @@ import {
   revokeAgentToken,
   rotateAgentToken,
   type AgentData,
+  type AgentDriver,
   type AgentListEntry,
+  type AgentTokenSpec,
 } from '@converge/services';
-
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 
 import { GetUserQuery } from 'services/users';
@@ -29,6 +30,8 @@ export interface CreateAgentVariables {
   workspaceId: string;
   name: string;
   teamIds: string[];
+  driver?: AgentDriver;
+  token?: AgentTokenSpec;
 }
 
 export function useCreateAgentMutation({
@@ -39,8 +42,8 @@ export function useCreateAgentMutation({
   const queryClient = useQueryClient();
 
   return useMutation(
-    ({ workspaceId, name, teamIds }: CreateAgentVariables) =>
-      createAgent(workspaceId, { name, teamIds }),
+    ({ workspaceId, ...data }: CreateAgentVariables) =>
+      createAgent(workspaceId, data),
     {
       onMutate: () => onMutate && onMutate(),
       onError: (
@@ -62,12 +65,15 @@ export function useCreateAgentMutation({
 export function useGetAgentsQuery(
   workspaceId: string,
   enabled = true,
-): { data: AgentListEntry[] | undefined; isLoading: boolean; refetch: () => void } {
-  return useQuery(
-    ['agents', workspaceId],
-    () => getAgents(workspaceId),
-    { enabled, staleTime: 30_000 },
-  );
+): {
+  data: AgentListEntry[] | undefined;
+  isLoading: boolean;
+  refetch: () => void;
+} {
+  return useQuery(['agents', workspaceId], () => getAgents(workspaceId), {
+    enabled,
+    staleTime: 30_000,
+  });
 }
 
 export function useRotateAgentTokenMutation({
@@ -83,11 +89,8 @@ export function useRotateAgentTokenMutation({
   }) => void;
 }) {
   return useMutation(
-    (params: {
-      workspaceId: string;
-      accountId: string;
-      name?: string;
-    }) => rotateAgentToken(params.workspaceId, params.accountId, params),
+    (params: { workspaceId: string; accountId: string; name?: string }) =>
+      rotateAgentToken(params.workspaceId, params.accountId, params),
     {
       onMutate: () => onMutate && onMutate(),
       onError: (
@@ -109,14 +112,12 @@ export function useRevokeAgentTokenMutation({
   onSuccess?: (data: { revoked: number }) => void;
 }) {
   return useMutation(
-    (params: {
-      workspaceId: string;
-      accountId: string;
-      tokenId?: string;
-    }) =>
-      revokeAgentToken(params.workspaceId, params.accountId, params.tokenId
-        ? { tokenId: params.tokenId }
-        : {}),
+    (params: { workspaceId: string; accountId: string; tokenId?: string }) =>
+      revokeAgentToken(
+        params.workspaceId,
+        params.accountId,
+        params.tokenId ? { tokenId: params.tokenId } : {},
+      ),
     {
       onMutate: () => onMutate && onMutate(),
       onError: (

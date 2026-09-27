@@ -309,20 +309,15 @@ An external coding agent (Claude Code, Cursor, Codex, or anything that
 speaks MCP over streamable HTTP) works Converge issues through the MCP
 endpoint at `https://<your-domain>/api/v1/mcp`.
 
-1. Create an agent with the `external` driver and a narrow token: scopes
-   `work`, `issues:write`, `comments:write`, limited to the teams it should
-   work on. The Add agent dialog does not set the driver or scopes yet, so
-   for now a workspace owner or admin runs this in the browser console while
-   signed in to Converge (the session cookie authenticates it):
-   ```js
-   await (await fetch('/api/v1/workspaces/<workspaceId>/agents', {
-     method: 'POST', headers: {'Content-Type': 'application/json'},
-     body: JSON.stringify({name: 'coder', teamIds: ['<teamId>'], driver: 'external',
-       token: {scopes: ['work', 'issues:write', 'comments:write'], teamIds: ['<teamId>'], ttlHours: 720}}),
-   })).json()
-   ```
-   The response shows the token once. Keep it in an environment variable
-   (`CONVERGE_TOKEN` below), not in a config file.
+1. In Settings → Members → Add agent (workspace owner or admin), pick the
+   teams, set "Who works its issues" to "External tool (MCP or API)", and
+   keep the defaults it applies: scopes `work`, `issues:write`,
+   `comments:write`, limited to those teams, expiring after one year. The
+   token is shown once, together with the setup below for this server's
+   address. Keep it in an environment variable (`CONVERGE_TOKEN` below),
+   not in a config file. Scripts can do the same through
+   `POST /api/v1/workspaces/<workspaceId>/agents` with
+   `{"name", "teamIds", "driver": "external", "token": {"scopes", "teamIds", "ttlHours"}}`.
 2. Point the client at the endpoint:
    - Claude Code:
      `claude mcp add --transport http converge https://<your-domain>/api/v1/mcp --header "Authorization: Bearer $CONVERGE_TOKEN"`

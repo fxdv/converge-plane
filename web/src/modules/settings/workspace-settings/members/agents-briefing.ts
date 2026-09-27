@@ -20,7 +20,12 @@ export const AGENTS_BRIEFING: BriefingSection[] = [
   },
   {
     title: 'You hold the keys',
-    body: 'You create an agent with a name and teams, and it receives a one-time API token — its only way in. Suspend is a kill switch: the token is revoked and the agent stops instantly, mid-task. Reactivating requires a fresh token; deleting removes the agent from the board, and its past work keeps its attribution.',
+    body: 'You create an agent with a name and teams, and it receives a one-time API token — its only way in, limited to the scopes, teams, and lifetime you pick. Suspend is a kill switch: the token is revoked and the agent stops instantly, mid-task. Reactivating requires a fresh token; deleting removes the agent from the board, and its past work keeps its attribution.',
+    status: 'live',
+  },
+  {
+    title: 'Bring your own coding agent',
+    body: 'Pick "External tool" when you add an agent, and a coding agent you run — Claude Code, Cursor, Codex, or a script — works its issues over MCP or the API. The swarm leaves that agent alone; its claims, cost, and trace land on the ticket like any other run.',
     status: 'live',
   },
   {
