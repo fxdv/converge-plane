@@ -111,7 +111,7 @@ func (a *API) notifyIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, 
 				    actor_name = coalesce(excluded.actor_name, notifications.actor_name)
 			returning id, created_at, read_at`,
 			workspaceID, row.ID, rid, row.Number, ntype,
-			p.AccountID, p.Fullname, key, auth.AccountKindHuman).Scan(&id, &createdAt, &readAt)
+			nullForEmpty(&p.AccountID), nullForEmpty(&p.Fullname), key, auth.AccountKindHuman).Scan(&id, &createdAt, &readAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue // the recipient is not a human account: no inbox
 		}
@@ -124,8 +124,8 @@ func (a *API) notifyIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, 
 			"issueId":     row.ID,
 			"issueNumber": row.Number,
 			"type":        ntype,
-			"actorId":     p.AccountID,
-			"actorName":   p.Fullname,
+			"actorId":     nullOrEmpty(p.AccountID),
+			"actorName":   nullOrEmpty(p.Fullname),
 			"recipientId": rid,
 			"createdAt":   createdAt.UTC().Format(iso),
 			"readAt":      readAt,

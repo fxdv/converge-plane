@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -142,6 +143,20 @@ type Config struct {
 	// (GET /metrics); empty disables it. It is a separate listener so the
 	// public reverse proxy never exposes it.
 	MetricsAddr string
+	// GitHubRepos is the allowlist of repositories whose pull requests
+	// are tracked: lower-cased "owner/name" or "owner/*" entries. Empty
+	// disables tracking; pull_request evidence then stays a plain link.
+	GitHubRepos []string
+	// GitHubToken authenticates the pull request poller to the GitHub
+	// API: a fine-grained token with read access to pull requests on the
+	// listed repositories. Optional; without it only public repositories
+	// are visible, at GitHub's anonymous rate limit (60 requests an hour).
+	GitHubToken string
+	// GitHubPollInterval is how often an open pull request is checked.
+	GitHubPollInterval time.Duration
+	// GitHubAutoDone moves an issue to its team's first Done state once
+	// a linked pull request merges and none is still open.
+	GitHubAutoDone bool
 	// Version is the build version, injected at link time.
 	Version string
 }
@@ -185,6 +200,11 @@ type Config struct {
 //	CONVERGE_TRUSTED_PROXIES   CIDRs/IPs whose X-Forwarded-For is believed, comma-separated,
 //	                           "none" trusts no proxy (default: loopback + private ranges)
 //	CONVERGE_METRICS_ADDR      Prometheus listen address, e.g. "127.0.0.1:9464" (default "": off)
+//	CONVERGE_GITHUB_REPOS      tracked repositories, "owner/name" or "owner/*", comma-separated (default "": off)
+//	CONVERGE_GITHUB_TOKEN      GitHub token with pull request read access (default "": public repos only)
+//	CONVERGE_GITHUB_POLL_INTERVAL
+//	                           how often an open PR is checked, 10s-1h (default "1m")
+//	CONVERGE_GITHUB_AUTO_DONE  move the issue to Done when its PRs merge (default "true")
 func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:          env("CONVERGE_HTTP_ADDR", ":3001"),
@@ -384,7 +404,64 @@ func Load() (Config, error) {
 		return cfg, fmt.Errorf("invalid CONVERGE_LOG_LEVEL %q: expected debug, info, warn or error", cfg.LogLevel)
 	}
 
+	if err := loadGitHub(&cfg); err != nil {
+		return cfg, err
+	}
 	return cfg, nil
+}
+
+func loadGitHub(cfg *Config) error {
+	if v := strings.TrimSpace(os.Getenv("CONVERGE_GITHUB_REPOS")); v != "" {
+		for _, entry := range strings.Split(v, ",") {
+			entry = strings.ToLower(strings.TrimSpace(entry))
+			if entry == "" {
+				continue
+			}
+			owner, name, ok := strings.Cut(entry, "/")
+			if !ok || !ValidGitHubOwner(owner) || (name != "*" && !ValidGitHubName(name)) {
+				return fmt.Errorf("invalid CONVERGE_GITHUB_REPOS entry %q: expected owner/name or owner/*", entry)
+			}
+			cfg.GitHubRepos = append(cfg.GitHubRepos, entry)
+		}
+	}
+	cfg.GitHubToken = strings.TrimSpace(os.Getenv("CONVERGE_GITHUB_TOKEN"))
+	if cfg.GitHubToken != "" && len(cfg.GitHubRepos) == 0 {
+		return fmt.Errorf("CONVERGE_GITHUB_TOKEN is set but CONVERGE_GITHUB_REPOS is empty: list the repositories whose pull requests to track")
+	}
+	cfg.GitHubPollInterval = time.Minute
+	if v := os.Getenv("CONVERGE_GITHUB_POLL_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 10*time.Second || d > time.Hour {
+			return fmt.Errorf("invalid CONVERGE_GITHUB_POLL_INTERVAL %q: expected a duration between 10s and 1h", v)
+		}
+		cfg.GitHubPollInterval = d
+	}
+	switch strings.ToLower(os.Getenv("CONVERGE_GITHUB_AUTO_DONE")) {
+	case "true", "1", "on", "":
+		cfg.GitHubAutoDone = true
+	case "false", "0", "off":
+		cfg.GitHubAutoDone = false
+	default:
+		return fmt.Errorf("invalid CONVERGE_GITHUB_AUTO_DONE %q: expected true or false", os.Getenv("CONVERGE_GITHUB_AUTO_DONE"))
+	}
+	return nil
+}
+
+var (
+	githubOwnerRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,38}$`)
+	githubNameRe  = regexp.MustCompile(`^[a-z0-9._-]{1,100}$`)
+)
+
+// ValidGitHubOwner reports whether s is a well-formed lower-cased GitHub
+// user or organization name.
+func ValidGitHubOwner(s string) bool {
+	return githubOwnerRe.MatchString(s)
+}
+
+// ValidGitHubName reports whether s is a well-formed lower-cased GitHub
+// repository name ("." and ".." are path segments, not names).
+func ValidGitHubName(s string) bool {
+	return s != "." && s != ".." && githubNameRe.MatchString(s)
 }
 
 // ValidateServe enforces the settings that make a serving process safe

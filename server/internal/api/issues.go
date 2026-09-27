@@ -68,9 +68,11 @@ func (a *API) issueAccess(ctx context.Context, principal *Principal, issueID str
 // handoff note (D1) and stays null on every other row.
 func (a *API) writeHistoryTx(ctx context.Context, tx pgx.Tx, workspaceID, teamID, issueID, actorID, action, field, from, to, summary string) (syncActionRecord, error) {
 	var id string
+	// An empty actor is the system (systemPrincipal): no account acted.
 	err := tx.QueryRow(ctx, `
-		insert into issue_history (workspace_id, team_id, issue_id, actor_id, action, field, from_value, to_value, summary)
-		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), nullif($9, ''))
+		insert into issue_history (workspace_id, team_id, issue_id, actor_id, actor_type, action, field, from_value, to_value, summary)
+		values ($1, $2, $3, nullif($4::text, '')::uuid, case when $4::text = '' then 'system' else 'user' end,
+		        $5, $6, nullif($7, ''), nullif($8, ''), nullif($9, ''))
 		returning id`,
 		workspaceID, teamID, issueID, actorID, action, field, from, to, summary).Scan(&id)
 	if err != nil {
@@ -105,6 +107,10 @@ type issueRequest struct {
 	// IssueRelation is the related picker's create op (v1.1): the
 	// client posts it alongside the (possibly untouched) issue fields.
 	IssueRelation *issueRelationRequest `json:"issueRelation"`
+	// statusNote is the status history row's summary: why a server-side
+	// move happened (a merged pull request). Unexported, so no client
+	// can set it.
+	statusNote string
 }
 
 // toJSONB renders a client string for a jsonb column: valid JSON is
@@ -506,7 +512,7 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 			return false, nil, err
 		}
 		rec, err := a.writeHistoryTx(ctx, tx, workspaceID, row.TeamID, row.ID, p.AccountID, "updated", "status",
-			strval(row.StatusID), *req.StateID, "")
+			strval(row.StatusID), *req.StateID, req.statusNote)
 		if err != nil {
 			return false, nil, err
 		}

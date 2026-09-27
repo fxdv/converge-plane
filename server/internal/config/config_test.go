@@ -22,6 +22,8 @@ var allKeys = []string{
 	"CONVERGE_SMTP_HOST", "CONVERGE_SMTP_PORT", "CONVERGE_SMTP_USER",
 	"CONVERGE_SMTP_PASS", "CONVERGE_SMTP_FROM", "CONVERGE_SMTP_TLS",
 	"CONVERGE_MAIL_LOG_BODIES", "CONVERGE_TRUSTED_PROXIES", "CONVERGE_METRICS_ADDR",
+	"CONVERGE_GITHUB_REPOS", "CONVERGE_GITHUB_TOKEN", "CONVERGE_GITHUB_POLL_INTERVAL",
+	"CONVERGE_GITHUB_AUTO_DONE",
 }
 
 // loadWith blanks every recognized variable, applies vars, and loads.
@@ -249,6 +251,35 @@ func TestLoadSMTP(t *testing.T) {
 	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_SMTP_PORT": "70000"}, "invalid CONVERGE_SMTP_PORT")
 	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_SMTP_PORT": "0"}, "invalid CONVERGE_SMTP_PORT")
 	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_SMTP_TLS": "plain"}, "invalid CONVERGE_SMTP_TLS")
+}
+
+func TestLoadGitHub(t *testing.T) {
+	off := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x"})
+	if len(off.GitHubRepos) != 0 || off.GitHubToken != "" || off.GitHubPollInterval != time.Minute || !off.GitHubAutoDone {
+		t.Fatalf("github defaults = %v %q %v %v", off.GitHubRepos, off.GitHubToken, off.GitHubPollInterval, off.GitHubAutoDone)
+	}
+	on := loadOK(t, map[string]string{
+		"CONVERGE_DATABASE_URL":         "x",
+		"CONVERGE_GITHUB_REPOS":         " Acme/App, acme-labs/*,,octo/web.site ",
+		"CONVERGE_GITHUB_TOKEN":         " github_pat_x ",
+		"CONVERGE_GITHUB_POLL_INTERVAL": "30s",
+		"CONVERGE_GITHUB_AUTO_DONE":     "false",
+	})
+	if fmt.Sprint(on.GitHubRepos) != "[acme/app acme-labs/* octo/web.site]" {
+		t.Fatalf("repos = %v", on.GitHubRepos)
+	}
+	if on.GitHubToken != "github_pat_x" || on.GitHubPollInterval != 30*time.Second || on.GitHubAutoDone {
+		t.Fatalf("github = %q %v %v", on.GitHubToken, on.GitHubPollInterval, on.GitHubAutoDone)
+	}
+	for _, bad := range []string{"acme", "acme/", "/app", "acme/app/x", "acme/..", "acme/.", "-acme/app", "ac me/app", "*/app", "acme/a*"} {
+		loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": bad}, "invalid CONVERGE_GITHUB_REPOS entry")
+	}
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_TOKEN": "t"}, "CONVERGE_GITHUB_REPOS is empty")
+	for _, bad := range []string{"5s", "2h", "soon"} {
+		loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": "a/b", "CONVERGE_GITHUB_POLL_INTERVAL": bad},
+			"invalid CONVERGE_GITHUB_POLL_INTERVAL")
+	}
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_AUTO_DONE": "maybe"}, "invalid CONVERGE_GITHUB_AUTO_DONE")
 }
 
 func TestLoadBooleanAndLogLevel(t *testing.T) {

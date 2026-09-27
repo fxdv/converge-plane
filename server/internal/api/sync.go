@@ -207,6 +207,8 @@ func (a *API) collectModel(ctx context.Context, model, workspaceID, accountID st
 		return a.collectArtifacts(ctx, workspaceID, emit)
 	case modelAgentRun:
 		return a.collectAgentRuns(ctx, workspaceID, emit)
+	case modelPullRequest:
+		return a.collectPullRequests(ctx, workspaceID, emit)
 	case "IssueRelation":
 		return a.collectIssueRelations(ctx, workspaceID, emit)
 	case "IssueHistory":

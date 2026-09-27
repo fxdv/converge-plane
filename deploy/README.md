@@ -14,6 +14,7 @@ operating it day to day.
 - [Client IP and trusted proxies](#client-ip-and-trusted-proxies)
 - [Security behavior](#security-behavior)
 - [Coding agents (MCP)](#coding-agents-mcp)
+- [GitHub pull requests](#github-pull-requests)
 - [Production checklist](#production-checklist)
 - [Backups](#backups)
 - [Upgrades](#upgrades)
@@ -86,6 +87,10 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_SMTP_PASS`       | `""`                              | SMTP auth password                                    |
 | `CONVERGE_SMTP_FROM`       | `no-reply@converge.local`         | From: address on outgoing mail                        |
 | `CONVERGE_SMTP_TLS`        | `starttls`                        | `starttls` \| `off` \| `implicit`                     |
+| `CONVERGE_GITHUB_REPOS`    | `""` (off)                        | Repositories whose pull requests are tracked: `owner/name` or `owner/*`, comma-separated ([below](#github-pull-requests)) |
+| `CONVERGE_GITHUB_TOKEN`    | `""`                              | Read-only GitHub token; needed for private repositories |
+| `CONVERGE_GITHUB_POLL_INTERVAL` | `1m`                         | How often an open pull request is checked, `10s` to `1h` |
+| `CONVERGE_GITHUB_AUTO_DONE` | `true`                           | Move an issue to Done once its pull requests merge   |
 
 The agent runtime and model-fleet variables (`CONVERGE_RUNTIME*`,
 `CONVERGE_SWARM_REVIEW_INTERVAL`, `CONVERGE_LLM*`) are covered in the
@@ -339,6 +344,54 @@ instructions tell the agent the workflow. Serve no OAuth discovery
 documents (`/.well-known/oauth-*`) on the API's domain: some clients then
 try OAuth instead of sending the configured header.
 
+## GitHub pull requests
+
+When an external agent reports a pull request (evidence of kind
+`pull_request` in `report_progress` or `release_claim`) in a repository you
+list, the API tracks it on GitHub. The card and the issue page show whether
+it is open, a draft, merged, or closed, with GitHub's title. Once every
+tracked pull request on an issue has merged and none is still open or
+unchecked, the issue moves to the team's first Done state. History and the
+inbox credit that move to Converge and name the pull request ("acme/app#12
+merged on GitHub"). Issues that are already done or canceled stay where they
+are, and so does an issue a person reopens after the merge.
+
+Setup:
+
+1. List the repositories: `CONVERGE_GITHUB_REPOS=acme/app,acme/api,labs/*`
+   (`owner/*` covers every repository of that owner; case does not matter).
+   Links to any other repository stay plain evidence links.
+2. Give the API a token, `CONVERGE_GITHUB_TOKEN`: a fine-grained personal
+   access token whose resource owner is the repositories' owner, with
+   access to only those repositories and the single permission
+   "Pull requests: Read-only". Private repositories need it. Without a
+   token GitHub allows 60 requests an hour from the server's address,
+   which covers about one open pull request at the default interval; with
+   one, the limit is 5,000 an hour and checks that find no change (`304`)
+   do not count against it.
+3. Allow outbound HTTPS from the API to `api.github.com`.
+
+How it behaves:
+
+- Each open pull request is checked about once per
+  `CONVERGE_GITHUB_POLL_INTERVAL` (default one minute), revalidated with
+  its ETag. Several API instances share the checks; each is made once.
+- Merged and closed pull requests are no longer checked. A closed one is
+  picked up again when an agent reports it again, for example after
+  reopening it.
+- A pull request GitHub does not return (deleted, or not visible to the
+  token) shows as unavailable and is retried with a backoff that grows to
+  one hour; after 48 failed checks in a row it waits for the next report.
+- On a rate limit the checks pause until GitHub's reset time. A rejected
+  token pauses them for 15 minutes and logs a warning (never the token).
+- The API never fetches the URL an agent reports. It rebuilds the GitHub
+  API path from the owner, name, and number it parsed, and follows
+  redirects only on `api.github.com`. An issue tracks at most 20 pull
+  requests.
+- `CONVERGE_GITHUB_AUTO_DONE=false` keeps the tracking but never moves an
+  issue. Unsetting `CONVERGE_GITHUB_REPOS` stops tracking; cards keep the
+  last state seen.
+
 ## Production checklist
 
 - [ ] `CONVERGE_SESSION_SECRET` set to `openssl rand -hex 32` output (the API refuses to start otherwise)
@@ -352,6 +405,7 @@ try OAuth instead of sending the configured header.
 - [ ] `CONVERGE_METRICS_ADDR`, if set, is not reachable through the public proxy
 - [ ] Agent scripts send `If-Match` (see above)
 - [ ] Tokens handed to external tools are scoped and team-limited (see above)
+- [ ] `CONVERGE_GITHUB_TOKEN`, if set, is fine-grained and read-only on pull requests (see above)
 - [ ] Backup job in place (below)
 
 ## Backups
@@ -389,6 +443,16 @@ docker compose up -d web                    # then the app
 Rolling back the *application* is a re-build of the previous tag; v1 schema
 changes are additive, so an old image remains compatible with a newer
 database.
+
+### Upgrading to the pull-request release (migration 0023)
+
+- **Nothing is tracked until you list repositories** in
+  `CONVERGE_GITHUB_REPOS`. Pull requests reported before then are not
+  tracked retroactively; an agent working the issue links them on its next
+  report.
+- **Web clients re-download their workspace once** after the upgrade.
+- **Rolling back past 0023 is safe.** Older builds ignore the table and
+  never move issues on a merge; tracked pull requests reappear on upgrade.
 
 ### Upgrading to the run-ledger release (migration 0022)
 
