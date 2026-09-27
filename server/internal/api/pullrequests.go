@@ -7,6 +7,10 @@
 // keeps in step with GitHub. The evidence is what the agent says; the
 // row is what GitHub says, and it is what the card shows.
 //
+// A member may also link a PR by hand, under the same rules, and unlink
+// one. An unlinked row stays as a tombstone that agent evidence does not
+// revive: agents repeat their evidence on every heartbeat.
+//
 // Only github.com pull request URLs link. Owner, name and number are
 // parsed and validated; the poller builds its own API path from them and
 // never requests the reported URL.
@@ -17,11 +21,13 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
 	"converge/internal/config"
@@ -178,8 +184,8 @@ func (a *API) emitPullRequestTx(ctx context.Context, tx pgx.Tx, id, action strin
 // Reporting a known link again re-arms a poller that had stopped
 // looking (a closed PR may have been reopened), except after a merge,
 // and leaves a scheduled one alone: agents repeat their evidence on
-// every heartbeat. An issue keeps at most 20 links; past that, reported
-// PRs stay plain evidence.
+// every heartbeat. A link a member unlinked stays unlinked. An issue
+// keeps at most 20 links; past that, reported PRs stay plain evidence.
 func (a *API) linkPullRequestsTx(ctx context.Context, tx pgx.Tx, run runRow, evidence []runEvidence) ([]syncActionRecord, error) {
 	if len(a.cfg.GitHubRepos) == 0 {
 		return nil, nil
@@ -199,7 +205,7 @@ func (a *API) linkPullRequestsTx(ctx context.Context, tx pgx.Tx, run runRow, evi
 		err := tx.QueryRow(ctx, `
 			insert into issue_pull_requests (workspace_id, issue_id, repo, number, linked_by, run_id)
 			select $1, $2, $3, $4, $5, $6
-			where (select count(*) from issue_pull_requests where issue_id = $2) < $7
+			where (select count(*) from issue_pull_requests where issue_id = $2 and unlinked_at is null) < $7
 			on conflict (issue_id, repo, number) do nothing
 			returning id`,
 			run.WorkspaceID, run.IssueID, ref.Repo, ref.Number, run.AgentID, run.ID, pullRequestsPerIssue).Scan(&id)
@@ -214,7 +220,7 @@ func (a *API) linkPullRequestsTx(ctx context.Context, tx pgx.Tx, run runRow, evi
 			if _, err := tx.Exec(ctx, `
 				update issue_pull_requests set next_check_at = now(), failures = 0, updated_at = now()
 				where issue_id = $1 and repo = $2 and number = $3
-				  and next_check_at is null and state <> 'merged'`,
+				  and next_check_at is null and state <> 'merged' and unlinked_at is null`,
 				run.IssueID, ref.Repo, ref.Number); err != nil {
 				return nil, err
 			}
@@ -229,7 +235,7 @@ func (a *API) linkPullRequestsTx(ctx context.Context, tx pgx.Tx, run runRow, evi
 // IssuePullRequest shape.
 func (a *API) collectPullRequests(ctx context.Context, workspaceID string, emit emitFn) ([]syncActionRecord, error) {
 	rows, err := a.pool.Query(ctx, "select "+pullColumns+`
-		from issue_pull_requests p where p.workspace_id = $1
+		from issue_pull_requests p where p.workspace_id = $1 and p.unlinked_at is null
 		order by p.created_at`, workspaceID)
 	if err != nil {
 		return nil, err
@@ -248,4 +254,188 @@ func (a *API) collectPullRequests(ctx context.Context, workspaceID string, emit 
 		out = append(out, rec)
 	}
 	return out, rows.Err()
+}
+
+// handleLinkPullRequest implements POST /api/v1/issues/{id}/pull_requests
+// ({"url"}): a member links a pull request by hand. Anyone who may edit
+// the issue may link, under the evidence rules: a github.com PR in a
+// tracked repository, at most 20 per issue. Linking a PR the issue
+// already links answers with that link; linking an unlinked one brings
+// it back, pending and due at once.
+func (a *API) handleLinkPullRequest(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+	if !isUUID(id) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := jsonDecode(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	row, workspaceID, ok := a.issueAccess(ctx, p, id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !a.agentPausedGuard(ctx, w, p, row) {
+		return
+	}
+	if len(a.cfg.GitHubRepos) == 0 {
+		writeError(w, http.StatusUnprocessableEntity, "this server does not follow GitHub pull requests")
+		return
+	}
+	ref, ok := parsePullRequestURL(strings.TrimSpace(req.URL))
+	if !ok {
+		writeError(w, http.StatusUnprocessableEntity, "url must be a github.com pull request, like https://github.com/owner/repo/pull/123")
+		return
+	}
+	if !a.githubTracks(ref.Repo) {
+		writeError(w, http.StatusUnprocessableEntity, "Converge does not follow "+ref.Repo+"; the repositories it follows are set by the server operator")
+		return
+	}
+
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_issue_"+row.TeamID); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	var (
+		linkID   string
+		unlinked bool
+	)
+	err = tx.QueryRow(ctx, `
+		select id, unlinked_at is not null from issue_pull_requests
+		where issue_id = $1 and repo = $2 and number = $3 for update`, row.ID, ref.Repo, ref.Number).Scan(&linkID, &unlinked)
+	switch {
+	case err == nil && !unlinked:
+		link, err := a.pullByIDTx(ctx, tx, linkID)
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, pullRequestData(link))
+		return
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+		a.internalError(w, err)
+		return
+	}
+	var live int
+	if err := tx.QueryRow(ctx, `
+		select count(*) from issue_pull_requests where issue_id = $1 and unlinked_at is null`, row.ID).Scan(&live); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if live >= pullRequestsPerIssue {
+		writeError(w, http.StatusUnprocessableEntity, "an issue links at most "+strconv.Itoa(pullRequestsPerIssue)+" pull requests")
+		return
+	}
+	if unlinked {
+		_, err = tx.Exec(ctx, `
+			update issue_pull_requests
+			set unlinked_at = null, unlinked_by = null, linked_by = $2, run_id = null,
+			    state = 'pending', draft = false, title = null, merged_at = null, etag = null,
+			    checked_at = null, failures = 0, next_check_at = now(), updated_at = now()
+			where id = $1`, linkID, p.AccountID)
+	} else {
+		err = tx.QueryRow(ctx, `
+			insert into issue_pull_requests (workspace_id, issue_id, repo, number, linked_by)
+			values ($1, $2, $3, $4, $5) returning id`,
+			workspaceID, row.ID, ref.Repo, ref.Number, p.AccountID).Scan(&linkID)
+	}
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	rec, link, err := a.emitPullRequestTx(ctx, tx, linkID, "CREATE")
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	a.broadcastRecord(rec)
+	writeJSON(w, http.StatusCreated, pullRequestData(link))
+}
+
+// handleUnlinkPullRequest implements
+// DELETE /api/v1/issues/{id}/pull_requests/{linkId}: anyone who may edit
+// the issue may unlink. The row stays as a tombstone, no longer checked
+// or shown, which agent evidence does not revive.
+func (a *API) handleUnlinkPullRequest(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	id, linkID := chi.URLParam(r, "id"), chi.URLParam(r, "linkId")
+	if !isUUID(id) || !isUUID(linkID) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	row, workspaceID, ok := a.issueAccess(ctx, p, id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !a.agentPausedGuard(ctx, w, p, row) {
+		return
+	}
+
+	tx, err := a.pool.Begin(ctx)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_issue_"+row.TeamID); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	var link pullRow
+	err = tx.QueryRow(ctx, "select "+pullColumns+`
+		from issue_pull_requests p
+		where p.id = $1 and p.issue_id = $2 and p.unlinked_at is null for update`, linkID, row.ID).Scan(link.scanDest()...)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if _, err := tx.Exec(ctx, `
+		update issue_pull_requests
+		set unlinked_at = now(), unlinked_by = $2, next_check_at = null, updated_at = now()
+		where id = $1`, linkID, p.AccountID); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	rec, err := a.emitChange(ctx, tx, workspaceID, modelPullRequest, linkID, "DELETE", map[string]any{"id": linkID})
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	a.broadcastRecord(rec)
+	writeJSON(w, http.StatusOK, pullRequestData(link))
 }

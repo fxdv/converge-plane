@@ -3,6 +3,7 @@
 // poller follows a PR from open through an ETag-revalidated check to
 // merged, the merge moves the issue to Done as the system once no PR is
 // still open, and failures back off or pause without leaking the token.
+// Members link and unlink by hand, and an unlinked PR stays unlinked.
 // Gated on CONVERGE_TEST_DATABASE_URL.
 package api
 
@@ -590,6 +591,128 @@ func TestPullRequestLinks(t *testing.T) {
 		}
 		if !strings.Contains(logs.String(), "GitHub rejected CONVERGE_GITHUB_TOKEN") {
 			t.Fatalf("the rejected token was not reported:\n%s", logs.String())
+		}
+	})
+}
+
+func (f *prFixture) linkByHand(issueID, url string) *httptest.ResponseRecorder {
+	f.t.Helper()
+	return f.call(humanPrincipal(f.owner), (*API).handleLinkPullRequest, "POST",
+		"/api/v1/issues/"+issueID+"/pull_requests", fmt.Sprintf(`{"url":%q}`, url), "id", issueID)
+}
+
+func (f *prFixture) unlink(issueID, linkID string) *httptest.ResponseRecorder {
+	f.t.Helper()
+	return f.call(humanPrincipal(f.owner), (*API).handleUnlinkPullRequest, "DELETE",
+		"/api/v1/issues/"+issueID+"/pull_requests/"+linkID, "", "id", issueID, "linkId", linkID)
+}
+
+func (f *prFixture) unlinked(linkID string) bool {
+	f.t.Helper()
+	var gone bool
+	if err := f.pool.QueryRow(context.Background(),
+		`select unlinked_at is not null from issue_pull_requests where id = $1`, linkID).Scan(&gone); err != nil {
+		f.t.Fatalf("read link %s: %v", linkID, err)
+	}
+	return gone
+}
+
+func TestPullRequestManualLinks(t *testing.T) {
+	f := newPRFixture(t)
+
+	t.Run("a member links by hand under the evidence rules", func(t *testing.T) {
+		me := f.call(humanPrincipal(f.owner), (*API).handleGetUser, "GET", "/api/v1/users", "")
+		checkStatus(t, me, http.StatusOK)
+		var u struct {
+			Features struct{ GitHubPullRequests bool }
+		}
+		decodeBody(t, me, &u)
+		if !u.Features.GitHubPullRequests {
+			t.Fatal("GET /users must offer hand-made links on a server that follows GitHub repositories")
+		}
+
+		issue := f.issue(f.t1, f.doing, f.ext1)
+		rec := f.linkByHand(issue, "https://github.com/Acme/App/pull/81/files")
+		checkStatus(t, rec, http.StatusCreated)
+		var v struct {
+			ID, Repo, State, LinkedByID string
+			Number                      int
+		}
+		decodeBody(t, rec, &v)
+		if v.Repo != "acme/app" || v.Number != 81 || v.State != "pending" || v.LinkedByID != f.owner {
+			t.Fatalf("link = %+v", v)
+		}
+		if !f.link(issue, 81).due || f.lastAction(v.ID) != "CREATE" {
+			t.Fatal("a hand-made link must be due at once and on the feed")
+		}
+		rec = f.linkByHand(issue, "https://github.com/acme/app/pull/81")
+		checkStatus(t, rec, http.StatusOK)
+		if n := f.linkCount(issue); n != 1 {
+			t.Fatalf("links after linking again = %d", n)
+		}
+		wantError(t, f.linkByHand(issue, "https://github.com/other/repo/pull/1"), http.StatusUnprocessableEntity,
+			"Converge does not follow other/repo; the repositories it follows are set by the server operator")
+		wantError(t, f.linkByHand(issue, "https://gitlab.com/acme/app/-/merge_requests/1"), http.StatusUnprocessableEntity,
+			"url must be a github.com pull request, like https://github.com/owner/repo/pull/123")
+	})
+
+	t.Run("an unlinked PR stays unlinked until a member links it again", func(t *testing.T) {
+		issue := f.issue(f.t1, f.doing, f.ext1)
+		claimID := f.claimAndReport(issue, "https://github.com/acme/app/pull/82")
+		id := f.linkID(issue, "acme/app", 82)
+		other := f.issue(f.t1, f.doing, f.ext1)
+		wantError(t, f.unlink(other, id), http.StatusNotFound, "not found")
+
+		checkStatus(t, f.unlink(issue, id), http.StatusOK)
+		if !f.unlinked(id) || f.link(issue, 82).due || f.lastAction(id) != "DELETE" {
+			t.Fatal("unlinking must leave a tombstone that is not checked and is off the feed")
+		}
+		wantError(t, f.unlink(issue, id), http.StatusNotFound, "not found")
+
+		f.reportPRs(issue, claimID, "https://github.com/acme/app/pull/82")
+		if !f.unlinked(id) || f.lastAction(id) != "DELETE" {
+			t.Fatal("the agent's next heartbeat revived an unlinked PR")
+		}
+		recs, err := f.a.collectModel(context.Background(), modelPullRequest, f.ws, f.owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rec := range recs {
+			if rec.ModelID == id {
+				t.Fatal("bootstrap carried an unlinked PR")
+			}
+		}
+
+		// A check leased before the unlink lands after it: it must not
+		// bring the link back.
+		g := f.poller()
+		ref := pullRef{Repo: "acme/app", Number: 82}
+		if err := g.apply(context.Background(), ref, leasedPull{id: id, issueID: issue},
+			githubResult{outcome: githubFetched, pull: githubPull{State: "open", Title: "Late answer"}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := g.apply(context.Background(), ref, leasedPull{id: id, issueID: issue},
+			githubResult{outcome: githubNotModified}); err != nil {
+			t.Fatal(err)
+		}
+		if s := f.link(issue, 82); s.due || s.title != "" || f.lastAction(id) != "DELETE" {
+			t.Fatalf("a late check touched the tombstone: %+v", s)
+		}
+
+		checkStatus(t, f.linkByHand(issue, "https://github.com/acme/app/pull/82"), http.StatusCreated)
+		if f.unlinked(id) || !f.link(issue, 82).due || f.link(issue, 82).state != "pending" || f.lastAction(id) != "CREATE" {
+			t.Fatal("linking by hand must bring the PR back, pending and due")
+		}
+	})
+
+	t.Run("an unlinked PR does not hold the issue back from Done", func(t *testing.T) {
+		issue := f.issue(f.t1, f.doing, f.ext1)
+		f.claimAndReport(issue, "https://github.com/acme/app/pull/83", "https://github.com/acme/app/pull/84")
+		checkStatus(t, f.unlink(issue, f.linkID(issue, "acme/app", 83)), http.StatusOK)
+		f.gh.queue("/repos/acme/app/pulls/84", pullJSON("closed", true, "The real fix"))
+		f.poll(f.poller(), issue)
+		if f.statusOf(issue) != f.done {
+			t.Fatal("a pending but unlinked PR kept the issue from moving to Done")
 		}
 	})
 }

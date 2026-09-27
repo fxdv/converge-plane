@@ -193,6 +193,9 @@ func (a *API) routes(r chi.Router) {
 		// itself (create rides the issue update) and the reader's list.
 		r.Delete("/issue_relation/{id}", a.handleDeleteIssueRelation)
 		r.Get("/issues/{id}/relations", a.handleListIssueRelations)
+		// Phase 2: pull requests a member links or unlinks by hand.
+		r.Post("/issues/{id}/pull_requests", a.handleLinkPullRequest)
+		r.Delete("/issues/{id}/pull_requests/{linkId}", a.handleUnlinkPullRequest)
 		// D1: the agent handoff protocol (docs/spec/12).
 		r.Post("/issues/{id}/handoff", a.handleHandoff)
 		r.Post("/issues/{id}/subscribe", a.handleSubscribeIssue)

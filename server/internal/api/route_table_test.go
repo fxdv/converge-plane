@@ -220,6 +220,7 @@ var rtRouteCases = []routeCase{
 				Invites    []json.RawMessage `json:"invites"`
 				Role       string            `json:"role"`
 				Kind       string            `json:"kind"`
+				Features   map[string]any    `json:"features"`
 			}
 			decodeBody(t, rec, &u)
 			if u.Workspaces == nil || len(u.Workspaces) != 0 || u.Invites == nil || len(u.Invites) != 0 {
@@ -227,6 +228,9 @@ var rtRouteCases = []routeCase{
 			}
 			if u.Role != "USER" || u.Kind != "human" {
 				t.Fatalf("role = %q kind = %q, want USER/human", u.Role, u.Kind)
+			}
+			if v, ok := u.Features["githubPullRequests"]; !ok || v != false {
+				t.Fatalf("features = %v, want githubPullRequests false on a server without GitHub repositories", u.Features)
 			}
 		},
 	},
@@ -485,6 +489,62 @@ var rtRouteCases = []routeCase{
 		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
 			if strings.TrimSpace(rec.Body.String()) != `[]` {
 				t.Fatalf("relations = %s, want the empty array (the client iterates it)", rec.Body.String())
+			}
+		},
+	},
+
+	// POST /issues/{id}/pull_requests — a hand-made link needs the server
+	// to follow GitHub at all (the table's API tracks no repository).
+	{
+		route: "POST /api/v1/issues/{id}/pull_requests", method: "POST",
+		path:      "/api/v1/issues/" + rtIssue + "/pull_requests",
+		urlParams: []string{"id", rtIssue},
+		handler:   (*API).handleLinkPullRequest,
+		body:      `{"url":"https://github.com/acme/app/pull/1"}`,
+		pool: &fakePool{rules: []fakeRule{
+			rtIssueRow(rtIssue, rtTeam, rtState, 7, false, nil, []string{}),
+			rtTeamWS(rtWS), rtRole("owner"),
+		}},
+		code: 422, err: "this server does not follow GitHub pull requests",
+	},
+
+	// DELETE /issues/{id}/pull_requests/{linkId} — unlinking leaves a
+	// tombstone that is no longer checked, and takes the link off the
+	// feed.
+	{
+		route: "DELETE /api/v1/issues/{id}/pull_requests/{linkId}", method: "DELETE",
+		path:      "/api/v1/issues/" + rtIssue + "/pull_requests/" + rtRelation,
+		urlParams: []string{"id", rtIssue, "linkId", rtRelation},
+		handler:   (*API).handleUnlinkPullRequest,
+		pool: &fakePool{
+			rules: []fakeRule{
+				rtIssueRow(rtIssue, rtTeam, rtState, 7, false, nil, []string{}),
+				rtTeamWS(rtWS), rtRole("owner"),
+			},
+			txs: []*fakeTx{{rules: []fakeRule{
+				{frag: "p.unlinked_at is null for update", rowVals: []any{
+					rtRelation, rtWS, rtIssue, "acme/app", 12, nil, nil,
+					"open", false, nil, nil, nil, time.Now(), time.Now()}},
+				rtSeq(10),
+			}}},
+		},
+		code: 200,
+		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
+			var v struct {
+				Repo   string `json:"repo"`
+				Number int    `json:"number"`
+			}
+			decodeBody(t, rec, &v)
+			if v.Repo != "acme/app" || v.Number != 12 {
+				t.Fatalf("unlinked = %s#%d, want the pre-unlink shape", v.Repo, v.Number)
+			}
+			var tombstone, deleted bool
+			for _, e := range pool.txs[0].execs {
+				tombstone = tombstone || strings.Contains(e.sql, "set unlinked_at = now(), unlinked_by = $2, next_check_at = null")
+				deleted = deleted || (strings.Contains(e.sql, "insert into sync_outbox") && e.args[4] == "DELETE")
+			}
+			if !tombstone || !deleted {
+				t.Fatalf("writes: tombstone=%v feed DELETE=%v, want both", tombstone, deleted)
 			}
 		},
 	},
@@ -1612,7 +1672,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 68 // the v1 surface: every route in Mount, one entry each
+	const want = 70 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}
