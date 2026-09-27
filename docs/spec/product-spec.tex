@@ -358,12 +358,14 @@ MCP server\cs{agents:mcp} & Tools-only MCP endpoint (streamable HTTP,
   release, issue update, comment; each call runs as its REST request under
   the caller's own token, so scopes and team grants hold & \shipped\\
 GitHub pull requests\cs{agents:prlinks} & A \texttt{pull\_request}
-  evidence link to an allowlisted repository becomes a tracked PR: the
-  server polls GitHub's REST API (ETag-revalidated, optional read-only
-  token) and shows open, draft, merged, or closed on the card and issue;
-  once every linked PR has merged and none is open, the issue moves to
-  the team's first Done state, recorded as a change by the system &
-  \shipped\\
+  evidence link to an allowlisted repository, or one a member pastes on
+  the issue, becomes a tracked PR: the server reads it from GitHub's REST
+  API (ETag-revalidated, optional read-only token) on each signed
+  webhook event and on a poll, follows renamed repositories, and shows
+  open, draft, merged, or closed on the card and issue; members unlink
+  any PR. Once every linked PR has merged and none is open, the issue
+  moves to the team's first Done state, recorded as a change by the
+  system & \shipped\\
 Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
   tokens, agent stops mid-request; per-account rate limit applies &
   \shipped\\
