@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -48,6 +51,10 @@ func (p *probe) runChecks() {
 	p.check("AUTHZ-2", "another workspace's data and issues are unreachable", p.checkCrossWorkspace)
 	p.check("AUTHZ-3", "a scoped agent token reaches only its scopes and teams, and dies on revocation", p.checkScopedToken)
 	p.check("AUTHZ-4", "MCP tool calls are held to the token's scopes and teams; sessions and foreign origins are refused", p.checkMCPScopes)
+
+	if p.webhookSecret != "" {
+		p.check("HOOK-1", "GitHub webhook deliveries count only when signed with the shared secret", p.checkGitHubWebhook)
+	}
 }
 
 // ---- hygiene ---------------------------------------------------------------
@@ -1055,6 +1062,40 @@ func (p *probe) createIssue(s *session, issue map[string]string) (id, etag strin
 		return "", "", fmt.Errorf("create issue: %w", err)
 	}
 	return res.field("id"), res.header.Get("ETag"), nil
+}
+
+// checkGitHubWebhook: a delivery carries no Origin and no session, like
+// GitHub's; its signature is its only credential. Unsigned, wrongly
+// signed and tampered deliveries are refused, a signed ping is answered.
+func (p *probe) checkGitHubWebhook() error {
+	sign := func(secret, body string) string {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(body))
+		return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	}
+	deliver := func(body, signature string) (response, error) {
+		header := map[string]string{"Origin": "", "X-GitHub-Event": "ping", "X-Hub-Signature-256": signature}
+		return p.do(request{method: "POST", path: "/api/github/webhook", body: body, ctype: "application/json", header: header})
+	}
+	ping := `{"zen":"Approachable is better than simple.","hook_id":1}`
+	for name, attempt := range map[string][2]string{
+		"unsigned":      {ping, ""},
+		"wrong secret":  {ping, sign(p.webhookSecret+"x", ping)},
+		"tampered body": {ping + " ", sign(p.webhookSecret, ping)},
+	} {
+		res, err := deliver(attempt[0], attempt[1])
+		if err != nil {
+			return err
+		}
+		if res.status != http.StatusUnauthorized {
+			return fmt.Errorf("%s delivery: %s, want 401", name, res)
+		}
+	}
+	res, err := deliver(ping, sign(p.webhookSecret, ping))
+	if err != nil {
+		return err
+	}
+	return expectStatus(res, http.StatusOK)
 }
 
 func isPrintableASCII(s string) bool {

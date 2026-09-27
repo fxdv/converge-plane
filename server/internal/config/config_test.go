@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -23,7 +24,7 @@ var allKeys = []string{
 	"CONVERGE_SMTP_PASS", "CONVERGE_SMTP_FROM", "CONVERGE_SMTP_TLS",
 	"CONVERGE_MAIL_LOG_BODIES", "CONVERGE_TRUSTED_PROXIES", "CONVERGE_METRICS_ADDR",
 	"CONVERGE_GITHUB_REPOS", "CONVERGE_GITHUB_TOKEN", "CONVERGE_GITHUB_POLL_INTERVAL",
-	"CONVERGE_GITHUB_AUTO_DONE",
+	"CONVERGE_GITHUB_AUTO_DONE", "CONVERGE_GITHUB_WEBHOOK_SECRET",
 }
 
 // loadWith blanks every recognized variable, applies vars, and loads.
@@ -280,6 +281,18 @@ func TestLoadGitHub(t *testing.T) {
 			"invalid CONVERGE_GITHUB_POLL_INTERVAL")
 	}
 	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_AUTO_DONE": "maybe"}, "invalid CONVERGE_GITHUB_AUTO_DONE")
+
+	secret := strings.Repeat("s", 32)
+	if off.GitHubWebhookSecret != "" {
+		t.Fatalf("webhook secret default = %q", off.GitHubWebhookSecret)
+	}
+	hooked := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": "a/b", "CONVERGE_GITHUB_WEBHOOK_SECRET": " " + secret + " "})
+	if hooked.GitHubWebhookSecret != secret {
+		t.Fatalf("webhook secret = %q", hooked.GitHubWebhookSecret)
+	}
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_WEBHOOK_SECRET": secret}, "CONVERGE_GITHUB_REPOS is empty")
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": "a/b", "CONVERGE_GITHUB_WEBHOOK_SECRET": secret[1:]},
+		"at least 32 characters")
 }
 
 func TestLoadBooleanAndLogLevel(t *testing.T) {

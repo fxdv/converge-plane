@@ -173,6 +173,11 @@ func (a *API) Mount(r chi.Router) {
 
 func (a *API) routes(r chi.Router) {
 	a.auth.Mount(r)
+	// Phase 2: GitHub's webhook deliveries, signed with the shared secret
+	// instead of carrying a session.
+	if a.cfg.GitHubWebhookSecret != "" {
+		r.Post("/api/github/webhook", a.handleGitHubWebhook)
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// The guard runs after the principal is resolved: unauthenticated

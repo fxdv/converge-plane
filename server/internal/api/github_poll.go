@@ -4,13 +4,18 @@
 // Linked pull requests (pullrequests.go) are checked against the GitHub
 // REST API while GitHub can still change them: pending and open ones
 // every CONVERGE_GITHUB_POLL_INTERVAL, with the last ETag, so an
-// unchanged PR costs a 304. A merged or closed PR is no longer checked;
+// unchanged PR costs a 304. Only repositories CONVERGE_GITHUB_REPOS
+// covers are read. A merged or closed PR is no longer checked;
 // reporting a closed one again re-arms it.
 //
 // Rows are leased before the request (next_check_at moves past the
 // batch's lifetime under skip locked), so any number of API processes
 // poll without duplicating work or holding a transaction across the
-// network call.
+// network call. A check records its answer only while its lease stands.
+//
+// With CONVERGE_GITHUB_WEBHOOK_SECRET set, GitHub's pull_request events
+// (github_webhook.go) make the PR's links due at once, and the interval
+// only catches what a lost delivery missed.
 //
 // A renamed or moved repository is followed through GitHub's redirect on
 // the API host, and the link takes the name GitHub now files the PR
@@ -123,9 +128,63 @@ func (g *githubPoller) pause(d time.Duration) {
 	}
 }
 
+// leasedPull is a link leased for one check. lease is the next_check_at
+// the lease set: the check records its answer only while the row still
+// holds it. A webhook nudge or a merge after a rename moves it, and the
+// check then due records instead, so an answer from before the change
+// never lands after one from after it.
 type leasedPull struct {
 	id, issueID, etag, state string
 	failures                 int
+	lease                    time.Time
+}
+
+// lease takes one batch of due links, grouped by pull request in the
+// order they came due. Only repositories the allowlist covers are read:
+// links to one taken off it keep their last state, and are checked
+// again if it comes back.
+func (g *githubPoller) lease(ctx context.Context) ([]pullRef, map[pullRef][]leasedPull, error) {
+	var repos, owners []string
+	for _, entry := range g.a.cfg.GitHubRepos {
+		if owner, ok := strings.CutSuffix(entry, "/*"); ok {
+			owners = append(owners, owner)
+		} else {
+			repos = append(repos, entry)
+		}
+	}
+	rows, err := g.a.pool.Query(ctx, `
+		with due as (
+			select id from issue_pull_requests
+			where next_check_at <= now()
+			  and (repo = any($3::text[]) or split_part(repo, '/', 1) = any($4::text[]))
+			order by next_check_at
+			limit $1
+			for update skip locked
+		)
+		update issue_pull_requests p set next_check_at = now() + $2::int * interval '1 second'
+		from due where p.id = due.id
+		returning p.id, p.issue_id, p.repo, p.number, coalesce(p.etag, ''), p.state, p.failures, p.next_check_at`,
+		githubPollBatch, int(githubLease.Seconds()), repos, owners)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var order []pullRef
+	leased := map[pullRef][]leasedPull{}
+	for rows.Next() {
+		var (
+			l   leasedPull
+			ref pullRef
+		)
+		if err := rows.Scan(&l.id, &l.issueID, &ref.Repo, &ref.Number, &l.etag, &l.state, &l.failures, &l.lease); err != nil {
+			return nil, nil, err
+		}
+		if leased[ref] == nil {
+			order = append(order, ref)
+		}
+		leased[ref] = append(leased[ref], l)
+	}
+	return order, leased, rows.Err()
 }
 
 // pollOnce checks one batch of due links and returns how many it
@@ -135,39 +194,8 @@ func (g *githubPoller) pollOnce(ctx context.Context) (int, error) {
 	if g.paused() {
 		return 0, nil
 	}
-	rows, err := g.a.pool.Query(ctx, `
-		with due as (
-			select id from issue_pull_requests
-			where next_check_at <= now()
-			order by next_check_at
-			limit $1
-			for update skip locked
-		)
-		update issue_pull_requests p set next_check_at = now() + $2::int * interval '1 second'
-		from due where p.id = due.id
-		returning p.id, p.issue_id, p.repo, p.number, coalesce(p.etag, ''), p.state, p.failures`,
-		githubPollBatch, int(githubLease.Seconds()))
+	order, leased, err := g.lease(ctx)
 	if err != nil {
-		return 0, err
-	}
-	var order []pullRef
-	leased := map[pullRef][]leasedPull{}
-	for rows.Next() {
-		var (
-			l   leasedPull
-			ref pullRef
-		)
-		if err := rows.Scan(&l.id, &l.issueID, &ref.Repo, &ref.Number, &l.etag, &l.state, &l.failures); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		if leased[ref] == nil {
-			order = append(order, ref)
-		}
-		leased[ref] = append(leased[ref], l)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return 0, err
 	}
 	checked := 0
@@ -335,7 +363,7 @@ func (g *githubPoller) apply(ctx context.Context, ref pullRef, l leasedPull, res
 		_, err := a.pool.Exec(ctx, `
 			update issue_pull_requests
 			set checked_at = now(), failures = 0, next_check_at = now() + $2::int * interval '1 second'
-			where id = $1 and unlinked_at is null`, l.id, int(g.interval.Seconds()))
+			where id = $1 and unlinked_at is null and next_check_at = $3`, l.id, int(g.interval.Seconds()), l.lease)
 		return err
 	case githubFailed:
 		_, err := a.pool.Exec(ctx, `
@@ -343,7 +371,8 @@ func (g *githubPoller) apply(ctx context.Context, ref pullRef, l leasedPull, res
 			set failures = failures + 1,
 			    next_check_at = case when failures + 1 >= $2::int then null
 			                         else now() + $3::int * interval '1 second' end
-			where id = $1 and unlinked_at is null`, l.id, githubMaxFailures, int(g.backoff(l.failures+1).Seconds()))
+			where id = $1 and unlinked_at is null and next_check_at = $4`,
+			l.id, githubMaxFailures, int(g.backoff(l.failures+1).Seconds()), l.lease)
 		return err
 	}
 
@@ -369,7 +398,8 @@ func (g *githubPoller) apply(ctx context.Context, ref pullRef, l leasedPull, res
 		failures int
 	)
 	err = tx.QueryRow(ctx, "select "+pullColumns+`, p.failures
-		from issue_pull_requests p where p.id = $1 and p.unlinked_at is null for update`, l.id).Scan(append(before.scanDest(), &failures)...)
+		from issue_pull_requests p
+		where p.id = $1 and p.unlinked_at is null and p.next_check_at = $2 for update`, l.id, l.lease).Scan(append(before.scanDest(), &failures)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

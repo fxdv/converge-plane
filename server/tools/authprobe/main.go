@@ -40,6 +40,7 @@ func main() {
 	smtpAddr := flag.String("smtp", "127.0.0.1:2526", "address for the probe's SMTP sink")
 	secure := flag.Bool("secure-cookies", false, "expect Secure session cookies (an https web origin)")
 	only := flag.String("only", "", "run only checks whose id has this prefix")
+	webhookSecret := flag.String("github-webhook-secret", "", "the API's CONVERGE_GITHUB_WEBHOOK_SECRET; empty skips the webhook checks")
 	flag.Parse()
 
 	ln, err := net.Listen("tcp", *smtpAddr)
@@ -59,7 +60,8 @@ func main() {
 			Timeout:       10 * time.Second,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		only: *only,
+		only:          *only,
+		webhookSecret: *webhookSecret,
 	}
 	failed := p.run()
 	_ = ln.Close()
@@ -74,6 +76,7 @@ type probe struct {
 	mail           *mailbox
 	http           *http.Client
 	only           string
+	webhookSecret  string
 
 	clientIP string // the current check's client, as the proxy reports it
 	passed   int

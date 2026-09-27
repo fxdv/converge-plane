@@ -57,6 +57,12 @@ refuses "refuses the published development secret" \
 refuses "refuses a short secret" CONVERGE_SESSION_SECRET=too-short
 refuses "refuses dev mode on a public URL" \
   CONVERGE_DEV_MODE=true CONVERGE_PUBLIC_URL=https://api.example.com CONVERGE_WEB_ORIGIN=https://app.example.com
+refuses "refuses a short GitHub webhook secret" \
+  CONVERGE_SESSION_SECRET="$(openssl rand -hex 32)" CONVERGE_GITHUB_REPOS=probe/app CONVERGE_GITHUB_WEBHOOK_SECRET=too-short
+
+# The poller reads only probe/app, which no link in the database names:
+# the run makes no GitHub request.
+WEBHOOK_SECRET="$(openssl rand -hex 32)"
 
 env -i PATH="$PATH" HOME="$HOME" \
   CONVERGE_DATABASE_URL="$DB" \
@@ -68,6 +74,8 @@ env -i PATH="$PATH" HOME="$HOME" \
   CONVERGE_SMTP_HOST="${SMTP_ADDR%:*}" \
   CONVERGE_SMTP_PORT="${SMTP_ADDR##*:}" \
   CONVERGE_SMTP_TLS=off \
+  CONVERGE_GITHUB_REPOS=probe/app \
+  CONVERGE_GITHUB_WEBHOOK_SECRET="$WEBHOOK_SECRET" \
   CONVERGE_RUNTIME=false \
   CONVERGE_LOG_LEVEL=debug \
   "$WORK/converge" >"$WORK/server.log" 2>&1 &
@@ -79,17 +87,18 @@ for _ in $(seq 100); do
   sleep 0.1
 done
 
-"$WORK/authprobe" -api "http://$API_ADDR" -web-origin "$WEB_ORIGIN" -smtp "$SMTP_ADDR" -secure-cookies || fail=1
+"$WORK/authprobe" -api "http://$API_ADDR" -web-origin "$WEB_ORIGIN" -smtp "$SMTP_ADDR" -secure-cookies \
+  -github-webhook-secret "$WEBHOOK_SECRET" || fail=1
 
 # The server logged every request at debug level: no sign-in link or code,
-# and no agent API token, may be in it.
+# no agent API token and no webhook secret may be in it.
 SECRET_RE='auth/verify\?preAuthSessionId=|"(linkCode|userInputCode)"|conv_agent_[A-Za-z0-9_-]{20,}'
-if grep -Eq "$SECRET_RE" "$WORK/server.log"; then
-  echo "FAIL  LOG       sign-in links, codes or API tokens appear in the server log:"
+if grep -Eq "$SECRET_RE" "$WORK/server.log" || grep -qF "$WEBHOOK_SECRET" "$WORK/server.log"; then
+  echo "FAIL  LOG       sign-in links, codes, API tokens or the webhook secret appear in the server log:"
   grep -E "$SECRET_RE" "$WORK/server.log" | head -3
   fail=1
 else
-  echo "PASS  LOG       no sign-in link, code or API token in the server log ($(wc -l <"$WORK/server.log" | tr -d ' ') lines at debug)"
+  echo "PASS  LOG       no sign-in link, code, API token or webhook secret in the server log ($(wc -l <"$WORK/server.log" | tr -d ' ') lines at debug)"
 fi
 
 if [ "$fail" -ne 0 ]; then
