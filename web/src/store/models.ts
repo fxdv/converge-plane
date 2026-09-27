@@ -19,6 +19,10 @@ export enum MODELS {
   IssueComment = 'IssueComment',
   IssueArtifact = 'IssueArtifact',
 
+  // Phase 2: the run ledger (spec cs:agents:runs): one record per
+  // external agent's claim, with its reported cost and evidence.
+  AgentRun = 'AgentRun',
+
   // Swarm: the in-flight work signal (one record per agent; the
   // board's live chip and the swarm panel's real-time state).
   SwarmActivity = 'SwarmActivity',

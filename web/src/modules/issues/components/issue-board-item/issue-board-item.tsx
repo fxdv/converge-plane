@@ -29,6 +29,7 @@ import {
 import { projectFocusKind } from 'modules/issues/project-rail/project-focus';
 import { ProjectFocusContext } from 'modules/issues/project-rail/project-focus-context';
 
+import { formatCost, formatTokens } from 'common/lib/run-format';
 import {
   IssueRelationEnum,
   type IssueHistoryType,
@@ -83,6 +84,7 @@ export const BoardIssueItem = observer(
       swarmActivityStore,
       workflowsStore,
       projectsStore,
+      agentRunsStore,
     } = useContextStore();
     const {
       openIssue,
@@ -107,6 +109,7 @@ export const BoardIssueItem = observer(
     // claim a card. The chip is the only live decoration the board
     // carries — full disclosure lives in the activity feed.
     const liveActivity = swarmActivityStore.forIssue(issue.id);
+    const runTotals = agentRunsStore.getIssueTotals(issue.id);
     const showLiveChip =
       !!liveActivity &&
       liveActivity.issueId === issue.id &&
@@ -246,6 +249,18 @@ export const BoardIssueItem = observer(
               >
                 <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
                 claimed
+              </span>
+            )}
+            {/* The run ledger: what external agents reported spending
+                on this issue, across all their runs. */}
+            {runTotals && runTotals.runs > 0 && (
+              <span
+                className="text-[10px] font-medium text-muted-foreground tabular-nums"
+                title={`${runTotals.runs} agent run${runTotals.runs === 1 ? '' : 's'} · ${formatTokens(runTotals.tokens)} tokens · cost as reported by the agents`}
+              >
+                {runTotals.costMicros > 0
+                  ? formatCost(runTotals.costMicros)
+                  : `${formatTokens(runTotals.tokens)} tok`}
               </span>
             )}
             <div className="text-muted-foreground font-mono">{`${team?.identifier ?? ''}-${issue.number}`}</div>

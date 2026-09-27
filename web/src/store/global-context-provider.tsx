@@ -1,6 +1,7 @@
 import { types, type Instance } from 'mobx-state-tree';
 import React from 'react';
 
+import { AgentRunsStore } from './agent-runs';
 import { ApplicationStore, defaultApplicationStoreValue } from './application';
 import { CommentsStore } from './comments';
 import { CommonStore, defaultCommonStoreValue } from './common';
@@ -22,6 +23,7 @@ import { WorkspaceStore } from './workspace';
 // AI, support/CRM, integrations, ...) were trimmed in the M3
 // dead-feature pass.
 const StoreContextModel = types.model({
+  agentRunsStore: AgentRunsStore,
   commentsStore: CommentsStore,
   notificationsStore: NotificationsStore,
   issueArtifactsStore: IssueArtifactsStore,
@@ -39,6 +41,9 @@ const StoreContextModel = types.model({
 });
 
 export const storeContextStore = StoreContextModel.create({
+  agentRunsStore: {
+    runs: {},
+  },
   commentsStore: {
     comments: {},
   },

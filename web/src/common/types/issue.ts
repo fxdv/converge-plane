@@ -116,6 +116,35 @@ export interface IssueArtifactType {
   sourceMetadata?: string;
 }
 
+// spec cs:agents:runs — one claim's worth of work by an external agent.
+// Usage, cost, outcome, summary, and evidence are agent-reported.
+export interface RunEvidenceType {
+  // pull_request | commit | ci_run | deployment | link
+  kind: string;
+  url: string;
+  title: string | null;
+}
+
+export interface AgentRunType {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  issueId: string;
+  agentId: string;
+  claimId: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  endReason: string | null;
+  outcome: string | null;
+  summary: string | null;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  costMicros: number;
+  eventCount: number;
+  evidence: RunEvidenceType[];
+}
+
 export enum SubscribeType {
   SUBSCRIBE = 'SUBSCRIBE',
   UNSUBSCRIBE = 'UNSUBSCRIBE',

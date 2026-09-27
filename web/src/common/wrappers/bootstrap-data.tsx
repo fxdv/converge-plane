@@ -26,13 +26,22 @@ interface Props {
   children: React.ReactElement;
 }
 
+// Change this when a release adds a synced model. A returning client
+// then takes the snapshot once instead of a delta, so it also gets rows
+// the delta never carried: server-side backfills, and records its
+// previous build ignored.
+export const SYNC_SCHEMA = '2026-09-27.agent-runs';
+
 export function BootstrapWrapper({ children }: Props) {
   const workspace = useCurrentWorkspace();
   const user = React.useContext(UserContext);
   const [loading, setLoading] = React.useState(true);
   const hashKey = `${workspace.id}__${user.id}`;
+  const schemaKey = `syncSchema_${hash(hashKey)}`;
   const lastSequenceId =
-    localStorage && localStorage.getItem(`lastSequenceId_${hash(hashKey)}`);
+    localStorage && localStorage.getItem(schemaKey) === SYNC_SCHEMA
+      ? localStorage.getItem(`lastSequenceId_${hash(hashKey)}`)
+      : null;
 
   // This tab's applied high-water (SWR-51): the shared key seeds it at
   // mount; live paths from here on dedupe and fetch against the tab's own
@@ -43,6 +52,7 @@ export function BootstrapWrapper({ children }: Props) {
   }, [workspace?.id]);
 
   const {
+    agentRunsStore,
     commentsStore,
     issueArtifactsStore,
     issuesHistoryStore,
@@ -68,6 +78,7 @@ export function BootstrapWrapper({ children }: Props) {
     [MODELS.IssueHistory]: issuesHistoryStore,
     [MODELS.IssueComment]: commentsStore,
     [MODELS.IssueArtifact]: issueArtifactsStore,
+    [MODELS.AgentRun]: agentRunsStore,
     [MODELS.View]: viewsStore,
     [MODELS.SwarmActivity]: swarmActivityStore,
     [MODELS.Notification]: notificationsStore,
@@ -128,6 +139,7 @@ export function BootstrapWrapper({ children }: Props) {
         MODEL_STORE_MAP,
         user?.id ?? '',
       );
+      localStorage.setItem(schemaKey, SYNC_SCHEMA);
 
       // Max-only (SWR-51): another tab may have advanced the shared key
       // past this snapshot's watermark — never write it backwards.

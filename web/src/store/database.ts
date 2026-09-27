@@ -3,6 +3,7 @@
 import Dexie from 'dexie';
 
 import type {
+  AgentRunType,
   IssueArtifactType,
   IssueCommentType,
   IssueHistoryType,
@@ -32,6 +33,7 @@ export class ConvergeDatabase extends Dexie {
   issueHistory: Dexie.Table<IssueHistoryType, string>;
   comments: Dexie.Table<IssueCommentType, string>;
   issueArtifacts: Dexie.Table<IssueArtifactType, string>;
+  agentRuns: Dexie.Table<AgentRunType, string>;
   usersOnWorkspaces: Dexie.Table<UsersOnWorkspaceType, string>;
   views: Dexie.Table<ViewType, string>;
   projects: Dexie.Table<ProjectType, string>;
@@ -40,7 +42,7 @@ export class ConvergeDatabase extends Dexie {
   constructor(databaseName: string) {
     super(databaseName);
 
-    this.version(22).stores({
+    this.version(23).stores({
       [MODELS.Workspace]: 'id,createdAt,updatedAt,name,slug,preferences',
       [MODELS.Label]:
         'id,createdAt,updatedAt,name,color,description,workspaceId,groupId,teamId',
@@ -60,6 +62,7 @@ export class ConvergeDatabase extends Dexie {
       // to 8 KB of display text per row; the load path queries issueId).
       [MODELS.IssueArtifact]:
         'id,createdAt,updatedAt,userId,issueId,title,sourceMetadata',
+      [MODELS.AgentRun]: 'id,issueId,agentId,startedAt',
       [MODELS.View]:
         'id,createdAt,updatedAt,workspaceId,name,description,filters,isBookmarked,teamId',
       [MODELS.Project]:
@@ -79,6 +82,7 @@ export class ConvergeDatabase extends Dexie {
     this.issueHistory = this.table(MODELS.IssueHistory);
     this.comments = this.table(MODELS.IssueComment);
     this.issueArtifacts = this.table(MODELS.IssueArtifact);
+    this.agentRuns = this.table(MODELS.AgentRun);
     this.views = this.table(MODELS.View);
     this.projects = this.table(MODELS.Project);
     this.notifications = this.table(MODELS.Notification);

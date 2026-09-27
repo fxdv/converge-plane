@@ -42,6 +42,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
     const workspace = useCurrentWorkspace();
 
     const {
+      agentRunsStore,
       commentsStore,
       issueArtifactsStore,
       issuesHistoryStore,
@@ -122,6 +123,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         [MODELS.IssueHistory]: issuesHistoryStore,
         [MODELS.IssueComment]: commentsStore,
         [MODELS.IssueArtifact]: issueArtifactsStore,
+        [MODELS.AgentRun]: agentRunsStore,
         [MODELS.View]: viewsStore,
         [MODELS.SwarmActivity]: swarmActivityStore,
         [MODELS.Notification]: notificationsStore,
