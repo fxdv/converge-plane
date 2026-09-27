@@ -23,6 +23,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"converge/internal/broadcast"
 	"converge/internal/config"
@@ -681,6 +682,7 @@ func (f *fakeRows) Scan(dest ...any) error { return fakeAssign(f.values[f.pos-1]
 func (f *fakeRows) Values() ([]any, error) { return f.values[f.pos-1], nil }
 func (f *fakeRows) RawValues() [][]byte    { return nil }
 func (f *fakeRows) Conn() *pgx.Conn        { return nil }
+func (f *fakeRows) TypeMap() *pgtype.Map   { return pgtype.NewMap() }
 
 // fakeAssign copies canned row values into scan targets positionally.
 func fakeAssign(values []any, dest ...any) error {
