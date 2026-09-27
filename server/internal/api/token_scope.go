@@ -49,6 +49,8 @@ var tokenRoutePolicy = map[string]routePolicy{
 	"GET /issues/{id}/relations":  {scope: auth.ScopeIssuesRead},
 	"DELETE /issue_relation/{id}": {scope: auth.ScopeIssuesWrite, wide: true},
 
+	"GET /issues/{id}/runs/{runId}/events": {scope: auth.ScopeIssuesRead},
+
 	"POST /issue_comments":             {scope: auth.ScopeCommentsWrite},
 	"POST /issue_comments/{id}":        {scope: auth.ScopeCommentsWrite},
 	"DELETE /issue_comments/{id}":      {scope: auth.ScopeCommentsWrite},
@@ -67,6 +69,7 @@ var tokenRoutePolicy = map[string]routePolicy{
 	"POST /issues/{id}/claim":           {scope: auth.ScopeWork},
 	"POST /issues/{id}/claim/heartbeat": {scope: auth.ScopeWork},
 	"POST /issues/{id}/claim/release":   {scope: auth.ScopeWork},
+	"POST /issues/{id}/claim/report":    {scope: auth.ScopeWork},
 
 	// Outside the token surface: hard delete (spec 07 keeps it out of
 	// issues:write), profile and workspace administration, taxonomy and

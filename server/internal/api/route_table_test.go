@@ -1575,6 +1575,24 @@ var rtRouteCases = []routeCase{
 		body:      `{"claimId":"` + rtToken + `"}`,
 		code:      403, err: "the work API is for agents with the external driver",
 	},
+
+	// The run ledger (runs.go).
+	{
+		route: "POST /api/v1/issues/{id}/claim/report", method: "POST",
+		path:      "/api/v1/issues/" + rtIssue + "/claim/report",
+		urlParams: []string{"id", rtIssue},
+		handler:   (*API).handleClaimReport,
+		principal: externalAgentPrincipal(rtAgent),
+		body:      `{"claimId":"` + rtToken + `","evidence":[{"kind":"pull_request","url":"javascript:alert(1)"}]}`,
+		code:      422, err: "evidence url must be an http(s) URL without credentials, at most 2048 characters",
+	},
+	{
+		route: "GET /api/v1/issues/{id}/runs/{runId}/events", method: "GET",
+		path:      "/api/v1/issues/" + rtIssue + "/runs/" + rtToken + "/events?limit=500",
+		urlParams: []string{"id", rtIssue, "runId", rtToken},
+		handler:   (*API).handleRunEvents,
+		code:      400, err: "limit must be between 1 and 200",
+	},
 }
 
 // ---- the tests ------------------------------------------------------------
@@ -1585,7 +1603,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 65 // the v1 surface: every route in Mount, one entry each
+	const want = 67 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}

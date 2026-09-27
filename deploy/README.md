@@ -267,6 +267,14 @@ What operators and integrators notice (wire details in
   agent alone. A claim that stops heartbeating lapses within its TTL (30–900
   s) and is swept within 10 s, even with `CONVERGE_RUNTIME=false`. Contract:
   [docs/spec/08](../docs/spec/08-api-and-event-contracts.md#as-built-v1-server).
+- **Agent runs.** Each claim records a run: model, token and cost totals, a
+  step trace (at most 1000 entries per run), evidence links, and an outcome.
+  Cost and tokens are what the agent reports; Converge does not price or
+  verify them, and the UI labels them as agent-reported. Links are shown
+  only when they are http(s). Runs and their traces are kept with the issue
+  and deleted with it; there is no separate retention job. Migration 0022
+  creates one run for every existing claim, and web clients re-download
+  their workspace once after the upgrade.
 - **Auth rate limits.** `/api/auth/*`: per IP, burst 30 then one request per
   2 s; sign-in codes per email, 5 then one per 3 min. Excess gets `429` with
   `Retry-After`. The `email/exists` endpoint is gone (it let anyone test

@@ -109,20 +109,35 @@ Team grants are checked where team access is decided, so every issue and comment
 
 **Drivers.** `accounts.agent_driver` is `runtime` (default: the in-process swarm works the agent's issues) or `external` (an outside process works them through the work API, and the runtime never schedules, wakes, or counts that agent). Switching an agent back to `runtime` ends its open claims (`revoked`).
 
-**Work API (external agents).** All four routes need an agent principal with the `external` driver (others get `403`) and, for a narrowed token, the `work` scope.
+**Work API (external agents).** Every work route needs an agent principal with the `external` driver (others get `403`) and, for a narrowed token, the `work` scope.
 
 | Route | Contract |
 | --- | --- |
 | `GET /agent/queue` | `{workspaceId, assigned, available, claims}`: open issues assigned to the agent (not paused, not in Human Review, not completed/canceled; at most 100), unassigned issues in an `UNSTARTED` state of its teams with no live claim (by priority; at most 50), and its open claims. Team grants filter both lists. |
 | `POST /issues/{id}/claim` `{ttlSeconds?}` | TTL 30–900 s (default 300; `422` otherwise). The issue must be assigned to the agent, or unassigned in an `UNSTARTED` state of one of its teams (claiming it assigns it). `409` if closed, waiting for a human, not the agent's, or held by another agent's live claim (`{"error","claimedById"}`). A claim the agent already holds is superseded. `200 {claim, packet}` with `ETag: "<version>"`. |
-| `POST /issues/{id}/claim/heartbeat` `{claimId}` | Extends the lease by its TTL. `409 {"error":"the claim has ended","endReason"}` if it has ended or no longer holds (the heartbeat ends it). |
-| `POST /issues/{id}/claim/release` `{claimId}` | Ends the claim; `200 {released:true}`, or `200 {released:false, endReason}` if it had already ended. Release does not unassign. |
+| `POST /issues/{id}/claim/heartbeat` `{claimId, …report}` | Extends the lease by its TTL. `409 {"error":"the claim has ended","endReason"}` if it has ended or no longer holds (the heartbeat ends it, and a report it carried is not applied). With a report: `200 {claim, run, droppedEvents}`. |
+| `POST /issues/{id}/claim/release` `{claimId, …report}` | Applies the report, then ends the claim; `200 {released:true, run}`, or `200 {released:false, endReason, run}` if it had already ended. Release does not unassign. |
+| `POST /issues/{id}/claim/report` `{claimId, …report}` | Reports without touching the lease. `200 {run, droppedEvents}`. |
 
-A claim that is missing, belongs to another agent, or names another issue answers `404 "claim not found"`. `claim` is `{id, issueId, agentId, mode: "assigned"|"pool", claimedAt, expiresAt, ttlSeconds, heartbeatIntervalSeconds}`. The agent heartbeats every `heartbeatIntervalSeconds` (a third of the TTL, at least 10). The `packet` bundles what the agent needs to start without further reads: the issue, its description as plain text, team, the team's states, labels, the last 20 comments (oldest first), and the latest handoff to it.
+A claim that is missing, belongs to another agent, or names another issue answers `404 "claim not found"`. `claim` is `{id, issueId, agentId, mode: "assigned"|"pool", claimedAt, expiresAt, ttlSeconds, heartbeatIntervalSeconds}`. The agent heartbeats every `heartbeatIntervalSeconds` (a third of the TTL, at least 10). The `packet` bundles what the agent needs to start without further reads: the issue, its description as plain text, team, the team's states, labels, the last 20 comments (oldest first), the latest handoff to it, and `previousRuns`: up to 5 ended runs on the issue, newest first, each `{id, agentId, startedAt, endedAt, endReason, outcome, summary, evidence}`.
 
 A claim ends as `released`, `expired`, `superseded`, `reassigned`, `paused` (paused or parked in Human Review), `closed`, or `revoked` (agent suspended, driver changed, membership ended). A sweeper ends lapsed and invalidated claims every 10 s, even when the runtime is disabled. At most one claim per issue is open (a partial unique index, under the team advisory lock and a row lock). Opening or ending a claim bumps the issue `version` and emits an Issue update; heartbeats do neither. Holding a claim is not required to write an issue. The claim coordinates who works it, and a process whose claim ended is fenced by the version: its next `If-Match` write gets `412`.
 
 **Claim on the wire.** Every Issue payload (bootstrap, delta, stream, responses) carries `claimedById` and `claimedAt`, the open claim's agent and start time, and explicit `null`s when there is none. The board shows a "claimed" chip on a card an external agent holds.
+
+**Run ledger.** Each claim opens one run (its `id` is the claim's), and the run ends with the claim and the claim's end reason. The agent reports into it with any subset of these fields; a report with none is a no-op:
+
+- `model`: 1–100 characters; the latest report wins.
+- `totals: {inputTokens?, outputTokens?, costMicros?}`: running totals for the run so far, each 0–10^12. Totals are absolute, so a retried report is harmless; a total lower than the stored one is refused (`422`). Cost is in micro-USD and is shown as reported by the agent. The server has no price table.
+- `events: [{kind, message}]`: `kind` is `step`, `tool`, `note`, or `error`; `message` is 1–1000 characters (longer is cut). At most 50 per report. The server assigns `seq` and `at`. A run keeps at most 1000 events; the excess is dropped and counted in `droppedEvents`, and usage and outcome still apply.
+- `evidence: [{kind, url, title?}]`: `kind` is `pull_request`, `commit`, `ci_run`, `deployment`, or `link`; `url` is http(s) with a host, no credentials, at most 2048 characters; `title` at most 200. Merged by URL, so a repeat updates the title. At most 20 per run (`422` past that).
+- `outcome`: `done`, `failed`, `blocked`, or `partial`, and `summary`: at most 2000 characters. Normally sent on release.
+
+Text is stored with control characters and bidirectional overrides removed. A report on a missing run or another agent's run answers `404 "run not found"`. A run accepts reports while its claim is open and for one hour after it ends, so an agent whose lease lapsed can still file its final numbers; after that, `409 "the run is closed to reports"`. Reports never bump the issue `version`, so reporting does not fence the agent's next write.
+
+`GET /issues/{id}/runs/{runId}/events?after=&limit=` (scope `issues:read`; any member who can read the issue) pages the trace in `seq` order: `after` ≥ 0 (default 0), `limit` 1–200 (default 200). Answers `{events: [{seq, at, kind, message}], nextAfter}`; `nextAfter` is `null` on the last page.
+
+**AgentRun on the wire.** A synced model, scoped by issue: `{id, createdAt, updatedAt, issueId, agentId, claimId, startedAt, endedAt, endReason, outcome, summary, model, inputTokens, outputTokens, costMicros, eventCount, evidence}`. Nullable fields are explicit `null`s and `evidence` is always an array. The trace is not synced. The board shows the issue's summed reported cost on the card; the issue page lists its runs, with the trace loaded on demand.
 
 ## Resource contracts by release
 

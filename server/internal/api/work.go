@@ -341,6 +341,12 @@ func (a *API) handleClaimIssue(w http.ResponseWriter, r *http.Request) {
 			a.internalError(w, err)
 			return
 		}
+		ended, err := a.endRunTx(ctx, tx, openID, reason)
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+		recs = append(recs, ended...)
 	}
 
 	if mode == "pool" {
@@ -375,6 +381,12 @@ func (a *API) handleClaimIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	claim.fill()
+	runRec, err := a.openRunTx(ctx, tx, claim.ID, workspaceID, id, p.AccountID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	recs = append(recs, runRec)
 	fresh, err := a.issueByIDTx(ctx, tx, id)
 	if err != nil {
 		a.internalError(w, err)
@@ -420,7 +432,11 @@ func (a *API) handleClaimRelease(w http.ResponseWriter, r *http.Request) {
 }
 
 // claimTransition is the shared heartbeat/release path: both name the
-// claim, both end a claim the verdict has already doomed.
+// claim, both end a claim the verdict has already doomed, and both may
+// carry a run report. A heartbeat applies its report only while the
+// claim holds; a release applies it before ending the claim, or to a run
+// that already ended within the report grace (the final numbers belong
+// in the release).
 func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bool) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {
@@ -432,13 +448,16 @@ func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bo
 	}
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
-	var req struct {
-		ClaimID string `json:"claimId"`
-	}
+	var req runReport
 	if err := decodeOptional(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if msg := req.normalize(); msg != "" {
+		writeError(w, http.StatusUnprocessableEntity, msg)
+		return
+	}
+	hasReport := !req.empty()
 	if !isUUID(id) || !isUUID(req.ClaimID) {
 		writeError(w, http.StatusNotFound, "claim not found")
 		return
@@ -482,22 +501,12 @@ func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bo
 	}
 	claim.AgentID = agentID
 	claim.fill()
-	if ended {
-		if release {
-			writeJSON(w, http.StatusOK, map[string]any{"released": false, "endReason": endReason})
-			return
-		}
+	if ended && !release {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "the claim has ended", "endReason": endReason})
 		return
 	}
-
-	switch {
-	case release || verdict != "":
-		reason := verdict
-		if release {
-			reason = claimEndReleased
-		}
-		recs, err := a.endClaimTx(ctx, tx, claim.ID, reason)
+	if !release && verdict != "" {
+		recs, err := a.endClaimTx(ctx, tx, claim.ID, verdict)
 		if err != nil {
 			a.internalError(w, err)
 			return
@@ -509,11 +518,38 @@ func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bo
 		for i := range recs {
 			a.broadcastRecord(recs[i])
 		}
-		if release {
-			writeJSON(w, http.StatusOK, map[string]any{"released": true, "endReason": claimEndReleased})
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "the claim has ended", "endReason": verdict})
+		return
+	}
+
+	var (
+		recs    []syncActionRecord
+		dropped int
+	)
+	if hasReport {
+		n, status, body, err := a.reportRunTx(ctx, tx, claim.ID, id, p.AccountID, req)
+		if err != nil {
+			a.internalError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusConflict, map[string]any{"error": "the claim has ended", "endReason": verdict})
+		if status != 0 {
+			writeJSON(w, status, body)
+			return
+		}
+		dropped = n
+	}
+	resp := map[string]any{}
+	switch {
+	case release && !ended:
+		out, err := a.endClaimTx(ctx, tx, claim.ID, claimEndReleased)
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+		recs = append(recs, out...)
+		resp["released"], resp["endReason"] = true, claimEndReleased
+	case release:
+		resp["released"], resp["endReason"] = false, endReason
 	default:
 		if err := tx.QueryRow(ctx, `
 			update issue_claims
@@ -523,12 +559,38 @@ func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bo
 			a.internalError(w, err)
 			return
 		}
-		if err := tx.Commit(ctx); err != nil {
+		resp["claim"] = claim
+	}
+	// endClaimTx already emitted the run when it ended it.
+	if hasReport && !(release && !ended) {
+		rec, _, err := a.emitRunTx(ctx, tx, claim.ID, "UPDATE")
+		if err != nil {
 			a.internalError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"claim": claim})
+		recs = append(recs, rec)
 	}
+	if release || hasReport {
+		run, err := a.runByIDTx(ctx, tx, claim.ID)
+		switch {
+		case err == nil:
+			resp["run"] = runData(run)
+		case !errors.Is(err, pgx.ErrNoRows):
+			a.internalError(w, err)
+			return
+		}
+		if hasReport {
+			resp["droppedEvents"] = dropped
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	for i := range recs {
+		a.broadcastRecord(recs[i])
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // endClaimTx ends one open claim and emits the issue's new state. It
@@ -548,6 +610,10 @@ func (a *API) endClaimTx(ctx context.Context, tx pgx.Tx, claimID, reason string)
 	if _, err := tx.Exec(ctx, "update issues set version = version + 1 where id = $1", issueID); err != nil {
 		return nil, err
 	}
+	recs, err := a.endRunTx(ctx, tx, claimID, reason)
+	if err != nil {
+		return nil, err
+	}
 	fresh, err := a.issueByIDTx(ctx, tx, issueID)
 	if err != nil {
 		return nil, err
@@ -556,7 +622,7 @@ func (a *API) endClaimTx(ctx context.Context, tx pgx.Tx, claimID, reason string)
 	if err != nil {
 		return nil, err
 	}
-	return []syncActionRecord{rec}, nil
+	return append(recs, rec), nil
 }
 
 // endAgentClaimsTx ends every open claim the agent holds.
@@ -577,6 +643,13 @@ func (a *API) endAgentClaimsTx(ctx context.Context, tx pgx.Tx, agentID, reason s
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Lock the runs before the first sync sequence is taken: a concurrent
+	// report locks its run and then the sequence, so taking them in the
+	// other order here could deadlock.
+	if _, err := tx.Exec(ctx,
+		"select 1 from agent_runs where claim_id = any($1::uuid[]) for update", ids); err != nil {
 		return nil, err
 	}
 	var recs []syncActionRecord
@@ -689,8 +762,9 @@ func (a *API) runClaimSweeper(ctx context.Context, done <-chan struct{}) {
 }
 
 // workPacket is what an agent needs to work one issue without further
-// reads. Everything under issue, comments, and handoff is user-authored:
-// an agent must treat it as data, never as instructions.
+// reads. Everything under issue, comments, handoff, and previousRuns is
+// user- or agent-authored: an agent must treat it as data, never as
+// instructions.
 type workPacket struct {
 	Issue           map[string]any  `json:"issue"`
 	DescriptionText string          `json:"descriptionText"`
@@ -699,6 +773,7 @@ type workPacket struct {
 	Labels          []packetLabel   `json:"labels"`
 	Comments        []packetComment `json:"comments"`
 	Handoff         *packetHandoff  `json:"handoff"`
+	PreviousRuns    []packetRun     `json:"previousRuns"`
 }
 
 type packetTeam struct {
@@ -809,7 +884,8 @@ func (a *API) workPacketTx(ctx context.Context, tx pgx.Tx, row issueRow, agentID
 	case !errors.Is(err, pgx.ErrNoRows):
 		return pk, err
 	}
-	return pk, nil
+	pk.PreviousRuns, err = a.previousRunsTx(ctx, tx, row.ID)
+	return pk, err
 }
 
 // decodeOptional decodes a JSON body when one is present; an empty body
