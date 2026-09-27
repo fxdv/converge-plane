@@ -28,10 +28,11 @@ export interface LoaderProps
   variant?: 'horizontal' | 'vertical';
 }
 
-const Loader = React.forwardRef<HTMLButtonElement, LoaderProps>(
-  ({ height = 300, size, text, variant = 'vertical' }) => {
+const Loader = React.forwardRef<HTMLDivElement, LoaderProps>(
+  ({ height = 300, size, text, variant = 'vertical' }, ref) => {
     return (
       <div
+        ref={ref}
         className={cn(
           loaderVariants({ size }),
           `h-[${height}px]`,
