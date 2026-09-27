@@ -1,18 +1,19 @@
 import { FormField, FormItem, FormControl } from '@converge/ui/components/form';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
-import { type UseFormReturn } from 'react-hook-form';
 
 import type { TeamType } from 'common/types';
 
+import { type IssueDraftForm } from './new-issues-type';
 import {
   IssueAssigneeDropdown,
   IssueLabelDropdown,
   IssuePriorityDropdown,
   IssueStatusDropdown,
 } from '../components';
+
 interface NewIssueMetadataProps {
-  form: UseFormReturn;
+  form: IssueDraftForm;
   team: TeamType;
   index: number;
 }

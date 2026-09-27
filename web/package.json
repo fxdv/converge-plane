@@ -24,8 +24,8 @@
     "axios": "^1.6.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
-    "copy-to-clipboard": "^3.3.3",
-    "date-fns": "^3.6.0",
+    "copy-to-clipboard": "^4.0.2",
+    "date-fns": "^4.4.0",
     "dayjs": "^1.11.10",
     "dexie": "^4.4.6",
     "fast-sort": "^3.4.0",
@@ -53,13 +53,13 @@
     "ts-key-enum": "^2.0.12",
     "use-debounce": "^10.0.0",
     "uuid": "^11.1.1",
-    "zod": "3.25.76"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@converge/eslint-config": "workspace:*",
     "@converge/typescript-config": "workspace:*",
     "@types/lodash.isequal": "^4.5.8",
-    "@types/node": "^20.11.5",
+    "@types/node": "^26.6.2",
     "@types/pluralize": "^0.0.33",
     "@types/qs": "^6.9.12",
     "@types/react": "^19",

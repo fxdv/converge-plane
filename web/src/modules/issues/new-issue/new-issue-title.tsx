@@ -12,16 +12,17 @@ import {
   TooltipTrigger,
 } from '@converge/ui/components/tooltip';
 import { AI } from '@converge/ui/icons';
-import { useWatch, type UseFormReturn } from 'react-hook-form';
+import { useWatch } from 'react-hook-form';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { useAITitleMutation } from 'services/issues';
 
 import { useDescriptionChange } from './new-issue-utils';
+import { type IssueDraftForm } from './new-issues-type';
 
 interface NewIssueTitleProps {
-  form: UseFormReturn;
+  form: IssueDraftForm;
   index: number;
   isSubIssue: boolean;
 }
@@ -34,7 +35,7 @@ function getDescription(description: string) {
   }
 }
 
-function getIfTouched(form: UseFormReturn, index: number) {
+function getIfTouched(form: IssueDraftForm, index: number) {
   if (
     form.formState.touchedFields.issues &&
     form.formState.touchedFields.issues[index]
