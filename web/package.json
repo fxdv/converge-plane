@@ -59,7 +59,7 @@
     "@converge/eslint-config": "workspace:*",
     "@converge/typescript-config": "workspace:*",
     "@types/lodash.isequal": "^4.5.8",
-    "@types/node": "^20.11.5",
+    "@types/node": "^26.6.2",
     "@types/pluralize": "^0.0.33",
     "@types/qs": "^6.9.12",
     "@types/react": "^19",

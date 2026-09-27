@@ -21,7 +21,7 @@
   "devDependencies": {
     "@converge/eslint-config": "workspace:*",
     "@converge/typescript-config": "workspace:*",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "class-transformer": "0.5.1",
     "esbuild": "0.28.2",
     "eslint": "^9.39.5",
