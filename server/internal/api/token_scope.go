@@ -117,6 +117,7 @@ var tokenRoutePolicy = map[string]routePolicy{
 	"GET /workspaces/{id}/agents":                           {},
 	"POST /workspaces/{id}/agents/{accountId}":              {},
 	"POST /workspaces/{id}/agents/{accountId}/token":        {},
+	"POST /workspaces/{id}/agents/{accountId}/token/rotate": {},
 	"POST /workspaces/{id}/agents/{accountId}/token/revoke": {},
 	"DELETE /workspaces/{id}/agents/{accountId}":            {},
 }

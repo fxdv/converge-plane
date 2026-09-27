@@ -69,6 +69,7 @@ export const MemberItem = observer(
             teamId={teamId}
             isAdmin={isAdmin}
             isSuspended={isSuspended}
+            isAgent={isAgent}
           />
         </div>
       </div>

@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  GRACE_OPTIONS,
   accessProblem,
   agentDefaults,
   agentRequest,
+  expiryLabel,
   grantSummary,
   mcpEndpoint,
   mcpSnippets,
+  usedRecently,
   type AgentAccessValues,
 } from 'modules/settings/workspace-settings/members/agent-access';
 
@@ -102,5 +105,32 @@ describe('agent access (the Add agent dialog)', () => {
     for (const s of snippets) {
       assert.doesNotMatch(s.text, /conv_agent_/);
     }
+  });
+});
+
+describe('token rotation (the API tokens dialog)', () => {
+  const now = new Date('2026-09-27T12:00:00Z');
+
+  it('offers only graces the server accepts, retiring the old token now first', () => {
+    assert.equal(GRACE_OPTIONS[0].hours, 0);
+    for (const option of GRACE_OPTIONS) {
+      assert.ok(option.hours >= 0 && option.hours <= 168, option.label);
+    }
+  });
+
+  it('counts two hours as recent use, since last use is stamped hourly', () => {
+    assert.equal(usedRecently(null, now), false);
+    assert.equal(usedRecently('2026-09-27T10:30:00Z', now), true);
+    assert.equal(usedRecently('2026-09-27T09:59:00Z', now), false);
+  });
+
+  it('shows the hours left on a token ending within two days', () => {
+    assert.equal(expiryLabel(null, now), 'never expires');
+    assert.equal(expiryLabel('2026-09-27T12:10:00Z', now), 'expires in 1 hour');
+    assert.equal(
+      expiryLabel('2026-09-28T12:00:00Z', now),
+      'expires in 24 hours',
+    );
+    assert.doesNotMatch(expiryLabel('2027-09-27T12:00:00Z', now), / in /);
   });
 });

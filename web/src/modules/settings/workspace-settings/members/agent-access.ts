@@ -1,6 +1,7 @@
-// agent-access.ts — the Add agent dialog's choices as pure data: the token
-// a new agent is issued (server/internal/api/agent.go tokenSpec) and how an
-// external tool connects to the MCP endpoint.
+// agent-access.ts — the agent dialogs' choices as pure data: the token a
+// new agent is issued (server/internal/api/agent.go tokenSpec), how a
+// rotation retires the old one, and how an external tool connects to the
+// MCP endpoint.
 import type {
   AgentData,
   AgentDriver,
@@ -108,6 +109,38 @@ export function grantSummary(
       ? data.tokenTeamIds.map(teamName).join(', ')
       : 'all of its teams',
   };
+}
+
+// When a rotated-out token stops working (the rotation's graceHours).
+export const GRACE_OPTIONS: Array<{ hours: number; label: string }> = [
+  { hours: 0, label: 'now' },
+  { hours: 1, label: 'in 1 hour' },
+  { hours: 24, label: 'in 24 hours' },
+];
+
+const HOUR = 60 * 60 * 1000;
+
+// The server stamps a token's last use at most once an hour, so "recent"
+// has to span two.
+export function usedRecently(lastUsedAt: string | null, now: Date): boolean {
+  return (
+    lastUsedAt !== null &&
+    now.getTime() - new Date(lastUsedAt).getTime() < 2 * HOUR
+  );
+}
+
+// A token ending within two days shows the time left rather than a date.
+export function expiryLabel(expiresAt: string | null, now: Date): string {
+  if (!expiresAt) {
+    return 'never expires';
+  }
+  const at = new Date(expiresAt);
+  const left = at.getTime() - now.getTime();
+  if (left < 48 * HOUR) {
+    const hours = Math.max(1, Math.round(left / HOUR));
+    return `expires in ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  }
+  return `expires ${at.toLocaleDateString()}`;
 }
 
 export function mcpEndpoint(origin: string): string {
