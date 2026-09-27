@@ -9,6 +9,7 @@ import {
 import { type WorkflowType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
+import { asSnapshot } from 'store/snapshot';
 
 import { Workflow } from './models';
 
@@ -20,7 +21,7 @@ export const WorkflowsStore: IAnyStateTreeNode = types
   .actions((self) => {
     const update = (workflow: WorkflowType, id: string) => {
       // Update or add the workflow in the map
-      self.workflows.set(id, workflow);
+      self.workflows.set(id, asSnapshot<typeof Workflow>(workflow));
 
       // Update the team index
       const teamId = workflow.teamId;
@@ -55,7 +56,10 @@ export const WorkflowsStore: IAnyStateTreeNode = types
 
       // Populate both the map and team index
       workflows.forEach((workflow: WorkflowType) => {
-        self.workflows.set(workflow.id, Workflow.create(workflow));
+        self.workflows.set(
+          workflow.id,
+          Workflow.create(asSnapshot<typeof Workflow>(workflow)),
+        );
         const teamWorkflows: string[] =
           self.workflowsByTeamId.get(workflow.teamId) || [];
         self.workflowsByTeamId.set(workflow.teamId, [

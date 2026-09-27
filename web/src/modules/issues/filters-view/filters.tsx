@@ -23,14 +23,19 @@ import {
 import { isEmpty } from './filter-utils';
 import { useFilterShorcuts } from './use-filter-shortcuts';
 
-const ContentMap = {
+export type KeyType = 'status' | 'assignee' | 'label' | 'priority';
+
+interface FilterContentProps {
+  onChange?: (value: string[] | number[], filterType: FilterTypeEnum) => void;
+  onClose: () => void;
+}
+
+const ContentMap: Record<KeyType, React.ComponentType<FilterContentProps>> = {
   status: IssueStatusFilter,
   assignee: IssueAssigneeFilter,
   label: IssueLabelFilter,
   priority: IssuePriorityFilter,
 };
-
-export type KeyType = keyof typeof ContentMap;
 
 interface FiltersProps {
   onClose: () => void;

@@ -9,6 +9,7 @@ import {
 import type { IssueHistoryType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
+import { asSnapshot } from 'store/snapshot';
 
 import { IssueHistoriesModel, IssueHistory } from './models';
 
@@ -32,12 +33,14 @@ export const IssueHistoryStore: IAnyStateTreeNode = types
         // Update the object at the found index with the new data
         // Re-created into the slot (array elements are model instances);
         // the wire merge validates field by field through create().
-        issueHistoriesArray[indexToUpdate] = IssueHistory.create({
-          ...getSnapshot(issueHistoriesArray[indexToUpdate]),
-          ...issueHistory,
-        });
+        issueHistoriesArray[indexToUpdate] = IssueHistory.create(
+          asSnapshot<typeof IssueHistory>({
+            ...getSnapshot(issueHistoriesArray[indexToUpdate]),
+            ...issueHistory,
+          }),
+        );
       } else {
-        issueHistoriesArray.push(issueHistory);
+        issueHistoriesArray.push(asSnapshot<typeof IssueHistory>(issueHistory));
       }
     };
     const deleteById = (id: string) => {

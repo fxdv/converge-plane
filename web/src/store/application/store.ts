@@ -124,7 +124,7 @@ export const ApplicationStore: IAnyStateTreeNode = types
           ? displayData
           : defaultApplicationStoreValue.displaySettings;
 
-      self.silentFilters = {};
+      self.silentFilters = FiltersModel.create({});
     },
     addToSelectedIssues(issue: string, reset: boolean) {
       if (reset) {

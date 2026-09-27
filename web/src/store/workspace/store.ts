@@ -1,6 +1,7 @@
 import {
   type IAnyStateTreeNode,
   type Instance,
+  cast,
   getSnapshot,
   types,
   flow,
@@ -9,6 +10,7 @@ import {
 import type { UsersOnWorkspaceType, WorkspaceType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
+import { asSnapshot } from 'store/snapshot';
 
 import { UsersOnWorkspace, Workspace } from './models';
 
@@ -19,7 +21,9 @@ export const WorkspaceStore: IAnyStateTreeNode = types
   })
   .actions((self) => {
     const update = (workspace: WorkspaceType | undefined) => {
-      self.workspace = workspace;
+      self.workspace = workspace
+        ? cast(asSnapshot<typeof Workspace>(workspace))
+        : undefined;
     };
     const updateUsers = (userRecord: UsersOnWorkspaceType, id: string) => {
       const indexToUpdate = self.usersOnWorkspaces.findIndex(
@@ -30,12 +34,16 @@ export const WorkspaceStore: IAnyStateTreeNode = types
         // Update the object at the found index with the new data
         // Re-created into the slot (array elements are model instances);
         // the wire merge validates field by field through create().
-        self.usersOnWorkspaces[indexToUpdate] = UsersOnWorkspace.create({
-          ...getSnapshot(self.usersOnWorkspaces[indexToUpdate]),
-          ...userRecord,
-        });
+        self.usersOnWorkspaces[indexToUpdate] = UsersOnWorkspace.create(
+          asSnapshot<typeof UsersOnWorkspace>({
+            ...getSnapshot(self.usersOnWorkspaces[indexToUpdate]),
+            ...userRecord,
+          }),
+        );
       } else {
-        self.usersOnWorkspaces.push(userRecord);
+        self.usersOnWorkspaces.push(
+          asSnapshot<typeof UsersOnWorkspace>(userRecord),
+        );
       }
     };
     const deleteUser = (id: string) => {
