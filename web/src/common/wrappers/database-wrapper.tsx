@@ -17,8 +17,9 @@ export function DatabaseWrapper(props: Props): React.ReactElement {
   const workspace = useCurrentWorkspace();
   const user = React.useContext(UserContext);
   const [loading, setLoading] = React.useState(true);
-  const hashKey = `${workspace.id}__${user.id}`;
 
+  // The router's query is empty on the first render after a full page
+  // load, so the workspace can resolve a render late.
   React.useEffect(() => {
     if (workspace) {
       const version = localStorage.getItem('version');
@@ -26,7 +27,7 @@ export function DatabaseWrapper(props: Props): React.ReactElement {
         localStorage.setItem('version', process.env.NEXT_PUBLIC_VERSION);
       }
 
-      initDatabase(hash(hashKey));
+      initDatabase(hash(`${workspace.id}__${user.id}`));
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
