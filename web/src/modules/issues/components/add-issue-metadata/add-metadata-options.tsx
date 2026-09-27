@@ -43,12 +43,23 @@ export function DefaultPopoverContent({
   );
 }
 
-export const ContentMap = {
+export type KeyType = 'Assignee' | 'Label';
+
+interface MetadataContentProps {
+  value?: string | string[];
+  input?: string;
+  teamIdentifier?: string;
+  onChange?: (value: string | string[]) => void;
+  onClose: () => void;
+}
+
+export const ContentMap: Record<
+  KeyType,
+  React.ComponentType<MetadataContentProps>
+> = {
   Assignee: IssueAssigneeDropdownWithoutContext,
   Label: IssueLabelDropdownWithoutContext,
 };
-
-export type KeyType = keyof typeof ContentMap;
 
 export interface CommandInterface {
   name: KeyType;

@@ -10,6 +10,7 @@ import {
 import type { ViewType } from 'common/types';
 
 import { convergeDatabase } from 'store/database';
+import { asSnapshot } from 'store/snapshot';
 
 import { View, Views } from './models';
 
@@ -28,12 +29,14 @@ export const ViewsStore: IAnyStateTreeNode = types
         // re-created into one. getSnapshot is the typed snapshot (MST
         // instances expose no toJSON in their typings) and create()
         // validates the wire merge field by field.
-        self.views[indexToUpdate] = View.create({
-          ...getSnapshot(self.views[indexToUpdate]),
-          ...view,
-        });
+        self.views[indexToUpdate] = View.create(
+          asSnapshot<typeof View>({
+            ...getSnapshot(self.views[indexToUpdate]),
+            ...view,
+          }),
+        );
       } else {
-        self.views.push(view);
+        self.views.push(asSnapshot<typeof View>(view));
       }
     };
     const deleteById = (id: string) => {
