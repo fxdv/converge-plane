@@ -48,7 +48,7 @@
     "@converge/types": "workspace:*",
     "axios": "^1.6.7",
     "superagent": "^8.1.2",
-    "zod": "3.23.8"
+    "zod": "3.25.76"
   },
   "engines": {
     "node": ">=18.0.0"
