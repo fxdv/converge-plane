@@ -1,5 +1,3 @@
-@tailwind base;
-
 @layer base {
   :root {
     --media-brand: 245 245 245;

@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config = {
-  darkMode: ['class'],
+  darkMode: 'class',
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -182,23 +182,6 @@ const config = {
       },
     },
   },
-  plugins: [
-    require('tailwindcss-animate'),
-    require('tailwind-scrollbar'),
-    require('tailwind-scrollbar-hide'),
-    require('@vidstack/react/tailwind.cjs')({
-      prefix: 'media',
-    }),
-    customVariants,
-  ],
 } satisfies Config;
-
-function customVariants({ addVariant, matchVariant }: any) {
-  // Strict version of `.group` to help with nesting.
-  matchVariant('parent-data', (value: string) => `.parent[data-${value}] > &`);
-
-  addVariant('hocus', ['&:hover', '&:focus-visible']);
-  addVariant('group-hocus', ['.group:hover &', '.group:focus-visible &']);
-}
 
 export default config;
