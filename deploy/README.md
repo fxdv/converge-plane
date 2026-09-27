@@ -91,6 +91,7 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_GITHUB_TOKEN`    | `""`                              | Read-only GitHub token; needed for private repositories |
 | `CONVERGE_GITHUB_POLL_INTERVAL` | `1m`                         | How often an open pull request is checked, `10s` to `1h` |
 | `CONVERGE_GITHUB_AUTO_DONE` | `true`                           | Move an issue to Done once its pull requests merge   |
+| `CONVERGE_GITHUB_WEBHOOK_SECRET` | `""` (off)                  | Secret of a GitHub webhook, at least 32 characters; turns on `POST /api/github/webhook` ([below](#github-pull-requests)) |
 
 The agent runtime and model-fleet variables (`CONVERGE_RUNTIME*`,
 `CONVERGE_SWARM_REVIEW_INTERVAL`, `CONVERGE_LLM*`) are covered in the
@@ -348,7 +349,8 @@ try OAuth instead of sending the configured header.
 
 When an external agent reports a pull request (evidence of kind
 `pull_request` in `report_progress` or `release_claim`) in a repository you
-list, the API tracks it on GitHub. The card and the issue page show whether
+list, or a person pastes its URL into **Link pull request** on the issue
+page, the API tracks it on GitHub. The card and the issue page show whether
 it is open, a draft, merged, or closed, with GitHub's title. Once every
 tracked pull request on an issue has merged and none is still open or
 unchecked, the issue moves to the team's first Done state. History and the
@@ -370,15 +372,37 @@ Setup:
    one, the limit is 5,000 an hour and checks that find no change (`304`)
    do not count against it.
 3. Allow outbound HTTPS from the API to `api.github.com`.
+4. Optional, so changes show within seconds: a GitHub webhook. Generate a
+   secret (`openssl rand -hex 32`) and set it as
+   `CONVERGE_GITHUB_WEBHOOK_SECRET`. In each repository's (or the
+   organization's) Settings → Webhooks, add one with payload URL
+   `https://<your API host>/api/github/webhook`, content type
+   `application/json`, the same secret, and only the **Pull requests**
+   event. GitHub's first delivery is a ping; the webhook page shows it
+   answered `200`. With webhooks on you can raise
+   `CONVERGE_GITHUB_POLL_INTERVAL` (to `15m`, say): polling then only
+   catches deliveries that never arrived.
 
 How it behaves:
 
 - Each open pull request is checked about once per
   `CONVERGE_GITHUB_POLL_INTERVAL` (default one minute), revalidated with
   its ETag. Several API instances share the checks; each is made once.
+- A webhook delivery counts only with a valid signature. It does not set
+  the state itself: it makes the pull request due, and the API reads it
+  from GitHub within about five seconds, so deliveries may arrive late,
+  out of order, or twice.
 - Merged and closed pull requests are no longer checked. A closed one is
-  picked up again when an agent reports it again, for example after
-  reopening it.
+  picked up again when an agent reports it again or a webhook reports a
+  change, for example after reopening it.
+- People link a pull request under the same rules as agents, and can
+  unlink any. An unlinked pull request stays unlinked when an agent
+  reports it again; linking it by hand brings it back.
+- A renamed or transferred repository is followed: the link takes the
+  new name if the list covers it, and if the issue already links the pull
+  request under that name, the duplicate goes. A pull request moved to a
+  repository outside the list shows as unavailable and is no longer
+  checked.
 - A pull request GitHub does not return (deleted, or not visible to the
   token) shows as unavailable and is retried with a backoff that grows to
   one hour; after 48 failed checks in a row it waits for the next report.
@@ -389,8 +413,9 @@ How it behaves:
   redirects only on `api.github.com`. An issue tracks at most 20 pull
   requests.
 - `CONVERGE_GITHUB_AUTO_DONE=false` keeps the tracking but never moves an
-  issue. Unsetting `CONVERGE_GITHUB_REPOS` stops tracking; cards keep the
-  last state seen.
+  issue. Only listed repositories are read: taking one off the list, or
+  unsetting `CONVERGE_GITHUB_REPOS`, stops its checks, and cards keep the
+  last state seen. Checks resume if it comes back.
 
 ## Production checklist
 
@@ -406,6 +431,7 @@ How it behaves:
 - [ ] Agent scripts send `If-Match` (see above)
 - [ ] Tokens handed to external tools are scoped and team-limited (see above)
 - [ ] `CONVERGE_GITHUB_TOKEN`, if set, is fine-grained and read-only on pull requests (see above)
+- [ ] `CONVERGE_GITHUB_WEBHOOK_SECRET`, if set, is `openssl rand -hex 32` output, used by no other webhook
 - [ ] Backup job in place (below)
 
 ## Backups
@@ -443,6 +469,14 @@ docker compose up -d web                    # then the app
 Rolling back the *application* is a re-build of the previous tag; v1 schema
 changes are additive, so an old image remains compatible with a newer
 database.
+
+### Upgrading to the hand-linking release (migration 0024)
+
+- **Nothing to do.** The migration adds two nullable columns; people can
+  link and unlink pull requests once the web app reloads.
+- **Rolling back past 0024 brings unlinked pull requests back** until the
+  next upgrade: older builds ignore the unlink columns, so they show and
+  check those links again.
 
 ### Upgrading to the pull-request release (migration 0023)
 
