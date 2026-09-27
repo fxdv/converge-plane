@@ -6,16 +6,13 @@
 // server owns /api/auth/* and /api/v1/* routes.
 
 import httpProxy from 'http-proxy';
-import getConfig from 'next/config';
-
-const { publicRuntimeConfig } = getConfig();
 
 // API_PROXY_TARGET (server-side only) overrides the build-time backend
 // host: in the docker compose image the proxy must reach the internal
 // `api` service while the browser's SSE stream still targets
 // NEXT_PUBLIC_BACKEND_HOST. Unset in local dev, where both are the same.
 const API_URL =
-  process.env.API_PROXY_TARGET || publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST;
+  process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_BACKEND_HOST;
 
 const proxy = httpProxy.createProxyServer();
 

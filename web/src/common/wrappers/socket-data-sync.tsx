@@ -1,6 +1,5 @@
 import { Loader } from '@converge/ui/components/loader';
 import { observer } from 'mobx-react-lite';
-import getConfig from 'next/config';
 import * as React from 'react';
 
 import { hash } from 'common/common-utils';
@@ -69,8 +68,6 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       undefined,
     );
 
-    const { publicRuntimeConfig } = getConfig();
-
     React.useEffect(() => {
       if (!socketRef.current && workspaceStore.workspace?.id) {
         initSocket();
@@ -87,7 +84,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
     }, [workspaceStore.workspace]);
 
     function initSocket() {
-      const base = publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST;
+      const base = process.env.NEXT_PUBLIC_BACKEND_HOST;
       if (!base || !workspaceStore.workspace?.id) {
         return;
       }
