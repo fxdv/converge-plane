@@ -1,5 +1,7 @@
 import type request from 'superagent';
-import type { Primitive } from 'zod';
+
+/** A query-string value. Zod 3 exported this; Zod 4 does not. */
+export type Primitive = string | number | bigint | boolean | null | undefined;
 
 /**
  * Integration of Native Promise Interface.
@@ -94,7 +96,7 @@ interface XHRError {
 /**
  * Error Metadata associated with XHR.
  */
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-constraint
+
 export interface XHRErrorResponse<TError extends unknown = string[]> {
   /** Errors sent in body of Error response */
   errors?: TError;

@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Team, TeamType as TeamTypeEnum } from '@converge/types';
 import { Button } from '@converge/ui/components/button';
 import {
@@ -19,12 +18,13 @@ import {
   SelectValue,
 } from '@converge/ui/components/select';
 import { useToast } from '@converge/ui/components/use-toast';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { useCreateTeamMutation } from 'services/team';
-
 import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
+
+import { useCreateTeamMutation } from 'services/team';
 
 import { SettingSection } from '../setting-section';
 
@@ -37,9 +37,7 @@ export const CreateNewTeamSchema = z.object({
     .max(50),
   identifier: z.string().min(3).max(3),
   teamType: z.enum(['engineering', 'support'], {
-    errorMap: () => ({
-      message: 'Team type must be either engineering or support',
-    }),
+    error: 'Team type must be either engineering or support',
   }),
 });
 

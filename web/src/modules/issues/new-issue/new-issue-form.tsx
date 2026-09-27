@@ -7,11 +7,7 @@ import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import { usePathname } from 'next/navigation';
 import React from 'react';
-import {
-  useWatch,
-  type UseFormReturn,
-  type UseFieldArrayRemove,
-} from 'react-hook-form';
+import { useWatch, type UseFieldArrayRemove } from 'react-hook-form';
 
 import { AiWritingExtension } from 'common/editor/ai-writing';
 import type { IssueType } from 'common/types';
@@ -25,6 +21,7 @@ import {
   useDefaultValues,
   useTeamForNewIssue,
 } from './new-issue-utils';
+import { type IssueDraftForm } from './new-issues-type';
 import { SubIssueSelectorNI } from './sub-issue-selector-ni';
 import { TeamDropdown } from './team-dropdown';
 import { AddIssueMetadata } from '../components/add-issue-metadata';
@@ -34,7 +31,7 @@ interface NewIssueFormProps {
   isSubIssue: boolean;
   index: number;
   defaultValues: Partial<IssueType>;
-  form: UseFormReturn;
+  form: IssueDraftForm;
 
   // To show loading for buttons
   isLoading: boolean;

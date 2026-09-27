@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Accordion,
   AccordionContent,
@@ -9,11 +8,11 @@ import { Form } from '@converge/ui/components/form';
 import { Separator } from '@converge/ui/components/separator';
 import { useToast } from '@converge/ui/components/use-toast';
 import { cn } from '@converge/ui/lib/utils';
+import { zodResolver } from '@hookform/resolvers/zod';
 import React from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, type Resolver } from 'react-hook-form';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Key } from 'ts-key-enum';
-import { z } from 'zod';
 
 import { getTiptapJSON } from 'common';
 import { SCOPES } from 'common/scopes';
@@ -28,7 +27,11 @@ import {
 
 import { IssueCollapseView } from './issue-collapse-view';
 import { NewIssueForm } from './new-issue-form';
-import { NewIssueSchema, NewIssueTemplateSchema } from './new-issues-type';
+import {
+  type NewIssueFormValues,
+  NewIssueSchema,
+  NewIssueTemplateSchema,
+} from './new-issues-type';
 
 export interface NewIssueProps {
   defaultValues?: Partial<IssueType>;
@@ -46,10 +49,12 @@ export function NewIssue({
   const { toast } = useToast();
 
   // The form has a array of issues where first issue is the parent and the later sub issues
-  const form = useForm<z.infer<typeof NewIssueSchema>>({
+  const form = useForm<NewIssueFormValues>({
+    // The template schema makes title optional. Zod 4 types that union as a
+    // different input than this form, which always carries NewIssueSchema.
     resolver: zodResolver(
       createOutsideFunction ? NewIssueTemplateSchema : NewIssueSchema,
-    ),
+    ) as Resolver<NewIssueFormValues>,
     defaultValues: {
       issues: [defaultValues],
     },
@@ -85,8 +90,8 @@ export function NewIssue({
 
   const [collapseId, setCollapseId] = React.useState(fields[0].id);
 
-  const onSubmit = (values: { issues: CreateIssueParams[] }) => {
-    const issues = [...values.issues];
+  const onSubmit = (values: NewIssueFormValues) => {
+    const issues = [...values.issues] as CreateIssueParams[];
     const parentIssue = issues.shift();
 
     const { json: parentDescription } = getTiptapJSON(parentIssue.description);
