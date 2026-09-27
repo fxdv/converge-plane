@@ -353,6 +353,10 @@ Run ledger\cs{agents:runs} & One run per claim: the agent reports model,
   outcome and summary on release; cost chip on the card, runs and trace
   on the issue; the next claimant's packet carries the prior runs &
   \shipped\\
+MCP server\cs{agents:mcp} & Tools-only MCP endpoint (streamable HTTP,
+  stateless) for external coding agents: queue, claim, heartbeat, report,
+  release, issue update, comment; each call runs as its REST request under
+  the caller's own token, so scopes and team grants hold & \shipped\\
 Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
   tokens, agent stops mid-request; per-account rate limit applies &
   \shipped\\

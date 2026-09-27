@@ -47,6 +47,7 @@ func (p *probe) runChecks() {
 	p.check("AUTHZ-1", "unauthenticated reads are refused", p.checkUnauthenticated)
 	p.check("AUTHZ-2", "another workspace's data and issues are unreachable", p.checkCrossWorkspace)
 	p.check("AUTHZ-3", "a scoped agent token reaches only its scopes and teams, and dies on revocation", p.checkScopedToken)
+	p.check("AUTHZ-4", "MCP tool calls are held to the token's scopes and teams; sessions and foreign origins are refused", p.checkMCPScopes)
 }
 
 // ---- hygiene ---------------------------------------------------------------
@@ -876,6 +877,108 @@ func (p *probe) checkScopedToken() error {
 	}
 	if res.status != http.StatusUnauthorized {
 		return fmt.Errorf("revoked token: %s, want 401", res)
+	}
+	return nil
+}
+
+// checkMCPScopes: the MCP endpoint re-dispatches each tool call through the
+// production router under the caller's token, so a scoped token keeps its
+// lane there too.
+func (p *probe) checkMCPScopes() error {
+	owner, err := p.signIn()
+	if err != nil {
+		return err
+	}
+	ws, team1, state1, err := p.newWorkspace(owner)
+	if err != nil {
+		return err
+	}
+	res, err := p.do(request{method: "POST", path: "/api/v1/teams", cookies: owner.all(),
+		json: map[string]string{"name": "Other", "identifier": "OTH", "workspaceId": ws}})
+	if err != nil {
+		return err
+	}
+	team2 := res.field("id")
+	res, err = p.do(request{method: "POST", path: "/api/v1/" + team2 + "/workflows", cookies: owner.all(),
+		json: map[string]any{"name": "Todo", "category": "UNSTARTED", "color": "#888888", "position": 1}})
+	if err != nil {
+		return err
+	}
+	state2 := res.field("id")
+	res, err = p.do(request{method: "POST", path: "/api/v1/workspaces/" + ws + "/agents", cookies: owner.all(),
+		json: map[string]any{
+			"name": "mcp-coder", "teamIds": []string{team1, team2}, "driver": "external",
+			"token": map[string]any{"scopes": []string{"work"}, "teamIds": []string{team1}, "ttlHours": 1},
+		}})
+	if err != nil {
+		return err
+	}
+	if err := expectStatus(res, http.StatusCreated); err != nil {
+		return fmt.Errorf("create agent: %w", err)
+	}
+	agentID, token := res.field("id"), res.field("token")
+	inLane, _, err := p.createIssue(owner, map[string]string{"teamId": team1, "stateId": state1, "title": "lane", "assigneeId": agentID})
+	if err != nil {
+		return err
+	}
+	offLane, _, err := p.createIssue(owner, map[string]string{"teamId": team2, "stateId": state2, "title": "off", "assigneeId": agentID})
+	if err != nil {
+		return err
+	}
+
+	ping := map[string]any{"jsonrpc": "2.0", "id": 1, "method": "ping"}
+	res, err = p.do(request{method: "POST", path: "/api/v1/mcp", cookies: owner.all(), json: ping})
+	if err != nil {
+		return err
+	}
+	if res.status != http.StatusForbidden {
+		return fmt.Errorf("MCP with a web session: %s, want 403", res)
+	}
+	res, err = p.do(request{method: "POST", path: "/api/v1/mcp", bearer: token, json: ping,
+		header: map[string]string{"Origin": "https://evil.example"}})
+	if err != nil {
+		return err
+	}
+	if res.status != http.StatusForbidden {
+		return fmt.Errorf("MCP from a foreign origin: %s, want 403", res)
+	}
+
+	for _, c := range []struct {
+		tool      string
+		args      map[string]any
+		wantError bool
+		contains  string
+	}{
+		{"claim_issue", map[string]any{"issueId": inLane}, false, `"claim"`},
+		{"update_issue", map[string]any{"issueId": inLane, "version": 0, "title": "x"}, true, `"requiredScope":"issues:write"`},
+		{"claim_issue", map[string]any{"issueId": offLane}, true, "HTTP 404"},
+		{"claim_issue", map[string]any{"issueId": "../workspaces/" + ws + "/agents"}, true, "issueId must be"},
+	} {
+		res, err := p.do(request{method: "POST", path: "/api/v1/mcp", bearer: token, json: map[string]any{
+			"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+			"params": map[string]any{"name": c.tool, "arguments": c.args},
+		}})
+		if err != nil {
+			return err
+		}
+		if err := expectStatus(res, http.StatusOK); err != nil {
+			return fmt.Errorf("MCP %s: %w", c.tool, err)
+		}
+		var out struct {
+			Result struct {
+				IsError bool `json:"isError"`
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(res.body, &out); err != nil || len(out.Result.Content) == 0 {
+			return fmt.Errorf("MCP %s: unreadable result %s", c.tool, res)
+		}
+		if out.Result.IsError != c.wantError || !strings.Contains(out.Result.Content[0].Text, c.contains) {
+			return fmt.Errorf("MCP %s %v: isError=%v %q, want isError=%v containing %q",
+				c.tool, c.args, out.Result.IsError, out.Result.Content[0].Text, c.wantError, c.contains)
+		}
 	}
 	return nil
 }

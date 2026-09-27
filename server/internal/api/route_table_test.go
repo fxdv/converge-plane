@@ -1593,6 +1593,15 @@ var rtRouteCases = []routeCase{
 		handler:   (*API).handleRunEvents,
 		code:      400, err: "limit must be between 1 and 200",
 	},
+
+	// The MCP endpoint (mcp.go): agent API tokens only.
+	{
+		route: "POST /api/v1/mcp", method: "POST",
+		path:    "/api/v1/mcp",
+		handler: (*API).handleMCP,
+		body:    `{"jsonrpc":"2.0","id":1,"method":"ping"}`,
+		code:    403, err: "the MCP endpoint takes an agent API token",
+	},
 }
 
 // ---- the tests ------------------------------------------------------------
@@ -1603,7 +1612,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 67 // the v1 surface: every route in Mount, one entry each
+	const want = 68 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}

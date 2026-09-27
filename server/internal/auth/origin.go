@@ -53,6 +53,12 @@ func hasSessionCookie(r *http.Request) bool {
 	return false
 }
 
+// TrustedOrigin reports whether origin (an Origin header value) is one of
+// the service's own web origins.
+func (s *Service) TrustedOrigin(origin string) bool {
+	return s.origins[normalizeOrigin(origin)]
+}
+
 // trustedOrigins is the set of origins allowed to send cookie-authenticated
 // writes, normalized like the header values they are compared with.
 func trustedOrigins(raw ...string) map[string]bool {

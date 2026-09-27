@@ -74,6 +74,9 @@ func newWorkFixture(t *testing.T) *workFixture {
 		if _, err := pool.Exec(ctx, `delete from workspaces where id = $1`, f.ws); err != nil {
 			t.Logf("cleanup workspace: %v", err)
 		}
+		if _, err := pool.Exec(ctx, `delete from api_tokens where account_id = any($1::uuid[]) or created_by = any($1::uuid[])`, f.accounts); err != nil {
+			t.Logf("cleanup tokens: %v", err)
+		}
 		if _, err := pool.Exec(ctx, `delete from accounts where id = any($1::uuid[])`, f.accounts); err != nil {
 			t.Logf("cleanup accounts: %v", err)
 		}

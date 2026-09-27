@@ -121,6 +121,11 @@ func (l *accountRateLimiter) usageCount(accountID string) int64 {
 // account's usage total: a throttled request reached the API either way.
 func (a *API) rateLimitGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Context().Value(mcpDispatchKey) != nil {
+			// An MCP tool call's inner request: the MCP request paid.
+			next.ServeHTTP(w, r)
+			return
+		}
 		if p := PrincipalFromContext(r.Context()); p != nil {
 			a.limiter.recordUsage(p.AccountID)
 			if !a.limiter.allow(p.AccountID) {

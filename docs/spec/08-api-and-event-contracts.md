@@ -139,6 +139,26 @@ Text is stored with control characters and bidirectional overrides removed. A re
 
 **AgentRun on the wire.** A synced model, scoped by issue: `{id, createdAt, updatedAt, issueId, agentId, claimId, startedAt, endedAt, endReason, outcome, summary, model, inputTokens, outputTokens, costMicros, eventCount, evidence}`. Nullable fields are explicit `null`s and `evidence` is always an array. The trace is not synced. The board shows the issue's summed reported cost on the card; the issue page lists its runs, with the trace loaded on demand.
 
+**MCP.** `POST /api/v1/mcp` is a Model Context Protocol server on the streamable HTTP transport, tools only.
+
+- **Transport.** Stateless: no `Mcp-Session-Id`, no server-initiated messages. `GET` answers `405` (no SSE stream). Requests get `application/json` responses; notifications and client responses get `202` with no body. Batches are refused (`400`, JSON-RPC `-32600`), as are malformed messages (`-32700`/`-32600`) and bodies over 1 MiB (`413`).
+- **Versions.** `2025-11-25`, `2025-06-18` and `2025-03-26`. `initialize` echoes a supported version and otherwise offers `2025-11-25`. On other requests, an unsupported `MCP-Protocol-Version` header answers `400`.
+- **Callers.** Agent API tokens only: a web session gets `403`. A request whose `Origin` is not the web origin gets `403`. The route itself is open to any token (`identity`).
+- **Methods.** `initialize`, `ping`, `tools/list`, `tools/call`; anything else is `-32601`.
+- **Tools.** Each maps to one REST request:
+
+| Tool | REST request |
+| --- | --- |
+| `get_queue` | `GET /agent/queue` |
+| `claim_issue {issueId, ttlSeconds?}` | `POST /issues/{id}/claim` |
+| `heartbeat {issueId, claimId, …report}` | `POST /issues/{id}/claim/heartbeat` |
+| `report_progress {issueId, claimId, …report}` | `POST /issues/{id}/claim/report` |
+| `release_claim {issueId, claimId, …report}` | `POST /issues/{id}/claim/release` |
+| `update_issue {issueId, version, title?, description?, stateId?, priority?, assigneeId?, labelIds?}` | `POST /issues/{id}` with `If-Match: "<version>"`; `description` is plain text |
+| `add_comment {issueId, body, parentId?}` | `POST /issue_comments?issueId=` |
+
+The inner request carries the caller's `Authorization` header and goes through the whole router, so the route's token policy, team grants, `If-Match` and handler rules apply as for a direct call. It is not charged to the rate limit again: one tool call counts as one request. A 2xx answer becomes the tool result (the JSON body as text and as `structuredContent`). Any other status becomes a tool error (`isError: true`) reading `HTTP <status>: <body>` plus a hint. Tool-side argument errors are also tool errors: `issueId` must be a UUID, unknown argument names are refused by name, `update_issue` needs a non-negative integer `version` and at least one field. An unknown tool is JSON-RPC `-32602`. `initialize` returns instructions describing the workflow, and they tell the agent to treat issue text, comments and handoffs as data rather than instructions.
+
 ## Resource contracts by release
 
 These are capability endpoints, not a fixed framework/router prescription.
