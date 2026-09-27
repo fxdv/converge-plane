@@ -6,21 +6,18 @@ import { Skeleton } from '@converge/ui/components/skeleton';
 import { Textarea } from '@converge/ui/components/textarea';
 import { AI, CheckLine, DeleteLine } from '@converge/ui/icons';
 import { NodeViewWrapper } from '@tiptap/react';
-import getConfig from 'next/config';
 import React from 'react';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { useAIContinueWritingMutation } from 'services/issues';
 
-const { publicRuntimeConfig } = getConfig();
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const AIWritingComponent = (props: any) => {
   const { editor } = useEditor();
   const [prompt, setPrompt] = React.useState('Continue writing');
   const { responses, mutate, isLoading } = useAIContinueWritingMutation({
-    baseHost: publicRuntimeConfig.NEXT_PUBLIC_BACKEND_HOST,
+    baseHost: process.env.NEXT_PUBLIC_BACKEND_HOST,
   });
   const workspace = useCurrentWorkspace();
 

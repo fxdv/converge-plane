@@ -1,5 +1,4 @@
 import { Loader } from '@converge/ui/components/loader';
-import getConfig from 'next/config';
 import * as React from 'react';
 
 import { hash } from 'common/common-utils';
@@ -8,7 +7,6 @@ import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { initDatabase } from 'store/database';
 import { UserContext } from 'store/user-context';
-const { publicRuntimeConfig } = getConfig();
 
 interface Props {
   children: React.ReactElement;
@@ -24,11 +22,8 @@ export function DatabaseWrapper(props: Props): React.ReactElement {
   React.useEffect(() => {
     if (workspace) {
       const version = localStorage.getItem('version');
-      if (version !== publicRuntimeConfig.NEXT_PUBLIC_VERSION) {
-        localStorage.setItem(
-          'version',
-          publicRuntimeConfig.NEXT_PUBLIC_VERSION,
-        );
+      if (version !== process.env.NEXT_PUBLIC_VERSION) {
+        localStorage.setItem('version', process.env.NEXT_PUBLIC_VERSION);
       }
 
       initDatabase(hash(hashKey));
