@@ -246,6 +246,8 @@ func (a *API) routes(r chi.Router) {
 		r.Post("/issues/{id}/claim", a.handleClaimIssue)
 		r.Post("/issues/{id}/claim/heartbeat", a.handleClaimHeartbeat)
 		r.Post("/issues/{id}/claim/release", a.handleClaimRelease)
+		r.Post("/issues/{id}/claim/report", a.handleClaimReport)
+		r.Get("/issues/{id}/runs/{runId}/events", a.handleRunEvents)
 	})
 }
 

@@ -347,6 +347,12 @@ Work API\cs{agents:work} & External agents (driver
   \texttt{external}) pull a queue, take an exclusive expiring lease on an
   issue, heartbeat, release; a lapsed lease is swept and fenced; the
   claim shows on the card & \shipped\\
+Run ledger\cs{agents:runs} & One run per claim: the agent reports model,
+  token and cost totals (shown as reported, never priced by the server),
+  a capped step trace and evidence links (PR, commit, CI, deploy);
+  outcome and summary on release; cost chip on the card, runs and trace
+  on the issue; the next claimant's packet carries the prior runs &
+  \shipped\\
 Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
   tokens, agent stops mid-request; per-account rate limit applies &
   \shipped\\

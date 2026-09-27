@@ -362,7 +362,9 @@ limiter, so a multi-instance deployment moves it to the shared broker.
   (60s), `CONVERGE_LLM_MAX_TOKENS` (2048).
 - **Trace and spend.** Every runtime action writes the same history /
   outbox / broadcast trail as the API; the panel's token slot reports
-  per-agent spend over the 24h window.
+  per-agent spend over the 24h window. The run ledger (`agent_runs`,
+  doc 08 "Run ledger") records external agents only; runtime decisions
+  stay on this in-memory meter until the runtime opens runs of its own.
 - **Live signal.** Each worker publishes its in-flight state as a
   `SwarmActivity` sync record (spec `cs:swarm:activity`): one record per
   agent carrying `{agent, issue, phase, since}`. `working` covers the
