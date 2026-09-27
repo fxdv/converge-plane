@@ -527,7 +527,7 @@ func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bo
 		dropped int
 	)
 	if hasReport {
-		n, status, body, err := a.reportRunTx(ctx, tx, claim.ID, id, p.AccountID, req)
+		n, status, body, linked, err := a.reportRunTx(ctx, tx, claim.ID, id, p.AccountID, req)
 		if err != nil {
 			a.internalError(w, err)
 			return
@@ -537,6 +537,7 @@ func (a *API) claimTransition(w http.ResponseWriter, r *http.Request, release bo
 			return
 		}
 		dropped = n
+		recs = append(recs, linked...)
 	}
 	resp := map[string]any{}
 	switch {

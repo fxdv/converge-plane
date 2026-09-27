@@ -310,8 +310,9 @@ func (a *API) endRunTx(ctx context.Context, tx pgx.Tx, claimID, reason string) (
 
 // reportRunTx locks the agent's run on the issue and applies a report to
 // it. On refusal it returns the HTTP status and body to answer with; the
-// caller emits the run afterwards.
-func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentID string, rp runReport) (dropped, status int, body map[string]any, err error) {
+// caller emits the run afterwards, and broadcasts linked: the pull
+// requests the report's evidence linked to the issue.
+func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentID string, rp runReport) (dropped, status int, body map[string]any, linked []syncActionRecord, err error) {
 	var (
 		run    runRow
 		closed bool
@@ -321,24 +322,24 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 		from agent_runs r where r.id = $1 and r.issue_id = $2
 		for update`, runID, issueID).Scan(append(run.scanDest(), &closed)...)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && run.AgentID != agentID) {
-		return 0, http.StatusNotFound, map[string]any{"error": "run not found"}, nil
+		return 0, http.StatusNotFound, map[string]any{"error": "run not found"}, nil, nil
 	}
 	if err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, nil, err
 	}
 	if closed {
 		return 0, http.StatusConflict, map[string]any{
-			"error": "the run is closed to reports", "endReason": strval(run.EndReason)}, nil
+			"error": "the run is closed to reports", "endReason": strval(run.EndReason)}, nil, nil
 	}
 	if rp.empty() {
-		return 0, 0, nil, nil
+		return 0, 0, nil, nil, nil
 	}
 	if t := rp.Totals; t != nil {
 		if (t.InputTokens != nil && *t.InputTokens < run.InputTokens) ||
 			(t.OutputTokens != nil && *t.OutputTokens < run.OutputTokens) ||
 			(t.CostMicros != nil && *t.CostMicros < run.CostMicros) {
 			return 0, http.StatusUnprocessableEntity, map[string]any{
-				"error": "usage totals only grow: report the run's totals so far"}, nil
+				"error": "usage totals only grow: report the run's totals so far"}, nil, nil
 		}
 	}
 	evidence := run.evidence()
@@ -355,7 +356,7 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 		}
 	}
 	if len(evidence) > runEvidenceCap {
-		return 0, http.StatusUnprocessableEntity, map[string]any{"error": "a run keeps at most 20 evidence links"}, nil
+		return 0, http.StatusUnprocessableEntity, map[string]any{"error": "a run keeps at most 20 evidence links"}, nil, nil
 	}
 	events := rp.Events
 	if room := runEventCap - run.EventCount; len(events) > room {
@@ -373,12 +374,12 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 			select $1, $2::int + t.ord::int, t.kind, t.message
 			from unnest($3::text[], $4::text[]) with ordinality as t(kind, message, ord)`,
 			runID, run.EventCount, kinds, messages); err != nil {
-			return 0, 0, nil, err
+			return 0, 0, nil, nil, err
 		}
 	}
 	evRaw, err := json.Marshal(evidence)
 	if err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, nil, err
 	}
 	var in, out, cost *int64
 	if t := rp.Totals; t != nil {
@@ -397,9 +398,13 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 			updated_at = now()
 		where id = $1`,
 		runID, rp.Model, in, out, cost, len(events), string(evRaw), rp.Outcome, rp.Summary); err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, nil, err
 	}
-	return dropped, 0, nil, nil
+	linked, err = a.linkPullRequestsTx(ctx, tx, run, rp.Evidence)
+	if err != nil {
+		return 0, 0, nil, nil, err
+	}
+	return dropped, 0, nil, linked, nil
 }
 
 // handleClaimReport implements POST /api/v1/issues/{id}/claim/report.
@@ -437,7 +442,7 @@ func (a *API) handleClaimReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	dropped, status, body, err := a.reportRunTx(ctx, tx, rp.ClaimID, id, p.AccountID, rp)
+	dropped, status, body, linked, err := a.reportRunTx(ctx, tx, rp.ClaimID, id, p.AccountID, rp)
 	if err != nil {
 		a.internalError(w, err)
 		return
@@ -465,6 +470,9 @@ func (a *API) handleClaimReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.broadcastRecord(rec)
+	for i := range linked {
+		a.broadcastRecord(linked[i])
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"run": runData(run), "droppedEvents": dropped})
 }
 

@@ -102,7 +102,8 @@ func artifactData(id, title, body, authorID, issueID string, createdAt, updatedA
 // IssueHistory shape (pure, so the wire contract is unit-testable;
 // collectHistory feeds it the issue_history columns). Only
 // status/assignee/priority/labels transitions are user-visible in v1;
-// summary carries the handoff note (D1) — null on every other row.
+// summary carries the handoff note (D1), the pause reason, or why the
+// system moved the issue (userId null) — null on every other row.
 func historyData(id string, createdAt, updatedAt time.Time, actorID *string, issueID, action, field string, from, to, summary *string) map[string]any {
 	// Every from/to field is union(..., null) without undefined in the
 	// client model, so all of them must be present (null when unset).

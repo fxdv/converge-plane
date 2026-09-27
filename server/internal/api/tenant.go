@@ -53,6 +53,9 @@ type API struct {
 	runtime *AgentRuntime
 	// sweeperDone stops the claim sweeper (work.go).
 	sweeperDone chan struct{}
+	// githubDone stops the pull request poller (github_poll.go), which
+	// runs only when CONVERGE_GITHUB_REPOS lists repositories.
+	githubDone chan struct{}
 	// startedAt is the process birth (the metrics plane's uptime source).
 	startedAt time.Time
 	// root is the router Mount was given; MCP tool calls re-enter it.
@@ -83,6 +86,15 @@ func (a *API) StartRuntime(ctx context.Context) {
 	a.runtime.Start(ctx)
 	a.sweeperDone = make(chan struct{})
 	go a.runClaimSweeper(ctx, a.sweeperDone)
+	if len(a.cfg.GitHubRepos) > 0 {
+		a.githubDone = make(chan struct{})
+		go newGitHubPoller(a).run(ctx, a.githubDone)
+		a.log.Info("tracking GitHub pull requests",
+			"repos", strings.Join(a.cfg.GitHubRepos, ","),
+			"authenticated", a.cfg.GitHubToken != "",
+			"interval", a.cfg.GitHubPollInterval,
+			"auto_done", a.cfg.GitHubAutoDone)
+	}
 }
 
 // StopRuntime drains the runtime: the dispatcher stops and live workers
@@ -93,6 +105,10 @@ func (a *API) StopRuntime() {
 	if a.sweeperDone != nil {
 		close(a.sweeperDone)
 		a.sweeperDone = nil
+	}
+	if a.githubDone != nil {
+		close(a.githubDone)
+		a.githubDone = nil
 	}
 }
 

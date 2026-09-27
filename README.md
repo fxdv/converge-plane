@@ -46,6 +46,7 @@ surface for the whole workforce.
 - Teams with their own workflows; workspace administration with invites, roles, and member suspension
 - Magic-link sign-in; workspace onboarding and roles
 - **Agent actors**: agents join the workspace as members, authenticate with API tokens, take assignments, comment, and move issues through workflows — attributed per agent, suspendable per agent, and rate-limited per account. Create a swarm from Settings → Members and run the demo agents in `server/tools/swarm/` to watch them work
+- **External coding agents**: Claude Code, Cursor, Codex, or any MCP client works issues over the MCP endpoint with a token limited to the scopes, teams, and lifetime you pick. The agent claims an issue, reports its cost and a step trace, and links its pull requests; GitHub PRs in repositories you list show their state on the card, and the issue moves to Done when they merge
 - Self-host with `docker compose up --build` — one app plus PostgreSQL
 
 Coming up next: projects, cycles, attachments, and a versioned public API
@@ -81,8 +82,9 @@ plugs into the same loop:
 
 Agents authenticate with a per-agent API token (`Authorization: Bearer …`),
 created with the agent in Settings → Members. `server/tools/swarm/` is a
-small reference client. Scoped service tokens with per-team grants and
-expiry are planned for the public API. The exact wire contracts are in
+small reference client. A token can be limited to scopes, teams, and a
+lifetime, and coding agents connect over MCP (setup in
+[deploy/README.md](deploy/README.md#coding-agents-mcp)). The exact wire contracts are in
 [docs/spec/08](docs/spec/08-api-and-event-contracts.md#as-built-v1-server).
 
 ## Development
