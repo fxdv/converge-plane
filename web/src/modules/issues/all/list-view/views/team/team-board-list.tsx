@@ -9,7 +9,6 @@ import {
 import { TeamIcon } from '@converge/ui/components/team-icon';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
-import ReactDOM from 'react-dom';
 import {
   AutoSizer,
   CellMeasurer,
@@ -129,23 +128,12 @@ export const TeamBoardList = observer(({ team }: TeamBoardListProps) => {
               <AutoSizer className="pb-10 h-full">
                 {({ width, height }) => (
                   <List
-                    ref={(ref) => {
-                      // react-virtualized has no way to get the list's ref that I can so
-                      // So we use the `ReactDOM.findDOMNode(ref)` escape hatch to get the ref
-                      if (ref) {
-                        // eslint-disable-next-line react/no-find-dom-node
-                        const whatHasMyLifeComeTo = ReactDOM.findDOMNode(ref);
-                        if (whatHasMyLifeComeTo instanceof HTMLElement) {
-                          droppableProvided.innerRef(whatHasMyLifeComeTo);
-                        }
-                      }
-                    }}
                     height={height}
                     overscanRowCount={10}
                     noRowsRenderer={() => <></>}
                     width={width}
                     rowCount={itemCount}
-                    outerRef={droppableProvided.innerRef}
+                    elementRef={droppableProvided.innerRef}
                     rowHeight={cache.rowHeight}
                     deferredMeasurementCache={cache}
                     rowRenderer={rowRender}
