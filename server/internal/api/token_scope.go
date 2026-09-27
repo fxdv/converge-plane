@@ -49,6 +49,9 @@ var tokenRoutePolicy = map[string]routePolicy{
 	"GET /issues/{id}/relations":  {scope: auth.ScopeIssuesRead},
 	"DELETE /issue_relation/{id}": {scope: auth.ScopeIssuesWrite, wide: true},
 
+	"POST /issues/{id}/pull_requests":            {scope: auth.ScopeIssuesWrite},
+	"DELETE /issues/{id}/pull_requests/{linkId}": {scope: auth.ScopeIssuesWrite},
+
 	"GET /issues/{id}/runs/{runId}/events": {scope: auth.ScopeIssuesRead},
 
 	"POST /issue_comments":             {scope: auth.ScopeCommentsWrite},

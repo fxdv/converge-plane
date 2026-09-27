@@ -335,7 +335,7 @@ func (g *githubPoller) apply(ctx context.Context, ref pullRef, l leasedPull, res
 		_, err := a.pool.Exec(ctx, `
 			update issue_pull_requests
 			set checked_at = now(), failures = 0, next_check_at = now() + $2::int * interval '1 second'
-			where id = $1`, l.id, int(g.interval.Seconds()))
+			where id = $1 and unlinked_at is null`, l.id, int(g.interval.Seconds()))
 		return err
 	case githubFailed:
 		_, err := a.pool.Exec(ctx, `
@@ -343,7 +343,7 @@ func (g *githubPoller) apply(ctx context.Context, ref pullRef, l leasedPull, res
 			set failures = failures + 1,
 			    next_check_at = case when failures + 1 >= $2::int then null
 			                         else now() + $3::int * interval '1 second' end
-			where id = $1`, l.id, githubMaxFailures, int(g.backoff(l.failures+1).Seconds()))
+			where id = $1 and unlinked_at is null`, l.id, githubMaxFailures, int(g.backoff(l.failures+1).Seconds()))
 		return err
 	}
 
@@ -369,7 +369,7 @@ func (g *githubPoller) apply(ctx context.Context, ref pullRef, l leasedPull, res
 		failures int
 	)
 	err = tx.QueryRow(ctx, "select "+pullColumns+`, p.failures
-		from issue_pull_requests p where p.id = $1 for update`, l.id).Scan(append(before.scanDest(), &failures)...)
+		from issue_pull_requests p where p.id = $1 and p.unlinked_at is null for update`, l.id).Scan(append(before.scanDest(), &failures)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -449,12 +449,22 @@ func (g *githubPoller) moveTx(ctx context.Context, tx pgx.Tx, before pullRow, re
 		}
 		return false, recs, nil
 	}
-	var other string
+	var (
+		other         string
+		otherUnlinked bool
+	)
 	err = tx.QueryRow(ctx, `
-		select id from issue_pull_requests
+		select id, unlinked_at is not null from issue_pull_requests
 		where issue_id = $1 and repo = $2 and number = $3 and id <> $4
-		for update`, before.IssueID, to, ref.Number, before.ID).Scan(&other)
+		for update`, before.IssueID, to, ref.Number, before.ID).Scan(&other, &otherUnlinked)
 	switch {
+	case err == nil && otherUnlinked:
+		// The issue unlinked the PR under its new name but still links
+		// it under the old one: the live link wins.
+		if _, err := tx.Exec(ctx, `delete from issue_pull_requests where id = $1`, other); err != nil {
+			return false, nil, err
+		}
+		fallthrough
 	case errors.Is(err, pgx.ErrNoRows):
 		_, err = tx.Exec(ctx, `update issue_pull_requests set repo = $2 where id = $1`, before.ID, to)
 		return err == nil, nil, err
@@ -550,7 +560,8 @@ func (a *API) completeOnMergeTx(ctx context.Context, tx pgx.Tx, link pullRow, re
 	)
 	if err := tx.QueryRow(ctx, `
 		select coalesce((select category from workflow_statuses where id = $1), 'UNSTARTED'),
-		       exists(select 1 from issue_pull_requests where issue_id = $2 and state in ('pending', 'open'))`,
+		       exists(select 1 from issue_pull_requests
+		              where issue_id = $2 and state in ('pending', 'open') and unlinked_at is null)`,
 		row.StatusID, row.ID).Scan(&category, &waiting); err != nil {
 		return nil, err
 	}

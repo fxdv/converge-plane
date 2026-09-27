@@ -35,6 +35,14 @@ type userResponse struct {
 	Role       string             `json:"role"`
 	Kind       string             `json:"kind"`
 	Image      string             `json:"image"`
+	Features   userFeatures       `json:"features"`
+}
+
+// userFeatures says which optional server features the client may
+// offer. It names no configuration: which repositories the server
+// follows stays with the operator.
+type userFeatures struct {
+	GitHubPullRequests bool `json:"githubPullRequests"`
 }
 
 // publicUser matches the web client's User shape for bulk lookups.
@@ -80,6 +88,7 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		// the sign-in -> onboarding journey.
 		Workspaces: []workspaceSummary{},
 		Invites:    []inviteSummary{},
+		Features:   userFeatures{GitHubPullRequests: len(a.cfg.GitHubRepos) > 0},
 	}
 
 	// Active and suspended memberships are both listed, and the
