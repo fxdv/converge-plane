@@ -138,6 +138,10 @@ func TestRefreshRotatesAndDetectsReuse(t *testing.T) {
 	if _, ok := s.ValidateAccess(access); ok {
 		t.Fatal("access token of a revoked session still validates")
 	}
+	other := &Service{pool: pool, cfg: s.cfg, revoked: newRevocations(), live: newRevocations()}
+	if _, ok := other.ValidateAccess(access); ok {
+		t.Fatal("another process still accepted the revoked access token")
+	}
 }
 
 func TestConcurrentRefreshesAllSucceed(t *testing.T) {

@@ -122,7 +122,7 @@ func (s *Service) refreshSession(ctx context.Context, c tokenClaims, token, ip, 
 		if err := tx.Commit(ctx); err != nil {
 			return SessionMaterial{}, false, err
 		}
-		s.revoked.add(c.Session, time.Now().Add(s.cfg.AccessTokenTTL))
+		s.announceRevoked(ctx, c.Session)
 		return SessionMaterial{}, false, errSessionReused
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -134,12 +134,20 @@ func (s *Service) refreshSession(ctx context.Context, c tokenClaims, token, ip, 
 // revokeSession ends a session: its refresh token stops working and, on
 // this instance, so do its access tokens.
 func (s *Service) revokeSession(ctx context.Context, c tokenClaims, reason string) error {
-	s.revoked.add(c.Session, time.Now().Add(s.cfg.AccessTokenTTL))
+	s.announceRevoked(ctx, c.Session)
 	_, err := s.pool.Exec(ctx, `
 		update sessions set revoked_at = now(), revoked_reason = $3
 		where id = $1 and account_id = $2 and revoked_at is null`,
 		c.Session, c.Account, reason)
 	return err
+}
+
+func (s *Service) announceRevoked(ctx context.Context, sessionID string) {
+	s.NoteRevoked(sessionID)
+	if s.pool == nil {
+		return
+	}
+	_, _ = s.pool.Exec(ctx, `select pg_notify('converge_session', $1)`, sessionID)
 }
 
 // inetOrNil keeps an unparseable client address out of the inet column.

@@ -165,4 +165,5 @@ func (a *API) broadcastRecord(rec syncActionRecord) {
 	n := a.bcast.Publish(rec.WorkspaceID, broadcast.Event{Data: raw, Seq: rec.SequenceID, To: rec.recipient})
 	a.log.Debug("realtime publish", "workspace", rec.WorkspaceID,
 		"model", rec.ModelName, "action", rec.Action, "delivered", n)
+	a.notifyFanout(rec)
 }

@@ -230,6 +230,9 @@ type githubPull struct {
 	Merged   bool       `json:"merged"`
 	MergedAt *time.Time `json:"merged_at"`
 	HTMLURL  string     `json:"html_url"`
+	Head     struct {
+		SHA string `json:"sha"`
+	} `json:"head"`
 }
 
 type githubOutcome int
@@ -246,6 +249,9 @@ type githubResult struct {
 	outcome githubOutcome
 	pull    githubPull
 	etag    string
+	// ciState is GitHub's combined commit status for the pull request
+	// head: pending, success, or failure. Empty when GitHub did not say.
+	ciState string
 	// movedTo is the repository GitHub now files the PR under, when it
 	// is not the one requested: the repository was renamed or moved.
 	movedTo string
@@ -291,7 +297,7 @@ func (g *githubPoller) fetch(ctx context.Context, ref pullRef, etag string) gith
 		if len(tag) > 200 {
 			tag = ""
 		}
-		out := githubResult{outcome: githubFetched, pull: pull, etag: tag}
+		out := githubResult{outcome: githubFetched, pull: pull, etag: tag, ciState: g.commitStatus(ctx, owner, name, pull.Head.SHA)}
 		// A renamed repository answers through a redirect to its numeric
 		// id, so the new name is only in the PR's own html_url.
 		if at, ok := parsePullRequestURL(pull.HTMLURL); ok && at.Number == ref.Number && at.Repo != ref.Repo {
@@ -326,6 +332,52 @@ func (g *githubPoller) fetch(ctx context.Context, ref pullRef, etag string) gith
 	default:
 		g.a.log.Warn("GitHub answered with an unexpected status", "pull_request", ref.String(), "status", res.StatusCode)
 		return githubResult{outcome: githubFailed}
+	}
+}
+
+// commitStatus reads the combined status of the pull request head.
+// A failure here leaves the link's ci_state unchanged: the pull request
+// itself was read, and a missing status is not a failed check.
+func (g *githubPoller) commitStatus(ctx context.Context, owner, name, sha string) string {
+	if len(sha) < 7 || len(sha) > 64 {
+		return ""
+	}
+	for _, r := range sha {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return ""
+		}
+	}
+	target := g.base + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/commits/" + url.PathEscape(sha) + "/status"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("User-Agent", "converge/"+g.a.cfg.Version)
+	if g.token != "" {
+		req.Header.Set("Authorization", "Bearer "+g.token)
+	}
+	res, err := g.client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 4<<10))
+		return ""
+	}
+	var body struct {
+		State string `json:"state"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, githubMaxBody)).Decode(&body); err != nil {
+		return ""
+	}
+	switch body.State {
+	case "success", "failure", "pending":
+		return body.State
+	default:
+		return ""
 	}
 }
 
@@ -550,6 +602,13 @@ func (g *githubPoller) recordFetchTx(ctx context.Context, tx pgx.Tx, before pull
 		where id = $1`,
 		before.ID, state, pull.Draft, title, mergedAt, res.etag, settled, int(g.interval.Seconds()), changed); err != nil {
 		return nil, err
+	}
+	if res.ciState != "" {
+		if _, err := tx.Exec(ctx, `
+			update issue_pull_requests set ci_state = $2
+			where id = $1 and ci_state is distinct from $2`, before.ID, res.ciState); err != nil {
+			return nil, err
+		}
 	}
 	var recs []syncActionRecord
 	if changed {

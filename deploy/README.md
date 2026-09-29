@@ -420,11 +420,13 @@ How it behaves:
 ## Done, spend, and outbound webhooks
 
 An agent cannot move an issue to a completed state unless a linked pull
-request has merged and none is still open, or a person has chosen
+request has merged and none is still open, a combined commit status
+the poller read from GitHub is `success`, or a person has chosen
 **Approve Done** on the issue. People and the merge itself are not
-held to that rule. The in-process runtime is told to triage and hand
-work on, not to complete it. Approval is forgotten when the issue
-leaves Done.
+held to that rule. A green check does not by itself move the issue;
+the agent (or a person) still changes the state. The in-process
+runtime is told to triage and hand work on, not to complete it.
+Approval is forgotten when the issue leaves Done.
 
 A team's preferences may set `spendBudgetMicros` (millionths of a US
 dollar). Over the last 24 hours, a reported cost that would pass the
@@ -452,6 +454,9 @@ Redirects are not followed. A workspace keeps at most 10 endpoints.
 `POST …/webhooks/{id}/rotate` replaces the secret; `DELETE` removes
 the endpoint. In dev mode (`CONVERGE_DEV_MODE`) an `http://127.0.0.1`
 URL is accepted so a local receiver can be tried.
+`GET /api/v1/workspaces/{id}/webhooks/deliveries` lists recent
+deliveries (last error, attempts, when it was delivered).
+`POST …/deliveries/{eventId}/retry` queues one again.
 
 ## Production checklist
 
@@ -618,22 +623,22 @@ too small); `slow_disconnects` climbing (overloaded clients or network).
 
 ## Scaling
 
-v1 is a single API instance by design:
+Two API processes can serve one board:
 
-- Refresh and sign-out are checked against the `sessions` table, so any
-  instance can serve any user. Two things are per-instance: the auth rate
-  limiters and the cache of revoked sessions. With several instances, a
-  signed-out access token stays usable on the other instances until it
-  expires (`CONVERGE_ACCESS_TOKEN_TTL`).
-- The realtime fan-out is an **in-process** pub/sub. With more than one
-  instance, each stream only receives its own mutations; cross-instance
-  delivery needs a shared broker (NATS/Redis pub-sub) behind the same
-  interface in `server/internal/broadcast`. The delta endpoint remains
-  authoritative regardless, so a multi-instance deployment stays correct —
-  realtime degrades to reconnect-rate freshness at worst.
-- The database is the scaling bottleneck to watch first; the read paths
-  are index-backed (set-based single queries, no N+1 in the sync feed).
+- Refresh and sign-out are checked against the `sessions` table. A
+  revoked session is also published on `converge_session`, and each
+  process re-reads `revoked_at` (cached for about two seconds when the
+  row is still live). Sign-in rate limits stay per process.
+- Request rate limits for signed-in accounts share `rate_buckets`. If
+  that read fails, the process uses its own bucket.
+- After a commit, the writer publishes to its own subscribers and
+  notifies `converge_fanout`. Another process ignores its own notices,
+  loads the outbox row, and publishes that. The delta endpoint remains
+  authoritative.
+- The process that holds advisory lock `480021` runs the agent runtime,
+  the claim sweeper, GitHub polling, and outbound webhook delivery.
+  The others serve HTTP and streams. If that connection drops, the
+  lock is free and another process takes it.
 
-The v1 feature surface is complete; horizontal fan-out (shared broker
-behind the `Broadcaster` seam) is the next infrastructure step, not a
-feature dependency.
+The database is the scaling bottleneck to watch first; the read paths
+are index-backed (set-based single queries, no N+1 in the sync feed).

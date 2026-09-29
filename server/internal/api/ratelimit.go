@@ -6,18 +6,18 @@
 // (human or agent) independently, so one misbehaving agent cannot
 // starve its human teammates or the rest of the swarm.
 //
-// In-memory on purpose: the single-instance v1 topology means every
-// request lands here, and a map of token buckets is the entire state.
-// Buckets are created lazily and never evicted; the population is
-// bounded by the number of accounts (membership rows), and a 100-agent
-// swarm is a few hundred bytes. A shared-broker multi-instance
-// deployment would move this behind the same seam.
+// The shared bucket lives in rate_buckets (migration 0026), so two API
+// processes spend the same budget. The in-memory bucket is the fallback
+// when that table cannot be read, and the only bucket unit tests see.
 package api
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type tokenBucket struct {
@@ -128,7 +128,7 @@ func (a *API) rateLimitGuard(next http.Handler) http.Handler {
 		}
 		if p := PrincipalFromContext(r.Context()); p != nil {
 			a.limiter.recordUsage(p.AccountID)
-			if !a.limiter.allow(p.AccountID) {
+			if !a.allowAccount(r.Context(), p.AccountID) {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.Header().Set("Retry-After", "1")
 				w.WriteHeader(http.StatusTooManyRequests)
@@ -138,4 +138,71 @@ func (a *API) rateLimitGuard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// sharedBucketSQL refills one account's bucket and spends a token when
+// one is available. The first row (no previous bucket) is allowed and
+// stores a full burst. A later call is allowed only when the refilled
+// bucket held at least one token.
+const sharedBucketSQL = `
+with prev as (
+  select tokens, updated_at from rate_buckets where account_id = $1::uuid
+),
+up as (
+  insert into rate_buckets as b (account_id, tokens, updated_at)
+  values (
+    $1::uuid,
+    case
+      when not exists (select 1 from prev) then $2::float8
+      else (
+        select case
+          when least($3::float8, tokens + $4::float8 * extract(epoch from (clock_timestamp() - updated_at))) >= 1
+          then least($3::float8, tokens + $4::float8 * extract(epoch from (clock_timestamp() - updated_at))) - 1
+          else least($3::float8, tokens + $4::float8 * extract(epoch from (clock_timestamp() - updated_at)))
+        end
+        from prev
+      )
+    end,
+    clock_timestamp()
+  )
+  on conflict (account_id) do update
+  set tokens = excluded.tokens, updated_at = excluded.updated_at
+  returning account_id
+)
+select
+  (select account_id from up) is not null
+  and (
+    not exists (select 1 from prev)
+    or coalesce((
+      select least($3::float8, tokens + $4::float8 * extract(epoch from (clock_timestamp() - updated_at))) >= 1
+      from prev
+    ), false)
+  )`
+
+// allowAccount spends one token from the shared bucket when Postgres can
+// answer, and from this process's bucket when it cannot.
+func (a *API) allowAccount(ctx context.Context, accountID string) bool {
+	if a == nil || a.limiter == nil || a.limiter.rps <= 0 {
+		return true
+	}
+	if allowed, ok := a.sharedAllow(ctx, accountID); ok {
+		return allowed
+	}
+	return a.limiter.allow(accountID)
+}
+
+func (a *API) sharedAllow(ctx context.Context, accountID string) (bool, bool) {
+	p, ok := a.pool.(*pgxpool.Pool)
+	if !ok || accountID == "" {
+		return false, false
+	}
+	qctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	var allowed bool
+	err := p.QueryRow(qctx, sharedBucketSQL,
+		accountID, a.limiter.burst, a.limiter.burst, a.limiter.rps).Scan(&allowed)
+	if err != nil {
+		return false, false
+	}
+	return allowed, true
 }

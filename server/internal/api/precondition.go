@@ -7,8 +7,8 @@
 // otherwise 412 with the current version, so the agent re-reads and
 // decides again instead of overwriting a human's edit.
 //
-// Agents must send it (428 without). The forked web client does not send
-// versions yet, so for humans the check applies only when they do.
+// Agents must send it (428 without). Humans send it when the client has
+// a version, and the same check applies to them when they do.
 package api
 
 import (

@@ -1731,6 +1731,25 @@ var rtRouteCases = []routeCase{
 		code: 200,
 	},
 	{
+		route: "GET /api/v1/workspaces/{id}/webhooks/deliveries", method: "GET",
+		path:      "/api/v1/workspaces/" + rtWS + "/webhooks/deliveries",
+		urlParams: []string{"id", rtWS},
+		handler:   (*API).handleListWebhookDeliveries,
+		pool: &fakePool{rules: []fakeRule{
+			rtRole("owner"),
+			{frag: "from webhook_events", rows: [][]any{}},
+		}},
+		code: 200,
+	},
+	{
+		route: "POST /api/v1/workspaces/{id}/webhooks/deliveries/{eventId}/retry", method: "POST",
+		path:      "/api/v1/workspaces/" + rtWS + "/webhooks/deliveries/" + rtToken + "/retry",
+		urlParams: []string{"id", rtWS, "eventId", rtToken},
+		handler:   (*API).handleRetryWebhookDelivery,
+		pool:      &fakePool{rules: []fakeRule{rtRole("owner")}},
+		code:      404, err: "not found",
+	},
+	{
 		route: "DELETE /api/v1/workspaces/{id}/webhooks/{endpointId}", method: "DELETE",
 		path:      "/api/v1/workspaces/" + rtWS + "/webhooks/" + rtToken,
 		urlParams: []string{"id", rtWS, "endpointId", rtToken},
@@ -1765,7 +1784,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 77 // the v1 surface: every route in Mount, one entry each
+	const want = 79 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}

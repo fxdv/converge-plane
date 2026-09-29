@@ -21,7 +21,7 @@ import (
 )
 
 // errDoneNeedsEvidence is the board refusing an agent's move to Done.
-var errDoneNeedsEvidence = errors.New("moving an issue to Done needs a merged pull request or a human's approval")
+var errDoneNeedsEvidence = errors.New("moving an issue to Done needs a merged pull request, a green check the server read, or a human's approval")
 
 const governanceWindow = 7 * 24 * time.Hour
 
@@ -45,15 +45,19 @@ func (a *API) doneEvidenceTx(ctx context.Context, tx pgx.Tx, issueID, teamID, st
 	if err != nil {
 		return err
 	}
-	var merged, open int
+	var merged, open, green int
 	if err := tx.QueryRow(ctx, `
 		select count(*) filter (where state = 'merged'),
-		       count(*) filter (where state in ('pending', 'open'))
+		       count(*) filter (where state in ('pending', 'open')),
+		       count(*) filter (where ci_state = 'success')
 		from issue_pull_requests
-		where issue_id = $1 and unlinked_at is null`, issueID).Scan(&merged, &open); err != nil {
+		where issue_id = $1 and unlinked_at is null`, issueID).Scan(&merged, &open, &green); err != nil {
 		return err
 	}
-	if merged > 0 && open == 0 {
+	// A merged pull request is proof only when nothing is still open.
+	// A green combined status is proof on its own: the server read it
+	// from GitHub. An evidence link of kind ci_run is not this column.
+	if (merged > 0 && open == 0) || green > 0 {
 		return nil
 	}
 	var approved bool
