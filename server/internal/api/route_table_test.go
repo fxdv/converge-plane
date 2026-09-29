@@ -1363,6 +1363,8 @@ var rtRouteCases = []routeCase{
 			{frag: "where a.kind = $2", rows: [][]any{}},
 			{frag: "order by i.updated_at desc", rows: [][]any{}},
 			{frag: "from swarm_settings where workspace_id = $1", rowErr: pgx.ErrNoRows},
+			{frag: "ws.category = 'COMPLETED'", rowVals: []any{0, int64(0)}},
+			{frag: "h.field = 'status'", rows: [][]any{}},
 		}},
 		code: 200,
 		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
@@ -1690,6 +1692,61 @@ var rtRouteCases = []routeCase{
 		code:      400, err: "limit must be between 1 and 200",
 	},
 
+	// Phase 3: a human approves Done. Agents are refused before any read.
+	{
+		route: "POST /api/v1/issues/{id}/done-approval", method: "POST",
+		path:      "/api/v1/issues/" + rtIssue + "/done-approval",
+		urlParams: []string{"id", rtIssue},
+		handler:   (*API).handleApproveDone,
+		principal: externalAgentPrincipal(rtAgent),
+		code:      422, err: "only a human can approve moving an issue to Done",
+	},
+	// Phase 3: the signed trace is absent until the operator sets a key.
+	{
+		route: "GET /api/v1/workspaces/{id}/trace", method: "GET",
+		path:      "/api/v1/workspaces/" + rtWS + "/trace",
+		urlParams: []string{"id", rtWS},
+		handler:   (*API).handleTraceExport,
+		code:      404, err: "trace signing is not configured",
+	},
+	// Phase 2: outbound webhooks. A non-https URL is refused before insert.
+	{
+		route: "POST /api/v1/workspaces/{id}/webhooks", method: "POST",
+		path:      "/api/v1/workspaces/" + rtWS + "/webhooks",
+		urlParams: []string{"id", rtWS},
+		handler:   (*API).handleCreateWebhook,
+		body:      `{"url":"http://10.1.1.1/hook"}`,
+		pool:      &fakePool{rules: []fakeRule{rtRole("owner")}},
+		code:      422, err: "webhook url must be https",
+	},
+	{
+		route: "GET /api/v1/workspaces/{id}/webhooks", method: "GET",
+		path:      "/api/v1/workspaces/" + rtWS + "/webhooks",
+		urlParams: []string{"id", rtWS},
+		handler:   (*API).handleListWebhooks,
+		pool: &fakePool{rules: []fakeRule{
+			rtRole("owner"),
+			{frag: "from webhook_endpoints", rows: [][]any{}},
+		}},
+		code: 200,
+	},
+	{
+		route: "DELETE /api/v1/workspaces/{id}/webhooks/{endpointId}", method: "DELETE",
+		path:      "/api/v1/workspaces/" + rtWS + "/webhooks/" + rtToken,
+		urlParams: []string{"id", rtWS, "endpointId", rtToken},
+		handler:   (*API).handleDeleteWebhook,
+		pool:      &fakePool{rules: []fakeRule{rtRole("owner")}},
+		code:      404, err: "not found",
+	},
+	{
+		route: "POST /api/v1/workspaces/{id}/webhooks/{endpointId}/rotate", method: "POST",
+		path:      "/api/v1/workspaces/" + rtWS + "/webhooks/" + rtToken + "/rotate",
+		urlParams: []string{"id", rtWS, "endpointId", rtToken},
+		handler:   (*API).handleRotateWebhookSecret,
+		pool:      &fakePool{rules: []fakeRule{rtRole("owner")}},
+		code:      404, err: "not found",
+	},
+
 	// The MCP endpoint (mcp.go): agent API tokens only.
 	{
 		route: "POST /api/v1/mcp", method: "POST",
@@ -1708,7 +1765,7 @@ var rtRouteCases = []routeCase{
 // catches the accidental deletion, and the router walk + the seam
 // contract catch the accidental drift in both directions.
 func TestRouteTableCompleteness(t *testing.T) {
-	const want = 71 // the v1 surface: every route in Mount, one entry each
+	const want = 77 // the v1 surface: every route in Mount, one entry each
 	if len(rtRouteCases) != want {
 		t.Fatalf("the route table holds %d entries, want %d — Mount and the table drifted", len(rtRouteCases), want)
 	}

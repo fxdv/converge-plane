@@ -160,6 +160,9 @@ type Config struct {
 	// GitHubAutoDone moves an issue to its team's first Done state once
 	// a linked pull request merges and none is still open.
 	GitHubAutoDone bool
+	// TraceSigningKey signs the JSONL run export. Empty leaves the
+	// export unmounted in spirit: the handler answers 404.
+	TraceSigningKey string
 	// Version is the build version, injected at link time.
 	Version string
 }
@@ -411,6 +414,10 @@ func Load() (Config, error) {
 
 	if err := loadGitHub(&cfg); err != nil {
 		return cfg, err
+	}
+	cfg.TraceSigningKey = strings.TrimSpace(os.Getenv("CONVERGE_TRACE_SIGNING_KEY"))
+	if cfg.TraceSigningKey != "" && len(cfg.TraceSigningKey) < 16 {
+		return cfg, fmt.Errorf("CONVERGE_TRACE_SIGNING_KEY must be at least 16 characters")
 	}
 	return cfg, nil
 }

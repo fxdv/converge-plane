@@ -104,10 +104,22 @@ export interface SwarmReview {
   lastNote?: string;
 }
 
+export interface SwarmGovernance {
+  windowDays: number;
+  completed: number;
+  costMicros: number;
+  costPerDoneMicros: number;
+  // Share of Done issues in the window later moved out of Done.
+  reworkRate: number;
+  // Share of agent Done moves later undone.
+  falseDoneRate: number;
+}
+
 export interface SwarmStatus {
   // Fleet roster, busy agents first.
   agents: SwarmAgent[];
   pausedIssues: SwarmPausedIssue[];
+  governance: SwarmGovernance;
   // The swarm plane's fleet settings (D4): the Swarm page's save target.
   settings: SwarmSettings;
   // The decision-brain indicator: is the fleet thinking (llm) or

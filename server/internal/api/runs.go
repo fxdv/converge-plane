@@ -385,6 +385,18 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 	if t := rp.Totals; t != nil {
 		in, out, cost = t.InputTokens, t.OutputTokens, t.CostMicros
 	}
+	if cost != nil {
+		var teamID string
+		if err := tx.QueryRow(ctx, `select team_id from issues where id = $1`, issueID).Scan(&teamID); err != nil {
+			return 0, 0, nil, nil, err
+		}
+		if err := a.spendAllowsTx(ctx, tx, teamID, runID, *cost); err != nil {
+			if errors.Is(err, errSpendBudget) {
+				return 0, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()}, nil, nil
+			}
+			return 0, 0, nil, nil, err
+		}
+	}
 	if _, err := tx.Exec(ctx, `
 		update agent_runs set
 			model = coalesce($2, model),
@@ -402,6 +414,11 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 	}
 	linked, err = a.linkPullRequestsTx(ctx, tx, run, rp.Evidence)
 	if err != nil {
+		return 0, 0, nil, nil, err
+	}
+	if err := a.enqueueWebhookTx(ctx, tx, run.WorkspaceID, "run.reported", map[string]any{
+		"runId": run.ID, "issueId": run.IssueID, "agentId": run.AgentID,
+	}); err != nil {
 		return 0, 0, nil, nil, err
 	}
 	return dropped, 0, nil, linked, nil

@@ -6,10 +6,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@converge/ui/components/dropdown-menu';
+import { useToast } from '@converge/ui/components/use-toast';
 import { ArrowForwardLine, MoreLine } from '@converge/ui/icons';
 import React from 'react';
-
-import { HandoffIssueDialog } from './handoff-issue-dialog';
 
 import { AddIssueRelationModal } from 'modules/issues/components/modals';
 import { MoveIssueToTeamDialog } from 'modules/shortcuts/dialogs';
@@ -20,9 +19,12 @@ import { TeamTypeEnum } from 'common/types';
 import { useIssueData } from 'hooks/issues';
 import { useTeamWithId } from 'hooks/teams';
 
+import { useApproveDoneMutation } from 'services/issues';
+
 import { DeleteIssueDialog } from './delete-issue-dialog';
 import { DeleteIssueItem } from './delete-issue-item';
 import { DropdownItem } from './dropdown-item';
+import { HandoffIssueDialog } from './handoff-issue-dialog';
 import { RelatedDropdownItems } from './related-dropdown-items';
 import { RemoveParentIssue } from './remove-parent-issue';
 
@@ -36,6 +38,16 @@ export function IssueOptionsDropdown() {
 
   const [moveIssueDialog, setMoveIssueDialog] = React.useState(false);
   const [handoffDialog, setHandoffDialog] = React.useState(false);
+  const { toast } = useToast();
+  const approve = useApproveDoneMutation({
+    onSuccess: () =>
+      toast({
+        title: 'Approved',
+        description: 'An agent may move this issue to Done.',
+      }),
+    onError: (message) =>
+      toast({ title: 'Could not approve', description: message }),
+  });
 
   return (
     <>
@@ -60,6 +72,11 @@ export function IssueOptionsDropdown() {
 
           <DropdownMenuItem onClick={() => setHandoffDialog(true)}>
             <DropdownItem Icon={ArrowForwardLine} title="Hand off to agent…" />
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => currentIssue && approve.mutate(currentIssue.id)}
+          >
+            <DropdownItem Icon={ArrowForwardLine} title="Approve Done" />
           </DropdownMenuItem>
 
           <RelatedDropdownItems
@@ -87,7 +104,10 @@ export function IssueOptionsDropdown() {
         open={moveIssueDialog}
         setOpen={setMoveIssueDialog}
       />
-      <HandoffIssueDialog open={handoffDialog} onOpenChange={setHandoffDialog} />
+      <HandoffIssueDialog
+        open={handoffDialog}
+        onOpenChange={setHandoffDialog}
+      />
     </>
   );
 }

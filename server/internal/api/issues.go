@@ -417,6 +417,10 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	changed, historyRecs, err := a.applyIssuePatchTx(ctx, tx, p, workspaceID, row, req)
+	if errors.Is(err, errDoneNeedsEvidence) {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 	if err != nil {
 		a.internalError(w, err)
 		return
@@ -508,6 +512,14 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		}
 	}
 	if req.StateID != nil && strval(req.StateID) != strval(row.StatusID) {
+		if agentActor(p) {
+			if err := a.doneEvidenceTx(ctx, tx, row.ID, row.TeamID, *req.StateID); err != nil {
+				return false, nil, err
+			}
+		}
+		if err := a.clearDoneApprovalTx(ctx, tx, row.ID, strval(row.StatusID), *req.StateID); err != nil {
+			return false, nil, err
+		}
 		if _, err := tx.Exec(ctx, `update issues set status_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, *req.StateID); err != nil {
 			return false, nil, err
 		}
@@ -646,6 +658,13 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 			return false, nil, err
 		}
 		row.AgentPaused = false
+	}
+	if changed {
+		if err := a.enqueueWebhookTx(ctx, tx, workspaceID, "issue.updated", map[string]any{
+			"issueId": row.ID, "teamId": row.TeamID, "statusId": strval(row.StatusID),
+		}); err != nil {
+			return false, nil, err
+		}
 	}
 	return changed, historyRecs, nil
 }

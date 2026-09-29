@@ -259,6 +259,13 @@ func (a *API) handleClaimIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	if over, err := a.teamOverBudget(ctx, row.TeamID); err != nil {
+		a.internalError(w, err)
+		return
+	} else if over {
+		writeError(w, http.StatusUnprocessableEntity, errSpendBudget.Error())
+		return
+	}
 
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {

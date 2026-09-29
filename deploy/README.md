@@ -417,6 +417,42 @@ How it behaves:
   unsetting `CONVERGE_GITHUB_REPOS`, stops its checks, and cards keep the
   last state seen. Checks resume if it comes back.
 
+## Done, spend, and outbound webhooks
+
+An agent cannot move an issue to a completed state unless a linked pull
+request has merged and none is still open, or a person has chosen
+**Approve Done** on the issue. People and the merge itself are not
+held to that rule. The in-process runtime is told to triage and hand
+work on, not to complete it. Approval is forgotten when the issue
+leaves Done.
+
+A team's preferences may set `spendBudgetMicros` (millionths of a US
+dollar). Over the last 24 hours, a reported cost that would pass the
+cap is refused, and so is a new claim once the cap is already spent.
+Leave it unset for no cap.
+
+The Swarm page shows the last seven days: issues currently Done, cost
+per Done, the share later moved out of Done, and the share of agent
+Done moves that a later move undid.
+
+`GET /api/v1/workspaces/{id}/trace` (an owner or admin) returns those
+runs as JSONL when `CONVERGE_TRACE_SIGNING_KEY` is set (at least 16
+characters). `X-Converge-Signature` is `sha256=` plus the hex
+HMAC-SHA256 of the body under that key. Without the key the route
+answers 404.
+
+An owner or admin registers an outbound webhook with
+`POST /api/v1/workspaces/{id}/webhooks` `{"url":"https://example.com/hook"}`.
+The answer includes `secret` once. Issue updates, run reports, and
+verified pull-request changes are POSTed as JSON
+`{"id","event","data"}` with `X-Converge-Timestamp` (unix seconds) and
+`X-Converge-Signature: sha256=<hex HMAC-SHA256 of timestamp + "." + body>`.
+The URL must be https and must not resolve to a private address.
+Redirects are not followed. A workspace keeps at most 10 endpoints.
+`POST …/webhooks/{id}/rotate` replaces the secret; `DELETE` removes
+the endpoint. In dev mode (`CONVERGE_DEV_MODE`) an `http://127.0.0.1`
+URL is accepted so a local receiver can be tried.
+
 ## Production checklist
 
 - [ ] `CONVERGE_SESSION_SECRET` set to `openssl rand -hex 32` output (the API refuses to start otherwise)

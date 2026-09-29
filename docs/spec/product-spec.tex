@@ -366,6 +366,21 @@ GitHub pull requests\cs{agents:prlinks} & A \texttt{pull\_request}
   any PR. Once every linked PR has merged and none is open, the issue
   moves to the team's first Done state, recorded as a change by the
   system & \shipped\\
+Evidence-gated Done\cs{agents:evidence} & An agent cannot move an issue
+  to a completed state unless a linked pull request has merged and none
+  is still open, or a human has approved the move. The in-process runtime
+  triages and does not complete work. A team spend cap
+  (\texttt{spendBudgetMicros} on team preferences, 24 hours) refuses
+  further reported cost and new claims. The swarm page shows cost per
+  Done, rework, and false-done over seven days. A signed JSONL trace
+  export is served when \texttt{CONVERGE\_TRACE\_SIGNING\_KEY} is set &
+  \shipped\\
+Outbound webhooks\cs{agents:webhooks} & An admin registers an HTTPS
+  endpoint. Issue updates, run reports, and verified pull-request changes
+  are POSTed with \texttt{X-Converge-Signature}
+  (HMAC-SHA256 of the timestamp and body). The secret is shown once.
+  Private addresses are refused and redirects are not followed &
+  \shipped\\
 Suspend / reactivate\cs{agents:suspension} & Kill switch: revokes
   tokens, agent stops mid-request; per-account rate limit applies &
   \shipped\\

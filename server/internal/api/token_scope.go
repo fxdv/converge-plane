@@ -51,6 +51,7 @@ var tokenRoutePolicy = map[string]routePolicy{
 
 	"POST /issues/{id}/pull_requests":            {scope: auth.ScopeIssuesWrite},
 	"DELETE /issues/{id}/pull_requests/{linkId}": {scope: auth.ScopeIssuesWrite},
+	"POST /issues/{id}/done-approval":            {},
 
 	"GET /issues/{id}/runs/{runId}/events": {scope: auth.ScopeIssuesRead},
 
@@ -108,6 +109,11 @@ var tokenRoutePolicy = map[string]routePolicy{
 	"POST /workspaces/invite_action":                        {},
 	"POST /workspaces/suspend":                              {},
 	"GET /workspaces/{id}/swarm":                            {},
+	"GET /workspaces/{id}/trace":                            {},
+	"GET /workspaces/{id}/webhooks":                         {},
+	"POST /workspaces/{id}/webhooks":                        {},
+	"DELETE /workspaces/{id}/webhooks/{endpointId}":         {},
+	"POST /workspaces/{id}/webhooks/{endpointId}/rotate":    {},
 	"GET /notifications":                                    {},
 	"POST /notifications/{id}/read":                         {},
 	"POST /notifications/read_all":                          {},
