@@ -5,6 +5,7 @@ export * from './update-issue';
 export * from './delete-issue';
 export * from './delete-issue-relation';
 export * from './pull-requests';
+export * from './done-approval';
 export * from './handoff-issue';
 export * from './move-issue-to-team';
 export * from './summarise-issue';

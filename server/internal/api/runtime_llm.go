@@ -562,7 +562,7 @@ func llmDecisionPrompt(in ActionInput) string {
 	b.WriteString("## Reply format\n")
 	b.WriteString("Exactly one JSON object, one of:\n")
 	b.WriteString(`{"kind":"advance","state":"<exact state name>","comment":"<one short sentence humans will see>"}`)
-	b.WriteString("\n- advance: move the issue forward; use a terminal state only when the work is genuinely finished\n")
+	b.WriteString("\n- advance: move the issue forward one step. You triage and hand work on; you do not move an issue to a completed state. Finished work is handed to a human with pause, or left for an external coding agent.\n")
 	b.WriteString(`{"kind":"handoff","to":"<agent name>","state":<state name or null>,"comment":"...","summary":"<=300 chars: what is done, what is blocked, what remains"}`)
 	b.WriteString("\n- handoff: another agent must continue; use only when nothing here can progress\n")
 	b.WriteString(`{"kind":"pause","comment":"<one short sentence: why no agent can proceed>","note":"where things stand, written for a human with zero context: what was done, what was found, what is blocked, what the human must decide or do"}`)

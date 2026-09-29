@@ -56,6 +56,10 @@ type API struct {
 	// githubDone stops the pull request poller (github_poll.go), which
 	// runs only when CONVERGE_GITHUB_REPOS lists repositories.
 	githubDone chan struct{}
+	// webhooks delivers signed outbound events. Nil skips enqueue, so
+	// tests that drive handlers without StartRuntime do not need endpoints.
+	webhooks    *webhookDispatcher
+	webhookDone chan struct{}
 	// startedAt is the process birth (the metrics plane's uptime source).
 	startedAt time.Time
 	// root is the router Mount was given; MCP tool calls re-enter it.
@@ -86,6 +90,9 @@ func (a *API) StartRuntime(ctx context.Context) {
 	a.runtime.Start(ctx)
 	a.sweeperDone = make(chan struct{})
 	go a.runClaimSweeper(ctx, a.sweeperDone)
+	a.webhooks = newWebhookDispatcher(a)
+	a.webhookDone = make(chan struct{})
+	go a.webhooks.run(ctx, a.webhookDone)
 	if len(a.cfg.GitHubRepos) > 0 {
 		a.githubDone = make(chan struct{})
 		go newGitHubPoller(a).run(ctx, a.githubDone)
@@ -109,6 +116,10 @@ func (a *API) StopRuntime() {
 	if a.githubDone != nil {
 		close(a.githubDone)
 		a.githubDone = nil
+	}
+	if a.webhookDone != nil {
+		close(a.webhookDone)
+		a.webhookDone = nil
 	}
 }
 
@@ -201,6 +212,7 @@ func (a *API) routes(r chi.Router) {
 		// Phase 2: pull requests a member links or unlinks by hand.
 		r.Post("/issues/{id}/pull_requests", a.handleLinkPullRequest)
 		r.Delete("/issues/{id}/pull_requests/{linkId}", a.handleUnlinkPullRequest)
+		r.Post("/issues/{id}/done-approval", a.handleApproveDone)
 		// D1: the agent handoff protocol (docs/spec/12).
 		r.Post("/issues/{id}/handoff", a.handleHandoff)
 		r.Post("/issues/{id}/subscribe", a.handleSubscribeIssue)
@@ -250,6 +262,11 @@ func (a *API) routes(r chi.Router) {
 		// M6: agent actors (swarm-capable machine members).
 		// D2: the swarm panel's fleet roster (read-only, any member).
 		r.Get("/workspaces/{id}/swarm", a.handleSwarmStatus)
+		r.Get("/workspaces/{id}/trace", a.handleTraceExport)
+		r.Get("/workspaces/{id}/webhooks", a.handleListWebhooks)
+		r.Post("/workspaces/{id}/webhooks", a.handleCreateWebhook)
+		r.Delete("/workspaces/{id}/webhooks/{endpointId}", a.handleDeleteWebhook)
+		r.Post("/workspaces/{id}/webhooks/{endpointId}/rotate", a.handleRotateWebhookSecret)
 		// The in-app inbox (docs/spec 12): the recipient's own rows, the
 		// one per-recipient read in the sync world; read state is the
 		// user's badge.

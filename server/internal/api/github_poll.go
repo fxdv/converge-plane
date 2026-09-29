@@ -558,6 +558,11 @@ func (g *githubPoller) recordFetchTx(ctx context.Context, tx pgx.Tx, before pull
 			return nil, err
 		}
 		recs = append(recs, rec)
+		if err := a.enqueueWebhookTx(ctx, tx, before.WorkspaceID, "pull_request.updated", map[string]any{
+			"issueId": before.IssueID, "repo": after.Repo, "number": after.Number, "state": state,
+		}); err != nil {
+			return nil, err
+		}
 	}
 	if state == "merged" && before.State != "merged" && a.cfg.GitHubAutoDone {
 		done, err := a.completeOnMergeTx(ctx, tx, before, pullRef{Repo: after.Repo, Number: after.Number})

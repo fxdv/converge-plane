@@ -1,7 +1,7 @@
-import { AI, Warning } from '@converge/ui/icons';
 import { RoleEnum } from '@converge/types';
-import { formatDistanceToNow } from 'date-fns';
+import { AI, Warning } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
@@ -18,11 +18,11 @@ import {
   useUpdateSwarmSettingsMutation,
 } from 'services/workspace';
 
-import { UserContext } from 'store/user-context';
 import { useContextStore } from 'store/global-context-provider';
+import { UserContext } from 'store/user-context';
 
-import { PausedIssueRow } from '../issues/swarm-panel/swarm-panel';
 import { SwarmAgentRow } from '../issues/swarm-panel/swarm-agent-row';
+import { PausedIssueRow } from '../issues/swarm-panel/swarm-panel';
 
 // spec cs:swarm:panel
 // spec cs:swarm:topology
@@ -96,7 +96,8 @@ export const SwarmPage = withApplicationStore(
     const activeAgents = (data?.agents ?? []).filter(
       (agent) => agent.status === 'ACTIVE',
     );
-    const designatedIsActive = !settings?.foremanAccountId ||
+    const designatedIsActive =
+      !settings?.foremanAccountId ||
       activeAgents.some((agent) => agent.id === settings.foremanAccountId);
 
     const save = () => {
@@ -126,13 +127,28 @@ export const SwarmPage = withApplicationStore(
             <div>
               <h2 className="text-base font-semibold">The swarm plane</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                One screen for the swarm: how the fleet coordinates, how
-                each agent is doing, and the work that waits on you.
-                Changes below take effect on the next swarm decision —
-                no restart, no redeploy.
+                One screen for the swarm: how the fleet coordinates, how each
+                agent is doing, and the work that waits on you. Changes below
+                take effect on the next swarm decision — no restart, no
+                redeploy.
               </p>
             </div>
           </section>
+
+          {data?.governance && (
+            <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 p-4">
+              <h3 className="text-sm font-semibold">
+                Last {data.governance.windowDays} days
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {data.governance.completed} done ·{' '}
+                {(data.governance.costPerDoneMicros / 1_000_000).toFixed(2)} USD
+                per done · {Math.round(data.governance.reworkRate * 100)}%
+                rework · {Math.round(data.governance.falseDoneRate * 100)}%
+                false done
+              </p>
+            </section>
+          )}
 
           <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 p-4 flex flex-col gap-4">
             <h3 className="text-sm font-semibold">Fleet settings</h3>
@@ -169,9 +185,7 @@ export const SwarmPage = withApplicationStore(
                 {data.brain.lastDecisionAt && (
                   <span className="text-muted-foreground">
                     · last decision{' '}
-                    {formatDistanceToNow(
-                      new Date(data.brain.lastDecisionAt),
-                    )}{' '}
+                    {formatDistanceToNow(new Date(data.brain.lastDecisionAt))}{' '}
                     ago
                   </span>
                 )}
@@ -204,8 +218,7 @@ export const SwarmPage = withApplicationStore(
                   </span>
                   {data.review.lastRunAt &&
                     ` · last pass ${formatDistanceToNow(new Date(data.review.lastRunAt))} ago`}
-                  {data.review.lastNote &&
-                    ` · ${data.review.lastNote}`}
+                  {data.review.lastNote && ` · ${data.review.lastNote}`}
                   {data.review.interval !== 'off' &&
                     ' — replies resume the swarm, cycled cards escalate to you'}
                 </span>
@@ -270,8 +283,8 @@ export const SwarmPage = withApplicationStore(
                 {!designatedIsActive && (
                   <span className="text-amber-600 dark:text-amber-400">
                     {' '}
-                    The designated foreman is not active; the fleet runs
-                    the auto rule.
+                    The designated foreman is not active; the fleet runs the
+                    auto rule.
                   </span>
                 )}
               </div>
@@ -331,9 +344,8 @@ export const SwarmPage = withApplicationStore(
             </h3>
             {(data?.pausedIssues ?? []).length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground">
-                Nothing is waiting on you. When the swarm cannot make
-                progress, the card parks here with the reason and the
-                path forward.
+                Nothing is waiting on you. When the swarm cannot make progress,
+                the card parks here with the reason and the path forward.
               </div>
             ) : (
               <div className="p-4 pt-2">
