@@ -19,6 +19,7 @@ export interface UpdateIssueParams {
   teamId: string;
 
   parentId?: string;
+  version?: number;
 
   cycleId?: string;
   projectId?: string;
@@ -34,10 +35,17 @@ export interface UpdateIssueParams {
   };
 }
 
-export function updateIssue({ id, teamId, ...otherParams }: UpdateIssueParams) {
+export function updateIssue({
+  id,
+  teamId,
+  version,
+  ...otherParams
+}: UpdateIssueParams) {
   return ajaxPost({
     url: `/api/v1/issues/${id}?teamId=${teamId}`,
     data: otherParams,
+    headers:
+      version && version > 0 ? { 'If-Match': `"${version}"` } : undefined,
   });
 }
 
@@ -60,7 +68,11 @@ export function useUpdateIssueMutation({
     try {
       issuesStore.updateIssue(otherParams, id);
 
-      return updateIssue({ ...otherParams, id });
+      return updateIssue({
+        ...otherParams,
+        id,
+        version: issue?.version,
+      });
     } catch (e) {
       issuesStore.updateIssue(issue, id);
       return undefined;

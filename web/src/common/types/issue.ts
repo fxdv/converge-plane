@@ -33,6 +33,8 @@ export interface IssueType {
   // Phase 2: the external agent holding a work-API claim, and since when.
   claimedById?: string | null;
   claimedAt?: string | null;
+  // The server's issue version. Edits send it as If-Match.
+  version?: number;
 
   projectId?: string;
   // v1.1: the project membership (spec cs:api:projects). The server

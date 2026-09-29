@@ -57,6 +57,10 @@ export const Issue = types.model('Issue', {
   // Payloads that predate the work API lack both, so they default to null.
   claimedById: types.optional(types.union(types.string, types.null), null),
   claimedAt: types.optional(types.union(types.string, types.null), null),
+  // The issue version the server last sent. Human edits send it as
+  // If-Match. Payloads from before the field was stored default to 0,
+  // and those edits omit the header.
+  version: types.optional(types.number, 0),
 });
 
 export const IssuesMap = types.map(Issue);

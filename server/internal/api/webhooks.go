@@ -156,6 +156,89 @@ func (a *API) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (a *API) handleListWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	workspaceID := chi.URLParam(r, "id")
+	if !a.webhookAdmin(ctx, w, p, workspaceID) {
+		return
+	}
+	rows, err := a.pool.Query(ctx, `
+		select id, event, attempts, last_error, delivered_at, next_attempt_at, created_at
+		from webhook_events
+		where workspace_id = $1
+		order by created_at desc
+		limit 20`, workspaceID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var (
+			id, event     string
+			attempts      int
+			last          *string
+			next, created time.Time
+			deliveredAt   *time.Time
+		)
+		if err := rows.Scan(&id, &event, &attempts, &last, &deliveredAt, &next, &created); err != nil {
+			a.internalError(w, err)
+			return
+		}
+		row := map[string]any{
+			"id": id, "event": event, "attempts": attempts,
+			"lastError": nil, "deliveredAt": nil,
+			"nextAttemptAt": next.UTC().Format(time.RFC3339),
+			"createdAt":     created.UTC().Format(time.RFC3339),
+		}
+		if last != nil {
+			row["lastError"] = *last
+		}
+		if deliveredAt != nil {
+			row["deliveredAt"] = deliveredAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		a.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *API) handleRetryWebhookDelivery(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFromContext(r.Context())
+	if p == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	ctx := r.Context()
+	workspaceID := chi.URLParam(r, "id")
+	eventID := chi.URLParam(r, "eventId")
+	if !a.webhookAdmin(ctx, w, p, workspaceID) {
+		return
+	}
+	tag, err := a.pool.Exec(ctx, `
+		update webhook_events
+		set next_attempt_at = now(), delivered_at = null, attempts = 0, last_error = null
+		where id = $1 and workspace_id = $2`, eventID, workspaceID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *API) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFromContext(r.Context())
 	if p == nil {

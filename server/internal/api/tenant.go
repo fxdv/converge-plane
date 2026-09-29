@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -62,6 +63,14 @@ type API struct {
 	webhookDone chan struct{}
 	// startedAt is the process birth (the metrics plane's uptime source).
 	startedAt time.Time
+	// instanceID distinguishes this process's own fan-out notices from
+	// another process's. Empty until StartRuntime.
+	instanceID string
+	fanoutDone chan struct{}
+	leaderStop chan struct{}
+	svcMu      sync.Mutex
+	servicesOn bool
+	stopOnce   sync.Once
 	// root is the router Mount was given; MCP tool calls re-enter it.
 	root http.Handler
 }
@@ -87,40 +96,26 @@ func New(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, authSvc *auth.
 // agents do not depend on the runtime. main calls it before the HTTP
 // listener and StopRuntime on the way out.
 func (a *API) StartRuntime(ctx context.Context) {
-	a.runtime.Start(ctx)
-	a.sweeperDone = make(chan struct{})
-	go a.runClaimSweeper(ctx, a.sweeperDone)
-	a.webhooks = newWebhookDispatcher(a)
-	a.webhookDone = make(chan struct{})
-	go a.webhooks.run(ctx, a.webhookDone)
-	if len(a.cfg.GitHubRepos) > 0 {
-		a.githubDone = make(chan struct{})
-		go newGitHubPoller(a).run(ctx, a.githubDone)
-		a.log.Info("tracking GitHub pull requests",
-			"repos", strings.Join(a.cfg.GitHubRepos, ","),
-			"authenticated", a.cfg.GitHubToken != "",
-			"interval", a.cfg.GitHubPollInterval,
-			"auto_done", a.cfg.GitHubAutoDone)
-	}
+	a.instanceID = newInstanceID()
+	a.fanoutDone = make(chan struct{})
+	a.leaderStop = make(chan struct{})
+	go a.listenFanout(ctx)
+	go a.leadRuntime(ctx)
 }
 
 // StopRuntime drains the runtime: the dispatcher stops and live workers
 // finish their current action. Best-effort — the process context does
 // the real forcing on shutdown.
 func (a *API) StopRuntime() {
-	a.runtime.Stop()
-	if a.sweeperDone != nil {
-		close(a.sweeperDone)
-		a.sweeperDone = nil
-	}
-	if a.githubDone != nil {
-		close(a.githubDone)
-		a.githubDone = nil
-	}
-	if a.webhookDone != nil {
-		close(a.webhookDone)
-		a.webhookDone = nil
-	}
+	a.stopOnce.Do(func() {
+		if a.leaderStop != nil {
+			close(a.leaderStop)
+		}
+		if a.fanoutDone != nil {
+			close(a.fanoutDone)
+		}
+	})
+	a.stopServices()
 }
 
 // wakeIssueOwner enqueues the issue's assignee for runtime work when the
@@ -265,6 +260,8 @@ func (a *API) routes(r chi.Router) {
 		r.Get("/workspaces/{id}/trace", a.handleTraceExport)
 		r.Get("/workspaces/{id}/webhooks", a.handleListWebhooks)
 		r.Post("/workspaces/{id}/webhooks", a.handleCreateWebhook)
+		r.Get("/workspaces/{id}/webhooks/deliveries", a.handleListWebhookDeliveries)
+		r.Post("/workspaces/{id}/webhooks/deliveries/{eventId}/retry", a.handleRetryWebhookDelivery)
 		r.Delete("/workspaces/{id}/webhooks/{endpointId}", a.handleDeleteWebhook)
 		r.Post("/workspaces/{id}/webhooks/{endpointId}/rotate", a.handleRotateWebhookSecret)
 		// The in-app inbox (docs/spec 12): the recipient's own rows, the

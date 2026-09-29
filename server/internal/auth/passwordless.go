@@ -90,7 +90,10 @@ type Service struct {
 	// emailLimit bounds code issuance per address.
 	emailLimit *netx.Limiter
 	revoked    *revocations
-	origins    map[string]bool
+	// live remembers sessions this process just confirmed are not
+	// revoked, so the shared check is not a query on every request.
+	live    *revocations
+	origins map[string]bool
 }
 
 // NewService builds the auth service. A nil mailer disables sign-in
@@ -104,6 +107,7 @@ func NewService(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, mailer 
 		ipLimit:    netx.NewLimiter(authIPRate, authIPBurst),
 		emailLimit: netx.NewLimiter(authEmailRate, authEmailBurst),
 		revoked:    newRevocations(),
+		live:       newRevocations(),
 		origins:    trustedOrigins(cfg.WebOrigin, cfg.PublicURL),
 	}
 }

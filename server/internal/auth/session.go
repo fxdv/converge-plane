@@ -31,6 +31,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -177,7 +178,38 @@ func (s *Service) accessClaims(token string) (tokenClaims, bool) {
 	if !ok || s.revoked.has(c.Session) {
 		return tokenClaims{}, false
 	}
+	if s.pool != nil && (s.live == nil || !s.live.has(c.Session)) && s.sessionRevoked(c.Session) {
+		s.revoked.add(c.Session, time.Now().Add(s.cfg.AccessTokenTTL))
+		return tokenClaims{}, false
+	}
+	if s.pool != nil && s.live != nil {
+		s.live.add(c.Session, time.Now().Add(2*time.Second))
+	}
 	return c, true
+}
+
+// NoteRevoked marks a session revoked on this process. The listener calls
+// it when another process notifies converge_session.
+func (s *Service) NoteRevoked(sessionID string) {
+	if s == nil || sessionID == "" {
+		return
+	}
+	until := time.Now().Add(s.cfg.AccessTokenTTL)
+	if s.cfg.AccessTokenTTL <= 0 {
+		until = time.Now().Add(time.Hour)
+	}
+	s.revoked.add(sessionID, until)
+}
+
+func (s *Service) sessionRevoked(id string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	var revoked bool
+	err := s.pool.QueryRow(ctx, `select revoked_at is not null from sessions where id = $1`, id).Scan(&revoked)
+	if err != nil {
+		return false
+	}
+	return revoked
 }
 
 // ValidateAccess verifies an access token (Authorization: Bearer value or
