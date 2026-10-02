@@ -74,6 +74,8 @@ type githubPoller struct {
 
 	mu          sync.Mutex
 	pausedUntil time.Time
+	// issueCursor rotates which allowlisted repository is listed next.
+	issueCursor int
 }
 
 func newGitHubPoller(a *API) *githubPoller {
@@ -108,6 +110,11 @@ func (g *githubPoller) run(ctx context.Context, done <-chan struct{}) {
 		case <-t.C:
 			if _, err := g.pollOnce(ctx); err != nil && ctx.Err() == nil {
 				g.a.log.Warn("pull request poll failed", "error", err)
+			}
+			if g.a.cfg.GitHubIssueTeam != "" {
+				if err := g.importOnce(ctx); err != nil && ctx.Err() == nil {
+					g.a.log.Warn("github issue import failed", "error", err)
+				}
 			}
 		}
 	}

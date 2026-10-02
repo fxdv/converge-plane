@@ -160,6 +160,10 @@ type Config struct {
 	// GitHubAutoDone moves an issue to its team's first Done state once
 	// a linked pull request merges and none is still open.
 	GitHubAutoDone bool
+	// GitHubIssueTeam is the team that receives open issues read from
+	// the allowlist. Empty leaves that read off. Converge does not
+	// write those issues back to GitHub.
+	GitHubIssueTeam string
 	// TraceSigningKey signs the JSONL run export. Empty leaves the
 	// export unmounted in spirit: the handler answers 404.
 	TraceSigningKey string
@@ -211,6 +215,7 @@ type Config struct {
 //	CONVERGE_GITHUB_POLL_INTERVAL
 //	                           how often an open PR is checked, 10s-1h (default "1m")
 //	CONVERGE_GITHUB_AUTO_DONE  move the issue to Done when its PRs merge (default "true")
+//	CONVERGE_GITHUB_ISSUE_TEAM team id that receives open issues read from the allowlist (default "": off)
 //	CONVERGE_GITHUB_WEBHOOK_SECRET
 //	                           webhook secret, >= 32 chars; mounts POST /api/github/webhook (default "": off)
 func Load() (Config, error) {
@@ -456,6 +461,13 @@ func loadGitHub(cfg *Config) error {
 	default:
 		return fmt.Errorf("invalid CONVERGE_GITHUB_AUTO_DONE %q: expected true or false", os.Getenv("CONVERGE_GITHUB_AUTO_DONE"))
 	}
+	cfg.GitHubIssueTeam = strings.ToLower(strings.TrimSpace(os.Getenv("CONVERGE_GITHUB_ISSUE_TEAM")))
+	if cfg.GitHubIssueTeam != "" && !githubTeamID.MatchString(cfg.GitHubIssueTeam) {
+		return fmt.Errorf("invalid CONVERGE_GITHUB_ISSUE_TEAM %q: expected a team id", os.Getenv("CONVERGE_GITHUB_ISSUE_TEAM"))
+	}
+	if cfg.GitHubIssueTeam != "" && len(cfg.GitHubRepos) == 0 {
+		return fmt.Errorf("CONVERGE_GITHUB_ISSUE_TEAM is set but CONVERGE_GITHUB_REPOS is empty: list the repositories whose issues to read")
+	}
 	cfg.GitHubWebhookSecret = strings.TrimSpace(os.Getenv("CONVERGE_GITHUB_WEBHOOK_SECRET"))
 	switch {
 	case cfg.GitHubWebhookSecret == "":
@@ -470,6 +482,7 @@ func loadGitHub(cfg *Config) error {
 var (
 	githubOwnerRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,38}$`)
 	githubNameRe  = regexp.MustCompile(`^[a-z0-9._-]{1,100}$`)
+	githubTeamID  = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 )
 
 // ValidGitHubOwner reports whether s is a well-formed lower-cased GitHub

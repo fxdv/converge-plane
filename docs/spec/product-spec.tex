@@ -365,7 +365,9 @@ GitHub pull requests\cs{agents:prlinks} & A \texttt{pull\_request}
   open, draft, merged, or closed on the card and issue; members unlink
   any PR. Once every linked PR has merged and none is open, the issue
   moves to the team's first Done state, recorded as a change by the
-  system & \shipped\\
+  system. With \texttt{CONVERGE\_GITHUB\_ISSUE\_TEAM} set, open issues
+  in a listed repository are copied into that team's queue; the copy is
+  not written back & \shipped\\
 Evidence-gated Done\cs{agents:evidence} & An agent cannot move an issue
   to a completed state unless a linked pull request has merged and none
   is still open, a combined commit status the server read is green, or a

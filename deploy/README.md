@@ -91,6 +91,7 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_GITHUB_TOKEN`    | `""`                              | Read-only GitHub token; needed for private repositories |
 | `CONVERGE_GITHUB_POLL_INTERVAL` | `1m`                         | How often an open pull request is checked, `10s` to `1h` |
 | `CONVERGE_GITHUB_AUTO_DONE` | `true`                           | Move an issue to Done once its pull requests merge   |
+| `CONVERGE_GITHUB_ISSUE_TEAM` | `""` (off)                     | Team id that receives open issues read from the allowlist. Converge does not write them back |
 | `CONVERGE_GITHUB_WEBHOOK_SECRET` | `""` (off)                  | Secret of a GitHub webhook, at least 32 characters; turns on `POST /api/github/webhook` ([below](#github-pull-requests)) |
 
 The agent runtime and model-fleet variables (`CONVERGE_RUNTIME*`,
@@ -412,6 +413,10 @@ How it behaves:
   API path from the owner, name, and number it parsed, and follows
   redirects only on `api.github.com`. An issue tracks at most 20 pull
   requests.
+- `CONVERGE_GITHUB_ISSUE_TEAM` is a team id. Open issues in each
+  concrete listed repository are copied into that team's queue, once.
+  An `owner/*` entry is not listed. Converge does not update the GitHub
+  issue, and a close on GitHub does not move the Converge issue.
 - `CONVERGE_GITHUB_AUTO_DONE=false` keeps the tracking but never moves an
   issue. Only listed repositories are read: taking one off the list, or
   unsetting `CONVERGE_GITHUB_REPOS`, stops its checks, and cards keep the
@@ -628,7 +633,8 @@ Two API processes can serve one board:
 - Refresh and sign-out are checked against the `sessions` table. A
   revoked session is also published on `converge_session`, and each
   process re-reads `revoked_at` (cached for about two seconds when the
-  row is still live). Sign-in rate limits stay per process.
+  row is still live). Sign-in rate limits share `auth_rate_buckets`.
+  If that read fails, the process uses its own bucket.
 - Request rate limits for signed-in accounts share `rate_buckets`. If
   that read fails, the process uses its own bucket.
 - After a commit, the writer publishes to its own subscribers and
