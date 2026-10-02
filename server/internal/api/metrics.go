@@ -98,6 +98,7 @@ type productMetrics struct {
 	IssuesCreated7d  int `json:"issuesCreated7d"`
 	IssuesDone24h    int `json:"issuesDone24h"`
 	IssuesDone7d     int `json:"issuesDone7d"`
+	IssuesDoneAll    int `json:"issuesDoneAll"`
 	Comments24h      int `json:"comments24h"`
 	Comments7d       int `json:"comments7d"`
 	Handoffs24h      int `json:"handoffs24h"`
@@ -154,6 +155,10 @@ type swarmMetrics struct {
 	// Completed issues that had spend data in the window (the sample the
 	// two medians above are over; 0 makes them "no data", not "free").
 	CostedIssues24h int `json:"costedIssues24h"`
+	// Reported cost is agent_runs.cost_micros on issues that reached Done
+	// in the window. It is not model tokens.
+	ReportedCostPerDoneMicros24h int64 `json:"reportedCostPerDoneMicros24h"`
+	ReportedCostIssues24h        int   `json:"reportedCostIssues24h"`
 	// The floor's share of the runtime's decisions in the window (the
 	// fallback rate): 1.0 means the model never decided, 0 means it
 	// never fell back. 0 also when nothing reported (a floor-only fleet).
@@ -163,7 +168,8 @@ type swarmMetrics struct {
 	LongestHandoffChain24h int          `json:"longestHandoffChain24h"`
 	CompletedByAgents7d    int          `json:"completedByAgents7d"`
 	CompletedByHumans7d    int          `json:"completedByHumans7d"`
-	AgentShare7d           float64      `json:"agentShare7d"` // agent completions / all completions, 7d
+	Completions7d          int          `json:"completions7d"`
+	AgentShare7d           float64      `json:"agentShare7d"` // agent-credited completions / all completions, 7d
 	Roster                 []swarmAgent `json:"roster"`
 }
 
@@ -406,6 +412,13 @@ func (a *API) productSection(ctx context.Context, ws string, m *productMetrics) 
 		return err
 	}
 	m.IssuesDone7d = n
+	if n, err = countIn(`
+		select count(*) from issue_history h
+		where h.workspace_id = $1 and h.action = 'updated' and h.field = 'status'
+		  and lower(h.to_value) in (` + completedStatusIDsSQL + `)`); err != nil {
+		return err
+	}
+	m.IssuesDoneAll = n
 	return nil
 }
 
@@ -594,6 +607,24 @@ func (a *API) swarmSection(ctx context.Context, ws string, m *swarmMetrics) erro
 		return err
 	}
 	cids.Close()
+	err = a.pool.QueryRow(ctx, `
+		select coalesce(sum(cost), 0), count(*)
+		from (
+			select h.issue_id, coalesce(sum(r.cost_micros), 0) as cost
+			from issue_history h
+			left join agent_runs r on r.issue_id = h.issue_id
+			where h.workspace_id = $1 and h.action = 'updated' and h.field = 'status'
+			  and h.created_at > now() - `+guardWindowLiteral+`
+			  and lower(h.to_value) in (`+completedStatusIDsSQL+`)
+			group by h.issue_id
+		) s
+		where cost > 0`, ws).Scan(&m.ReportedCostPerDoneMicros24h, &m.ReportedCostIssues24h)
+	if err != nil {
+		return err
+	}
+	if m.ReportedCostIssues24h > 0 {
+		m.ReportedCostPerDoneMicros24h /= int64(m.ReportedCostIssues24h)
+	}
 	if n := len(spends); n > 0 {
 		m.CostedIssues24h = n
 		m.CostMedianTokens24h = medianInt64(spends)
@@ -624,23 +655,29 @@ func (a *API) swarmSection(ctx context.Context, ws string, m *swarmMetrics) erro
 		return err
 	}
 
-	// Agent share of completed work, 7d: the actor's kind on the
-	// completion row (an agent and a human both write the same
-	// transition; the kind is what splits the credit).
+	// Agent share of completed work, 7d. The denominator is every move
+	// into a completed status, including a system move (no actor). A
+	// system move counts for the agent when that issue has a run: that
+	// is how an agent finishes work the server then marks Done.
 	err = a.pool.QueryRow(ctx, `
-		select count(*) filter (where a.kind = $2),
-		       count(*) filter (where a.kind <> $2)
+		select count(*) filter (
+		         where a.kind = $2
+		            or (h.actor_id is null and exists (
+		                  select 1 from agent_runs r where r.issue_id = h.issue_id))
+		       ),
+		       count(*) filter (where a.kind is not null and a.kind <> $2),
+		       count(*)
 		from issue_history h
-		join accounts a on a.id = h.actor_id
+		left join accounts a on a.id = h.actor_id
 		where h.workspace_id = $1 and h.action = 'updated' and h.field = 'status'
 		  and h.created_at > now() - interval '7 days'
 		  and lower(h.to_value) in (`+completedStatusIDsSQL+`)`,
-		ws, auth.AccountKindAgent).Scan(&m.CompletedByAgents7d, &m.CompletedByHumans7d)
+		ws, auth.AccountKindAgent).Scan(&m.CompletedByAgents7d, &m.CompletedByHumans7d, &m.Completions7d)
 	if err != nil {
 		return err
 	}
-	if denom := m.CompletedByAgents7d + m.CompletedByHumans7d; denom > 0 {
-		m.AgentShare7d = float64(m.CompletedByAgents7d) / float64(denom)
+	if m.Completions7d > 0 {
+		m.AgentShare7d = float64(m.CompletedByAgents7d) / float64(m.Completions7d)
 	}
 	return nil
 }

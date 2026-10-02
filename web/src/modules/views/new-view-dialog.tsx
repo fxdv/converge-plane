@@ -31,8 +31,8 @@ import { useCreateViewMutation } from 'services/views';
 import { useContextStore } from 'store/global-context-provider';
 
 export const NewViewSchema = z.object({
-  name: z.string().min(6),
-  description: z.string().min(6),
+  name: z.string().min(6, 'Name needs at least 6 characters.'),
+  description: z.string().min(6, 'Description needs at least 6 characters.'),
 });
 
 interface NewViewDialogProps {

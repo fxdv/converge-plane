@@ -3,16 +3,18 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
 } from '@converge/ui/components/breadcrumb';
-import { buttonVariants } from '@converge/ui/components/button';
+import { Button } from '@converge/ui/components/button';
 import { TeamIcon } from '@converge/ui/components/team-icon';
-import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import * as React from 'react';
 
 import { HeaderLayout } from 'common/header-layout';
 
 import { useCurrentTeam } from 'hooks/teams';
+
+import { NewViewDialog } from './new-view-dialog';
 
 interface HeaderProps {
   title: string;
@@ -20,22 +22,19 @@ interface HeaderProps {
 
 export const Header = observer(({ title }: HeaderProps) => {
   const team = useCurrentTeam();
+  const [open, setOpen] = React.useState(false);
 
   const {
     query: { workspaceSlug },
   } = useRouter();
 
   const actions = (
-    <Link
-      href={
-        team
-          ? `/${workspaceSlug}/team/${team?.identifier}/all`
-          : `/${workspaceSlug}/all`
-      }
-      className={cn(buttonVariants({ variant: 'secondary' }))}
-    >
-      New view
-    </Link>
+    <>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        New view
+      </Button>
+      <NewViewDialog open={open} setOpen={setOpen} />
+    </>
   );
 
   return (

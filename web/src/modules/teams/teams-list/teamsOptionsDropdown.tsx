@@ -25,11 +25,13 @@ interface TeamOptionsDropdownProps {
     createdAt: string;
   };
   teamAccessList: string[];
+  implicitAccess?: boolean;
 }
 
 export function TeamOptionsDropdown({
   team,
   teamAccessList,
+  implicitAccess = false,
 }: TeamOptionsDropdownProps) {
   const { toast } = useToast();
   const currentUser = React.useContext(UserContext);
@@ -75,7 +77,7 @@ export function TeamOptionsDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
-            {!hasTeamAccess && (
+            {!hasTeamAccess && !implicitAccess && (
               <DropdownMenuItem
                 onClick={() =>
                   addTeamMember({

@@ -365,7 +365,7 @@ func (a *API) handleListNotifications(w http.ResponseWriter, r *http.Request) {
 		var n notification
 		var actorID *string
 		var createdAt time.Time
-		var readAt *string
+		var readAt *time.Time
 		if err := rows.Scan(&n.ID, &n.IssueID, &n.IssueNumber, &n.Type, &actorID, &n.ActorName, &createdAt, &readAt); err != nil {
 			a.internalError(w, err)
 			return
@@ -374,7 +374,7 @@ func (a *API) handleListNotifications(w http.ResponseWriter, r *http.Request) {
 		n.ActorID = actorID
 		n.RecipientID = p.AccountID
 		n.CreatedAt = createdAt.UTC().Format(iso)
-		n.ReadAt = readAt
+		n.ReadAt = isoPtr(readAt)
 		out = append(out, n)
 	}
 	if err := rows.Err(); err != nil {
@@ -413,14 +413,16 @@ func (a *API) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request)
 
 	var n notification
 	var createdAt time.Time
+	var readAt *time.Time
 	err = tx.QueryRow(ctx, `
 		select n.id, n.workspace_id::text, n.issue_id::text, n.issue_number, n.type,
-		       a.id::text, a.name, n.created_at, n.read_at, n.account_id::text
+		       coalesce(a.id::text, n.actor_id::text), coalesce(a.name, n.actor_name),
+		       n.created_at, n.read_at, n.account_id::text
 		from notifications n
-		join accounts a on a.id = n.actor_id
+		left join accounts a on a.id = n.actor_id
 		where n.id = $1 and n.account_id = $2`, id, p.AccountID).Scan(
 		&n.ID, &n.WorkspaceID, &n.IssueID, &n.IssueNumber, &n.Type,
-		&n.ActorID, &n.ActorName, &createdAt, &n.ReadAt, &n.RecipientID)
+		&n.ActorID, &n.ActorName, &createdAt, &readAt, &n.RecipientID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
@@ -430,6 +432,7 @@ func (a *API) handleMarkNotificationRead(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	n.CreatedAt = createdAt.UTC().Format(iso)
+	n.ReadAt = isoPtr(readAt)
 	if n.ReadAt == nil {
 		now := time.Now().UTC().Format(iso)
 		n.ReadAt = &now
@@ -572,6 +575,14 @@ func (a *API) handleMarkNotificationsRead(w http.ResponseWriter, r *http.Request
 // the database (the routes serve it; the collector builds the same
 // shape). The pointers ride as null where the row has none: the wire
 // discipline is present or null, never absent.
+func isoPtr(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.UTC().Format(iso)
+	return &s
+}
+
 func (a *API) notificationData(n *notification) map[string]any {
 	return map[string]any{
 		"id":          n.ID,
@@ -613,7 +624,7 @@ func (a *API) collectNotifications(ctx context.Context, workspaceID, accountID s
 		var n notification
 		var actorID, actorName *string
 		var createdAt time.Time
-		var readAt *string
+		var readAt *time.Time
 		if err := rows.Scan(&n.ID, &n.IssueID, &n.IssueNumber, &n.Type,
 			&actorID, &actorName, &createdAt, &readAt); err != nil {
 			return nil, err
@@ -623,7 +634,7 @@ func (a *API) collectNotifications(ctx context.Context, workspaceID, accountID s
 		n.ActorName = actorName
 		n.RecipientID = accountID
 		n.CreatedAt = createdAt.UTC().Format(iso)
-		n.ReadAt = readAt
+		n.ReadAt = isoPtr(readAt)
 		rec, err := emit(n.ID, a.notificationData(&n))
 		if err != nil {
 			return nil, err

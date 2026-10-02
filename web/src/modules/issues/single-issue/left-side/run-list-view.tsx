@@ -37,7 +37,7 @@ const END_LABEL: Record<string, string> = {
   superseded: 'restarted',
   reassigned: 'reassigned',
   paused: 'paused for a human',
-  closed: 'issue closed',
+  closed: '',
   revoked: 'revoked',
 };
 
@@ -134,16 +134,19 @@ const RunRow = observer(({ run }: { run: AgentRunType }) => {
         <span className="text-foreground truncate">
           {agent?.fullname ?? 'agent'}
         </span>
-        <span
-          className={`text-xs shrink-0 ${run.outcome ? (OUTCOME_STYLE[run.outcome] ?? '') : 'text-muted-foreground'}`}
-        >
-          {running
-            ? 'working'
-            : (run.outcome ??
-              END_LABEL[run.endReason ?? ''] ??
-              run.endReason ??
-              'ended')}
-        </span>
+        {running ||
+        run.outcome ||
+        (run.endReason && run.endReason !== 'closed') ? (
+          <span
+            className={`text-xs shrink-0 ${run.outcome ? (OUTCOME_STYLE[run.outcome] ?? '') : 'text-muted-foreground'}`}
+          >
+            {running
+              ? 'working'
+              : (run.outcome ??
+                END_LABEL[run.endReason ?? ''] ??
+                run.endReason)}
+          </span>
+        ) : null}
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
           {run.costMicros > 0
@@ -173,7 +176,11 @@ const RunRow = observer(({ run }: { run: AgentRunType }) => {
             {formatTokens(run.outputTokens)} out · {formatCost(run.costMicros)}{' '}
             (agent-reported)
             {run.endedAt
-              ? ` · ended ${new Date(run.endedAt).toLocaleString()} (${END_LABEL[run.endReason ?? ''] ?? run.endReason})`
+              ? ` · ended ${new Date(run.endedAt).toLocaleString()}${
+                  run.endReason && run.endReason !== 'closed'
+                    ? ` (${END_LABEL[run.endReason] ?? run.endReason})`
+                    : ''
+                }`
               : ''}
           </div>
           {run.summary ? (
