@@ -56,7 +56,7 @@ export function NewIssue({
       createOutsideFunction ? NewIssueTemplateSchema : NewIssueSchema,
     ) as Resolver<NewIssueFormValues>,
     defaultValues: {
-      issues: [defaultValues],
+      issues: [{ ...defaultValues, title: defaultValues.title ?? '' }],
     },
   });
 

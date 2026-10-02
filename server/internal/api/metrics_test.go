@@ -80,7 +80,7 @@ func TestMetricsWireContract(t *testing.T) {
 	equalStrings(t, swarmKeys(t, resp.Product),
 		[]string{"comments", "comments24h", "comments7d", "handoffs24h", "handoffs7d",
 			"historyRows", "issues", "issuesCreated24h", "issuesCreated7d",
-			"issuesDone24h", "issuesDone7d", "labels", "members", "membersActive",
+			"issuesDone24h", "issuesDone7d", "issuesDoneAll", "labels", "members", "membersActive",
 			"projects", "states", "teams", "views", "workflows"})
 	equalStrings(t, swarmKeys(t, resp.Product.States[0]),
 		[]string{"category", "count", "name"})
@@ -91,11 +91,12 @@ func TestMetricsWireContract(t *testing.T) {
 		[]string{"acquired", "idle", "max"})
 	equalStrings(t, swarmKeys(t, resp.Swarm),
 		[]string{"activeAgents", "agentShare7d", "agents", "busy",
-			"completedByAgents7d", "completedByHumans7d", "completions24h",
+			"completedByAgents7d", "completedByHumans7d", "completions24h", "completions7d",
 			"costMeanTokens24h", "costMedianTokens24h", "costedIssues24h",
 			"fallbackRate24h", "handoffs24h", "longestHandoffChain24h",
 			"meanResumeMs", "medianResumeMs", "openIssues", "ops24h",
-			"pauseRate24h", "pausedIssues", "pauses24h", "roster", "tokens24h"})
+			"pauseRate24h", "pausedIssues", "pauses24h",
+			"reportedCostIssues24h", "reportedCostPerDoneMicros24h", "roster", "tokens24h"})
 	equalStrings(t, swarmKeys(t, resp.Proxy),
 		[]string{"agentBurn", "mode", "model", "nodes", "rateBurst", "rateRps", "timeout"})
 	equalStrings(t, swarmKeys(t, resp.Proxy.Nodes[0]),

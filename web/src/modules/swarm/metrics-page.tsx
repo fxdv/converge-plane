@@ -13,6 +13,7 @@ import * as React from 'react';
 import { HeaderLayout } from 'common/header-layout';
 import { AppLayout } from 'common/layouts/app-layout';
 import { MainLayout } from 'common/layouts/main-layout';
+import { formatCost } from 'common/lib/run-format';
 import { withApplicationStore } from 'common/wrappers/with-application-store';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
@@ -146,7 +147,7 @@ const Vitals = ({ data }: { data: WorkspaceMetrics }) => {
     tone?: 'amber' | 'red';
   }> = [
     { label: 'Open issues', value: String(data.swarm.openIssues) },
-    { label: 'Done 7d', value: String(data.product.issuesDone7d) },
+    { label: 'Done moves 7d', value: String(data.product.issuesDone7d) },
     {
       label: 'Agents busy',
       value: `${data.swarm.busy}/${data.swarm.agents}`,
@@ -271,12 +272,20 @@ const SwarmSection = ({ swarm }: { swarm: SwarmMetrics }) => (
           {swarm.meanResumeMs > 0 ? formatMs(swarm.meanResumeMs) : '—'}
         </span>
       </span>
-      <span>
-        Cost per done 24h{' '}
+      <span title="Reported micro-USD on agent runs for issues that reached Done in 24 hours">
+        Reported cost per done 24h{' '}
+        <span className="font-mono tabular-nums">
+          {swarm.reportedCostIssues24h > 0
+            ? formatCost(swarm.reportedCostPerDoneMicros24h)
+            : '—'}
+        </span>
+      </span>
+      <span title="Model tokens the runtime attributed to issues that reached Done in 24 hours">
+        Model tokens per done 24h{' '}
         <span className="font-mono tabular-nums">
           {swarm.costedIssues24h > 0
-            ? `${formatCount(swarm.costMedianTokens24h)} median · ${swarm.costedIssues24h} issues`
-            : 'no data'}
+            ? `${formatCount(swarm.costMedianTokens24h)} median`
+            : '—'}
         </span>
       </span>
       <span>
@@ -291,10 +300,10 @@ const SwarmSection = ({ swarm }: { swarm: SwarmMetrics }) => (
           {String(swarm.longestHandoffChain24h)}
         </span>
       </span>
-      <span>
-        Agent share of 7d completions{' '}
+      <span title="Status changes into Done in 7 days. A system move counts for the agent when that issue has a run.">
+        Agent share of 7d Done moves{' '}
         <span className="font-mono tabular-nums">
-          {formatPct(swarm.agentShare7d)}
+          {swarm.completions7d > 0 ? formatPct(swarm.agentShare7d) : '—'}
         </span>
       </span>
     </div>
@@ -457,7 +466,7 @@ const ProductSection = ({ product }: { product: ProductMetrics }) => {
             <Td>Issues done</Td>
             <Td right>{product.issuesDone24h}</Td>
             <Td right>{product.issuesDone7d}</Td>
-            <Td right>—</Td>
+            <Td right>{product.issuesDoneAll}</Td>
           </tr>
           <tr>
             <Td>Comments</Td>
@@ -795,7 +804,7 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   add(
     'swarm',
-    'cost per done (median)',
+    'model tokens per done (median)',
     s.costedIssues24h > 0 ? formatCount(s.costMedianTokens24h) : '—',
     s.costedIssues24h > 0 ? 'tokens' : '',
     '24h',
@@ -803,7 +812,7 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   add(
     'swarm',
-    'cost per done (mean)',
+    'model tokens per done (mean)',
     s.costedIssues24h > 0 ? formatCount(s.costMeanTokens24h) : '—',
     s.costedIssues24h > 0 ? 'tokens' : '',
     '24h',
@@ -811,7 +820,17 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   add(
     'swarm',
-    'done with spend data',
+    'reported cost per done',
+    s.reportedCostIssues24h > 0
+      ? formatCost(s.reportedCostPerDoneMicros24h)
+      : '—',
+    s.reportedCostIssues24h > 0 ? 'reported micro-USD' : '',
+    '24h',
+    s.reportedCostPerDoneMicros24h,
+  );
+  add(
+    'swarm',
+    'done with model-token data',
     String(s.costedIssues24h),
     'count',
     '24h',
@@ -843,8 +862,8 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   add(
     'swarm',
-    'agent share of completions',
-    formatPct(s.agentShare7d),
+    'agent share of Done moves',
+    s.completions7d > 0 ? formatPct(s.agentShare7d) : '—',
     '',
     '7d',
     Math.round(s.agentShare7d * 1000) / 10,

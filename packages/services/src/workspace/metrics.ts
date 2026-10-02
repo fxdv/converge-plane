@@ -35,6 +35,7 @@ export interface ProductMetrics {
   issuesCreated7d: number;
   issuesDone24h: number;
   issuesDone7d: number;
+  issuesDoneAll: number;
   comments24h: number;
   comments7d: number;
   handoffs24h: number;
@@ -95,8 +96,14 @@ export interface SwarmMetrics {
   longestHandoffChain24h: number;
   completedByAgents7d: number;
   completedByHumans7d: number;
-  /** agent completions / all completions, 7d */
+  /** every move into Done in 7 days, including a system move */
+  completions7d: number;
+  /** agent-credited Done moves / completions7d; 0 when the denominator is 0 */
   agentShare7d: number;
+  /** mean of agent_runs.cost_micros on issues that reached Done in 24 hours */
+  reportedCostPerDoneMicros24h: number;
+  /** issues in that mean (0 means the cost reads as no sample) */
+  reportedCostIssues24h: number;
   roster: SwarmAgent[];
 }
 

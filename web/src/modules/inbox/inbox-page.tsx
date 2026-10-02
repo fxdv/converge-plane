@@ -15,6 +15,7 @@ import { withApplicationStore } from 'common/wrappers/with-application-store';
 import { useCurrentWorkspace } from 'hooks/workspace';
 
 import {
+  listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
 } from 'services/workspace';
@@ -137,6 +138,42 @@ export const InboxPage = withApplicationStore(() => {
   const { notificationsStore } = useContextStore();
   const workspace = useCurrentWorkspace();
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  const [reload, setReload] = React.useState(0);
+  const [settled, setSettled] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+
+  // The live feed only keeps rows that arrived after this tab loaded.
+  // Opening the inbox reads this account's rows first, so the empty line
+  // cannot appear while a stored notice is still unread from the server.
+  React.useEffect(() => {
+    if (!workspace) {
+      return undefined;
+    }
+    let cancel = false;
+    setSettled(false);
+    setFailed(false);
+    listNotifications(workspace.id)
+      .then(async (incoming) => {
+        if (cancel) {
+          return;
+        }
+        for (const row of incoming ?? []) {
+          notificationsStore.update(row);
+          await convergeDatabase.notifications.put(row);
+        }
+        if (!cancel) {
+          setSettled(true);
+        }
+      })
+      .catch(() => {
+        if (!cancel) {
+          setFailed(true);
+        }
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [workspace, notificationsStore, reload]);
 
   const rows = workspace ? notificationsStore.forWorkspace(workspace.id) : [];
   const unread = workspace ? notificationsStore.unreadIn(workspace.id) : [];
@@ -188,7 +225,22 @@ export const InboxPage = withApplicationStore(() => {
     >
       <div className="p-6 max-w-3xl mx-auto w-full">
         <div className="border border-grayAlpha-100 dark:border-grayAlpha-300">
-          {rows.length === 0 ? (
+          {rows.length === 0 && !settled && !failed ? (
+            <div className="p-6 text-sm text-muted-foreground">
+              Loading the inbox…
+            </div>
+          ) : rows.length === 0 && failed ? (
+            <div className="p-6 text-sm text-muted-foreground">
+              Could not load the inbox.{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setReload((n) => n + 1)}
+              >
+                Retry
+              </button>
+            </div>
+          ) : rows.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground leading-relaxed">
               Nothing here yet. Assignments, comments, and moves to Done show up
               here.

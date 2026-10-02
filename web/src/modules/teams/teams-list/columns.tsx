@@ -30,8 +30,11 @@ export const useProjectColumns = (): Array<ColumnDef<TeamType>> => {
       });
     },
   });
-  const teamAccessList =
-    workspaceStore.getUserData(currentUser.id)?.teamIds ?? [];
+  const membership = workspaceStore.getUserData(currentUser.id);
+  const teamAccessList = membership?.teamIds ?? [];
+  const role = (membership?.role ?? '').toLowerCase();
+  // Owner and admin can open every team without a membership row.
+  const implicitAccess = role === 'owner' || role === 'admin';
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const day = date.getDate().toString().padStart(2, '0');
@@ -86,6 +89,8 @@ export const useProjectColumns = (): Array<ColumnDef<TeamType>> => {
               <Badge variant="secondary" className="flex items-center gap-1">
                 <CheckLine size={14} /> Joined
               </Badge>
+            ) : implicitAccess ? (
+              <Badge variant="secondary">Can open</Badge>
             ) : (
               <Button
                 variant="ghost"
@@ -128,6 +133,7 @@ export const useProjectColumns = (): Array<ColumnDef<TeamType>> => {
           <div className="capitalize pl-4 py-2 flex items-center gap-1">
             <TeamOptionsDropdown
               teamAccessList={teamAccessList}
+              implicitAccess={implicitAccess}
               team={row.original}
             />
           </div>

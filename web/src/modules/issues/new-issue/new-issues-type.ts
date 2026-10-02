@@ -6,7 +6,7 @@ export const NewIssueSchema = z.object({
   issues: z.array(
     z.object({
       description: z.optional(z.string()),
-      title: z.string(),
+      title: z.string().min(1, 'Title is required.'),
       stateId: z.string(),
       labelIds: z.array(z.string()),
       priority: z.number(),
