@@ -35,6 +35,13 @@ export interface SwarmAgent {
   pausedIssueCount: number;
   lastActivityAt: string | null;
   lastHandoff: SwarmHandoff | null;
+  // The issue this agent most recently reported a run on.
+  lastIssue: {
+    id: string;
+    number: number;
+    title: string;
+    teamId: string;
+  } | null;
   // The quiet-guard signals over the shared 24h window: handoffs
   // received (the loop guard) and authored operations (the budget's
   // per-agent share).

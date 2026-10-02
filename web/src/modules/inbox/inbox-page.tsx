@@ -190,10 +190,8 @@ export const InboxPage = withApplicationStore(() => {
         <div className="border border-grayAlpha-100 dark:border-grayAlpha-300">
           {rows.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground leading-relaxed">
-              Nothing here. When something touches a card you are on — an
-              assign, a move, a comment, a mention, a handoff, a pause — it
-              lands here. Older than 90 days it is purged; the issue&apos;s
-              timeline keeps the full record.
+              Nothing here yet. Assignments, comments, and moves to Done show up
+              here.
             </div>
           ) : (
             <>
@@ -227,11 +225,6 @@ export const InboxPage = withApplicationStore(() => {
               </ul>
             </>
           )}
-        </div>
-        <div className="mt-2 px-4 text-[11px] text-muted-foreground">
-          Addressed to your account only · a new day starts a new nudge for the
-          same event · the issue&apos;s timeline is the record, this is the
-          pointer
         </div>
       </div>
     </MainLayout>

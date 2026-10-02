@@ -1,9 +1,13 @@
+import type { SwarmAgent } from '@converge/services';
+
 import { Warning } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
-import type { SwarmAgent } from '@converge/services';
 import { formatDistanceToNow } from 'date-fns';
 import { observer } from 'mobx-react-lite';
+import Link from 'next/link';
 import * as React from 'react';
+
+import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { useContextStore } from 'store/global-context-provider';
 
@@ -14,6 +18,10 @@ import { useContextStore } from 'store/global-context-provider';
 // suspended.
 export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
   const { teamsStore, swarmActivityStore } = useContextStore();
+  const workspace = useCurrentWorkspace();
+  const lastTeam = agent.lastIssue
+    ? teamsStore.getTeamWithId(agent.lastIssue.teamId)?.identifier
+    : undefined;
 
   const teams = agent.teamIds
     .map((id) => teamsStore.getTeamWithId(id)?.identifier)
@@ -83,14 +91,24 @@ export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
         </div>
       )}
 
+      {agent.lastIssue && lastTeam && workspace?.slug && (
+        <div className="mt-1 pl-4 text-xs truncate">
+          <Link
+            href={`/${workspace.slug}/issue/${lastTeam}-${agent.lastIssue.number}`}
+            className="hover:underline"
+          >
+            {lastTeam}-{agent.lastIssue.number} {agent.lastIssue.title}
+          </Link>
+        </div>
+      )}
+
       {agent.lastHandoff && (
         <div
           className="mt-1 pl-4 text-xs text-grayAlpha-600 dark:text-grayAlpha-300 truncate"
           title={agent.lastHandoff.summary}
         >
           {agent.lastHandoff.direction === 'in' ? '←' : '→'}{' '}
-          {agent.lastHandoff.counterpartName} ·{' '}
-          {agent.lastHandoff.issueTitle} ·{' '}
+          {agent.lastHandoff.counterpartName} · {agent.lastHandoff.issueTitle} ·{' '}
           {formatDistanceToNow(new Date(agent.lastHandoff.createdAt), {
             addSuffix: true,
           })}
@@ -117,4 +135,3 @@ export const SwarmAgentRow = observer(({ agent }: { agent: SwarmAgent }) => {
     </div>
   );
 });
-

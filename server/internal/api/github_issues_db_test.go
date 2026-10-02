@@ -119,6 +119,15 @@ func TestImportedIssueClosesWhenThePollerReadsAMerge(t *testing.T) {
 	if category != "COMPLETED" || prState != "merged" || cost != 2500 || steps != 1 || copies != 1 {
 		t.Fatalf("path = %s pr %s cost %d steps %d copies %d", category, prState, cost, steps, copies)
 	}
+	var notes int
+	if err := f.pool.QueryRow(ctx, `
+		select count(*) from notifications
+		where issue_id = $1 and account_id = $2 and type = 'closed'`, issue, f.owner).Scan(&notes); err != nil {
+		t.Fatal(err)
+	}
+	if notes != 1 {
+		t.Fatalf("owner notifications = %d, want 1", notes)
+	}
 	for _, m := range methods {
 		if len(m) < 4 || m[:4] != "GET " {
 			t.Fatalf("GitHub was not only read: %v", methods)

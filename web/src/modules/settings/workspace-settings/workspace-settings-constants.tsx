@@ -1,5 +1,6 @@
 import { CreateNewTeam } from './create-new-team';
 import { Export } from './export';
+import { Integrations } from './integrations';
 import { Labels } from './labels';
 import { Members } from './members';
 import { Overview } from './overview';
@@ -10,6 +11,7 @@ export const SECTION_COMPONENTS = {
   members: Members,
   new_team: CreateNewTeam,
   export: Export,
+  integrations: Integrations,
 };
 
 export const SECTION_TITLES = {
@@ -18,6 +20,7 @@ export const SECTION_TITLES = {
   members: 'Members',
   new_team: 'Add team',
   export: 'Export',
+  integrations: 'Integrations',
 };
 
 type StringKeys<T> = {

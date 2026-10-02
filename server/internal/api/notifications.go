@@ -139,6 +139,26 @@ func (a *API) notifyIssueTx(ctx context.Context, tx pgx.Tx, workspaceID string, 
 	return recs, nil
 }
 
+// workspaceOwnersTx is the workspace's active owners and admins.
+func (a *API) workspaceOwnersTx(ctx context.Context, tx pgx.Tx, workspaceID string) ([]string, error) {
+	rows, err := tx.Query(ctx, `
+		select account_id::text from workspace_members
+		where workspace_id = $1 and status = 'active' and role in ('owner', 'admin')`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // issueParticipants returns the accounts that have commented on the
 // issue (the matrix's "everyone who has commented").
 func (a *API) issueParticipants(ctx context.Context, tx pgx.Tx, issueID string) []string {
@@ -207,6 +227,15 @@ func (a *API) notifyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, w
 			}
 			for id := range set {
 				recipients = append(recipients, id)
+			}
+			// A system move has no human actor, creator, or assignee to
+			// tell. Owners and admins are the people who should see Done.
+			if p.AccountID == "" && category == "COMPLETED" {
+				owners, err := a.workspaceOwnersTx(ctx, tx, workspaceID)
+				if err != nil {
+					return nil, err
+				}
+				recipients = append(recipients, owners...)
 			}
 			sort.Strings(recipients)
 			return a.notifyIssueTx(ctx, tx, workspaceID, p, row, notifClosed, recipients)

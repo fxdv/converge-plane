@@ -49,6 +49,13 @@ var swarmSummaryCap = fmt.Sprintf("left(h.summary, %d)", swarmSummaryTrim)
 
 // swarmHandoff is the panel's per-agent last-handoff line: one atomic
 // work transition, the direction from this agent's point of view.
+type swarmIssueRef struct {
+	ID     string `json:"id"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	TeamID string `json:"teamId"`
+}
+
 type swarmHandoff struct {
 	IssueID         string    `json:"issueId"`
 	IssueNumber     int       `json:"issueNumber"`
@@ -76,6 +83,9 @@ type swarmAgent struct {
 	PausedIssueCount int           `json:"pausedIssueCount"`
 	LastActivityAt   *time.Time    `json:"lastActivityAt"`
 	LastHandoff      *swarmHandoff `json:"lastHandoff"`
+	// LastIssue is the issue this agent most recently reported a run
+	// on, so the fleet row can open it.
+	LastIssue *swarmIssueRef `json:"lastIssue"`
 	// The quiet-guard signals, per agent, over the shared 24h window:
 	// handoffs received (the loop guard) and authored operations (the
 	// op budget's per-agent share), plus API calls (the burn proxy).
@@ -378,6 +388,31 @@ func (a *API) swarmRoster(ctx context.Context, workspaceID string) ([]swarmAgent
 		return nil, err
 	}
 
+	lastIssues := map[string]swarmIssueRef{}
+	irows, err := a.pool.Query(ctx, `
+		select distinct on (r.agent_id) r.agent_id::text, i.id::text, i.number, i.title, i.team_id::text
+		from agent_runs r
+		join issues i on i.id = r.issue_id
+		where r.workspace_id = $1 and r.agent_id = any($2::uuid[])
+		order by r.agent_id, r.updated_at desc`, workspaceID, ids)
+	if err != nil {
+		return nil, err
+	}
+	for irows.Next() {
+		var agentID string
+		var ref swarmIssueRef
+		if err := irows.Scan(&agentID, &ref.ID, &ref.Number, &ref.Title, &ref.TeamID); err != nil {
+			irows.Close()
+			return nil, err
+		}
+		lastIssues[agentID] = ref
+	}
+	err = irows.Err()
+	irows.Close()
+	if err != nil {
+		return nil, err
+	}
+
 	for i := range agents {
 		ag := &agents[i]
 		if wl, ok := workloads[ag.ID]; ok {
@@ -390,6 +425,9 @@ func (a *API) swarmRoster(ctx context.Context, workspaceID string) ([]swarmAgent
 		}
 		if h, ok := lastHandoffs[ag.ID]; ok {
 			ag.LastHandoff = &h
+		}
+		if ref, ok := lastIssues[ag.ID]; ok {
+			ag.LastIssue = &ref
 		}
 		ag.Handoffs24h = handoffs24[ag.ID]
 		ag.Requests24h = a.limiter.usageCount(ag.ID)

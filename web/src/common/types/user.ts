@@ -31,5 +31,6 @@ export interface User {
   // Optional server features; absent on older servers.
   features?: {
     githubPullRequests?: boolean;
+    githubRepos?: string[];
   };
 }

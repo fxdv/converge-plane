@@ -109,7 +109,7 @@ func TestSwarmStatusWireContract(t *testing.T) {
 		[]string{"mode"}) // note/model/endpoints/lastDecisionAt are omitempty
 	equalStrings(t, swarmKeys(t, status.Agents[0]),
 		[]string{"busy", "createdAt", "email", "handoffs24h", "id", "lastActivityAt",
-			"lastHandoff", "name", "openIssueCount", "ops24h", "pausedIssueCount",
+			"lastHandoff", "lastIssue", "name", "openIssueCount", "ops24h", "pausedIssueCount",
 			"requests24h", "status", "teamIds", "tokens24h"})
 	equalStrings(t, swarmKeys(t, *status.Agents[0].LastHandoff),
 		[]string{"counterpartId", "counterpartName", "createdAt", "direction",
@@ -130,7 +130,7 @@ func TestSwarmStatusWireContract(t *testing.T) {
 	if err := json.Unmarshal(raw, &empty); err != nil {
 		t.Fatalf("unmarshal empty agent: %v", err)
 	}
-	for _, k := range []string{"lastHandoff", "lastActivityAt"} {
+	for _, k := range []string{"lastHandoff", "lastActivityAt", "lastIssue"} {
 		if _, ok := empty[k]; !ok {
 			t.Errorf("empty agent row missing key %q", k)
 		} else if empty[k] != nil {

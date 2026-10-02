@@ -15,7 +15,9 @@ import en from 'javascript-time-ago/locale/en';
 import React from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Hydrate, QueryClientProvider } from 'react-query';
+
 import { initSession } from 'common/init-config';
+import { DocumentTitle } from 'common/layouts/app-layout/document-title';
 import { useGetQueryClient } from 'common/lib/react-query-client';
 import { SCOPES } from 'common/scopes';
 
@@ -55,6 +57,7 @@ export const MyApp: NextComponentType<
                     GeistMono.variable,
                   )}
                 >
+                  <DocumentTitle />
                   {getLayout(<Component {...pageProps} />)}
                 </div>
 

@@ -20,6 +20,10 @@ export const WORKSPACE_LINKS: LinkItem[] = [
     title: 'Export',
     href: 'export',
   },
+  {
+    title: 'Integrations',
+    href: 'integrations',
+  },
 ];
 
 export const ACCOUNT_LINKS: LinkItem[] = [
