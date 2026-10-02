@@ -9,6 +9,7 @@ import { useEditorSuggestionItems } from 'modules/issues/components/use-editor-s
 
 import { getTiptapJSON } from 'common';
 import { convergeIssueExtension } from 'common/editor/converge-issue-extension';
+import { importedIssueText } from 'common/lib/imported-issue';
 
 import { useIssueData } from 'hooks/issues';
 import { useEditorPasteHandler } from 'hooks/use-editor-paste-handler';
@@ -50,6 +51,7 @@ export const LeftSide = observer(() => {
   }, 1000);
 
   const { handlePaste } = useEditorPasteHandler();
+  const imported = importedIssueText(issue.description);
 
   return (
     <ScrollArea className="grow flex h-full justify-center w-full">
@@ -62,18 +64,36 @@ export const LeftSide = observer(() => {
                 <ParentIssueView issue={issue} />
               </div>
             )}
-            <Editor
-              value={issue.description}
-              onChange={onDescriptionChange}
-              handlePaste={handlePaste}
-              extensions={[convergeIssueExtension]}
-              className="min-h-[50px] mb-8 px-6 mt-3 text-md"
-            >
-              <FileUpload />
-              <EditorExtensions suggestionItems={suggestionItems}>
-                <IssueSubIssueSelector />
-              </EditorExtensions>
-            </Editor>
+            {imported ? (
+              <div className="px-6 mt-3 mb-4 text-sm">
+                <a
+                  href={imported.href}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="text-muted-foreground hover:underline"
+                >
+                  {imported.href}
+                </a>
+                {imported.body ? (
+                  <div className="mt-3 whitespace-pre-wrap break-words">
+                    {imported.body}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <Editor
+                value={issue.description}
+                onChange={onDescriptionChange}
+                handlePaste={handlePaste}
+                extensions={[convergeIssueExtension]}
+                className="min-h-[50px] mb-8 px-6 mt-3 text-md"
+              >
+                <FileUpload />
+                <EditorExtensions suggestionItems={suggestionItems}>
+                  <IssueSubIssueSelector />
+                </EditorExtensions>
+              </Editor>
+            )}
 
             <div className="mx-6">
               <Separator />

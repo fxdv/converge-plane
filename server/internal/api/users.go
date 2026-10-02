@@ -39,10 +39,18 @@ type userResponse struct {
 }
 
 // userFeatures says which optional server features the client may
-// offer. It names no configuration: which repositories the server
-// follows stays with the operator.
+// offer. githubRepos is the allowlist (names only; the token stays
+// on the server). An empty list is [] so the client can render it.
 type userFeatures struct {
-	GitHubPullRequests bool `json:"githubPullRequests"`
+	GitHubPullRequests bool     `json:"githubPullRequests"`
+	GitHubRepos        []string `json:"githubRepos"`
+}
+
+func githubReposOrEmpty(repos []string) []string {
+	if repos == nil {
+		return []string{}
+	}
+	return repos
 }
 
 // publicUser matches the web client's User shape for bulk lookups.
@@ -88,7 +96,10 @@ func (a *API) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		// the sign-in -> onboarding journey.
 		Workspaces: []workspaceSummary{},
 		Invites:    []inviteSummary{},
-		Features:   userFeatures{GitHubPullRequests: len(a.cfg.GitHubRepos) > 0},
+		Features: userFeatures{
+			GitHubPullRequests: len(a.cfg.GitHubRepos) > 0,
+			GitHubRepos:        githubReposOrEmpty(a.cfg.GitHubRepos),
+		},
 	}
 
 	// Active and suspended memberships are both listed, and the

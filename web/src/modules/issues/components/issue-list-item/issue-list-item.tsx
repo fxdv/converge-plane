@@ -1,4 +1,5 @@
 import { Checkbox } from '@converge/ui/components/checkbox';
+import { PullRequestLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
 import React, { Suspense } from 'react';
@@ -11,6 +12,15 @@ import {
   IssueStatusDropdownVariant,
   LazyIssueAssigneeDropdown,
 } from 'modules/issues/components';
+
+import {
+  PULL_REQUEST_LABEL,
+  PULL_REQUEST_STYLE,
+  pullRequestDisplay,
+  pullRequestHeadline,
+} from 'common/lib/pull-request-format';
+import { formatCost } from 'common/lib/run-format';
+import type { IssuePullRequestType } from 'common/types';
 
 import { IssueViewContext } from 'components/side-issue-view';
 import { useTeamWithId } from 'hooks/teams/use-current-team';
@@ -37,7 +47,12 @@ export const IssueListItem = observer(
     } = React.useContext(IssueViewContext);
 
     const { mutate: updateIssue } = useUpdateIssueMutation({});
-    const { issuesStore, applicationStore } = useContextStore();
+    const {
+      issuesStore,
+      applicationStore,
+      agentRunsStore,
+      issuePullRequestsStore,
+    } = useContextStore();
     const issue = issuesStore.getIssueById(issueId);
 
     const team = useTeamWithId(issue.teamId);
@@ -55,6 +70,10 @@ export const IssueListItem = observer(
     const priorityChange = (priority: number) => {
       updateIssue({ id: issue.id, priority, teamId: issue.teamId });
     };
+    const runTotals = agentRunsStore.getIssueTotals(issue.id);
+    const pullRequests: IssuePullRequestType[] =
+      issuePullRequestsStore.getForIssue(issue.id);
+    const prHeadline = pullRequestHeadline(pullRequests);
 
     return (
       <>
@@ -145,6 +164,32 @@ export const IssueListItem = observer(
                         className="text-xs"
                       />
                     </div>
+                    {runTotals &&
+                      runTotals.runs > 0 &&
+                      runTotals.costMicros > 0 && (
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {formatCost(runTotals.costMicros)}
+                        </span>
+                      )}
+                    {prHeadline && (
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-0.5 text-xs font-medium',
+                          PULL_REQUEST_STYLE[prHeadline],
+                        )}
+                        title={pullRequests
+                          .map(
+                            (pr) =>
+                              `${pr.repo}#${pr.number} · ${PULL_REQUEST_LABEL[pullRequestDisplay(pr)]}`,
+                          )
+                          .join('\n')}
+                      >
+                        <PullRequestLine size={12} />
+                        {pullRequests.length === 1
+                          ? `#${pullRequests[0].number}`
+                          : pullRequests.length}
+                      </span>
+                    )}
                     <div className="min-w-[70px] text-muted-foreground text-xs font-mono">{`${team?.identifier ?? ''}-${issue.number}`}</div>
                     <Suspense>
                       <LazyIssueAssigneeDropdown

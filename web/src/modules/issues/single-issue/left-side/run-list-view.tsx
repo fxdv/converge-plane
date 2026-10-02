@@ -1,6 +1,8 @@
+import { getRunEvents } from '@converge/services';
 import { ChevronDown, CodingLine, LinkLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
+import { useQuery } from 'react-query';
 
 import {
   formatCost,
@@ -103,6 +105,16 @@ const RunRow = observer(({ run }: { run: AgentRunType }) => {
   const agent = users.find((user: User) => user.id === run.agentId);
   const running = run.endedAt === null;
   const tokens = run.inputTokens + run.outputTokens;
+  const latest = useQuery(
+    ['runLatest', run.id, run.eventCount],
+    () => getRunEvents(run.issueId, run.id, Math.max(0, run.eventCount - 1)),
+    {
+      enabled: run.eventCount > 0,
+      staleTime: 10_000,
+      refetchOnWindowFocus: false,
+    },
+  );
+  const step = latest.data?.events[latest.data.events.length - 1]?.message;
 
   return (
     <div className="border-t border-grayAlpha-100 py-2">
@@ -148,6 +160,11 @@ const RunRow = observer(({ run }: { run: AgentRunType }) => {
           }`}
         />
       </button>
+      {step ? (
+        <div className="mt-1 pl-6 text-xs text-muted-foreground truncate">
+          {step}
+        </div>
+      ) : null}
       {expanded ? (
         <div className="mt-2 flex flex-col gap-2 pl-6 text-xs">
           <div className="text-muted-foreground">

@@ -32,8 +32,9 @@ export const TeamList = observer(() => {
   const team = useCurrentTeam();
   const teamAccessList =
     workspaceStore.getUserData(currentUser.id)?.teamIds ?? [];
-  const teams = teamsStore.teams.filter((team: TeamType) =>
-    teamAccessList.includes(team.id),
+  const teams = teamsStore.teams.filter(
+    (candidate: TeamType) =>
+      teamAccessList.includes(candidate.id) || candidate.id === team?.id,
   );
   const workspace = useCurrentWorkspace();
 

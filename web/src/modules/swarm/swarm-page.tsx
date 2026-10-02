@@ -8,6 +8,7 @@ import * as React from 'react';
 import { HeaderLayout } from 'common/header-layout';
 import { AppLayout } from 'common/layouts/app-layout';
 import { MainLayout } from 'common/layouts/main-layout';
+import { formatCost } from 'common/lib/run-format';
 import { withApplicationStore } from 'common/wrappers/with-application-store';
 
 import { IssueViewContext } from 'components/side-issue-view';
@@ -142,10 +143,9 @@ export const SwarmPage = withApplicationStore(
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 {data.governance.completed} done ·{' '}
-                {(data.governance.costPerDoneMicros / 1_000_000).toFixed(2)} USD
-                per done · {Math.round(data.governance.reworkRate * 100)}%
-                rework · {Math.round(data.governance.falseDoneRate * 100)}%
-                false done
+                {formatCost(data.governance.costPerDoneMicros)} per done ·{' '}
+                {Math.round(data.governance.reworkRate * 100)}% rework ·{' '}
+                {Math.round(data.governance.falseDoneRate * 100)}% false done
               </p>
             </section>
           )}
