@@ -24,7 +24,7 @@ var allKeys = []string{
 	"CONVERGE_SMTP_PASS", "CONVERGE_SMTP_FROM", "CONVERGE_SMTP_TLS",
 	"CONVERGE_MAIL_LOG_BODIES", "CONVERGE_TRUSTED_PROXIES", "CONVERGE_METRICS_ADDR",
 	"CONVERGE_GITHUB_REPOS", "CONVERGE_GITHUB_TOKEN", "CONVERGE_GITHUB_POLL_INTERVAL",
-	"CONVERGE_GITHUB_AUTO_DONE", "CONVERGE_GITHUB_WEBHOOK_SECRET",
+	"CONVERGE_GITHUB_AUTO_DONE", "CONVERGE_GITHUB_ISSUE_TEAM", "CONVERGE_GITHUB_WEBHOOK_SECRET",
 }
 
 // loadWith blanks every recognized variable, applies vars, and loads.
@@ -256,8 +256,8 @@ func TestLoadSMTP(t *testing.T) {
 
 func TestLoadGitHub(t *testing.T) {
 	off := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x"})
-	if len(off.GitHubRepos) != 0 || off.GitHubToken != "" || off.GitHubPollInterval != time.Minute || !off.GitHubAutoDone {
-		t.Fatalf("github defaults = %v %q %v %v", off.GitHubRepos, off.GitHubToken, off.GitHubPollInterval, off.GitHubAutoDone)
+	if len(off.GitHubRepos) != 0 || off.GitHubToken != "" || off.GitHubPollInterval != time.Minute || !off.GitHubAutoDone || off.GitHubIssueTeam != "" {
+		t.Fatalf("github defaults = %v %q %v %v %q", off.GitHubRepos, off.GitHubToken, off.GitHubPollInterval, off.GitHubAutoDone, off.GitHubIssueTeam)
 	}
 	on := loadOK(t, map[string]string{
 		"CONVERGE_DATABASE_URL":         "x",
@@ -276,6 +276,13 @@ func TestLoadGitHub(t *testing.T) {
 		loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": bad}, "invalid CONVERGE_GITHUB_REPOS entry")
 	}
 	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_TOKEN": "t"}, "CONVERGE_GITHUB_REPOS is empty")
+	team := "b63d0cd2-760b-4696-b366-0e56d4cba014"
+	withTeam := loadOK(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": "a/b", "CONVERGE_GITHUB_ISSUE_TEAM": strings.ToUpper(team)})
+	if withTeam.GitHubIssueTeam != team {
+		t.Fatalf("issue team = %q", withTeam.GitHubIssueTeam)
+	}
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_ISSUE_TEAM": team}, "CONVERGE_GITHUB_REPOS is empty")
+	loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": "a/b", "CONVERGE_GITHUB_ISSUE_TEAM": "eng"}, "invalid CONVERGE_GITHUB_ISSUE_TEAM")
 	for _, bad := range []string{"5s", "2h", "soon"} {
 		loadErr(t, map[string]string{"CONVERGE_DATABASE_URL": "x", "CONVERGE_GITHUB_REPOS": "a/b", "CONVERGE_GITHUB_POLL_INTERVAL": bad},
 			"invalid CONVERGE_GITHUB_POLL_INTERVAL")

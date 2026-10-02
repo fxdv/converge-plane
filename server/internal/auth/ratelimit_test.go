@@ -82,7 +82,9 @@ func TestThrottledResendKeepsTheCurrentLink(t *testing.T) {
 		t.Fatalf("issueCode: %v", err)
 	}
 	for i := 0; i < authEmailBurst; i++ {
-		s.emailLimit.Allow(email)
+		if _, used := s.sharedAuth(context.Background(), "email:"+email, authEmailRate, authEmailBurst); !used {
+			s.emailLimit.Allow(email)
+		}
 	}
 	body, _ := json.Marshal(map[string]string{"preAuthSessionId": preAuth})
 	rec := httptest.NewRecorder()

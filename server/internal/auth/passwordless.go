@@ -15,7 +15,8 @@
 //
 // Every route is rate limited per client IP; issuing a code (create,
 // resend) is additionally limited per email address, so neither a
-// single host nor a distributed sender can mail-bomb an inbox.
+// single host nor a distributed sender can mail-bomb an inbox. Those
+// buckets are shared across API processes when Postgres can be read.
 //
 // Tokens are HMAC-signed base64-JSON payloads (see session.go); the
 // client parses them with atob() and treats them opaquely, so the
@@ -115,7 +116,7 @@ func NewService(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, mailer 
 // limitByIP rejects auth requests from a client IP over its budget.
 func (s *Service) limitByIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if ip := netx.ClientIP(r); !s.ipLimit.Allow(ip) {
+		if ip := netx.ClientIP(r); !s.allowAuth(r.Context(), "ip:"+ip, s.ipLimit, authIPRate, authIPBurst) {
 			authEvents.With("rate_limited_ip").Inc()
 			s.log.Warn("auth rate limit", "scope", "ip", "ip", ip, "path", r.URL.Path)
 			writeRateLimited(w, int(1/authIPRate))
@@ -128,7 +129,7 @@ func (s *Service) limitByIP(next http.Handler) http.Handler {
 // allowEmail consumes one code-issuance token for email, writing the 429
 // when the address is over its budget.
 func (s *Service) allowEmail(w http.ResponseWriter, email string) bool {
-	if s.emailLimit.Allow(email) {
+	if s.allowAuth(context.Background(), "email:"+email, s.emailLimit, authEmailRate, authEmailBurst) {
 		return true
 	}
 	authEvents.With("rate_limited_email").Inc()
