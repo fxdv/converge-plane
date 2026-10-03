@@ -511,8 +511,8 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.deepEqual(tableStubs.get(MODELS.Label)!.dels, ['l1']);
     assert.deepEqual(tableStubs.get(MODELS.Issue)!.dels, []);
     assert.deepEqual(tableStubs.get(MODELS.UsersOnWorkspaces)!.dels, ['m1']);
-    assert.deepEqual(tableStubs.get(MODELS.IssueHistory)!.dels, ['h1']);
-    assert.deepEqual(tableStubs.get(MODELS.IssueComment)!.dels, ['c1']);
+    assert.deepEqual(tableStubs.get(MODELS.IssueHistory)!.dels, []);
+    assert.deepEqual(tableStubs.get(MODELS.IssueComment)!.dels, []);
     assert.deepEqual(tableStubs.get(MODELS.IssueArtifact)!.dels, ['a1']);
   });
 

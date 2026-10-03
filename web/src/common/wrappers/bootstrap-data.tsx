@@ -30,7 +30,7 @@ interface Props {
 // then takes the snapshot once instead of a delta, so it also gets rows
 // the delta never carried: server-side backfills, and records its
 // previous build ignored.
-export const SYNC_SCHEMA = '2026-10-04.r9-slice1';
+export const SYNC_SCHEMA = '2026-10-04.r9-slice2';
 
 export function BootstrapWrapper({ children }: Props) {
   const workspace = useCurrentWorkspace();

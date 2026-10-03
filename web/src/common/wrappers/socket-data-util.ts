@@ -494,20 +494,54 @@ async function localRowsForModel(
             .anyOf([...domain.teamIds])
             .toArray()
         : [];
-    case MODELS.IssueComment:
+    case MODELS.IssueComment: {
+      if (isMemoryAuthorityModel(MODELS.IssueComment)) {
+        const store = MODEL_STORE_MAP[MODELS.IssueComment];
+        if (!store?.comments) {
+          return [];
+        }
+        const rows: { id: string }[] = [];
+        for (const [issueId, comments] of store.comments.entries()) {
+          if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
+            continue;
+          }
+          for (const comment of comments as { id: string }[]) {
+            rows.push({ id: comment.id });
+          }
+        }
+        return rows;
+      }
       return domain.issueIds.size
         ? db.comments
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()
         : [];
-    case MODELS.IssueHistory:
+    }
+    case MODELS.IssueHistory: {
+      if (isMemoryAuthorityModel(MODELS.IssueHistory)) {
+        const store = MODEL_STORE_MAP[MODELS.IssueHistory];
+        if (!store?.issueHistories) {
+          return [];
+        }
+        const rows: { id: string }[] = [];
+        for (const [issueId, histories] of store.issueHistories.entries()) {
+          if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
+            continue;
+          }
+          for (const row of histories as { id: string }[]) {
+            rows.push({ id: row.id });
+          }
+        }
+        return rows;
+      }
       return domain.issueIds.size
         ? db.issueHistory
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()
         : [];
+    }
     case MODELS.IssueArtifact:
       return domain.issueIds.size
         ? db.issueArtifacts

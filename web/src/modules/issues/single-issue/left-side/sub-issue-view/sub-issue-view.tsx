@@ -8,6 +8,7 @@ import { AddLine, ChevronDown, ChevronRight } from '@converge/ui/icons';
 import * as React from 'react';
 
 import { IssueListItem } from 'modules/issues/components';
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 import { useSortIssues } from 'modules/issues/components/issue-list-item/utils';
 import { NewIssueDialog } from 'modules/issues/new-issue/new-issue-dialog';
 
@@ -25,7 +26,8 @@ export function SubIssueView({ childIssues, issueId }: SubIssueViewProps) {
 
   return (
     <>
-      <Collapsible open={isOpen} onOpenChange={setOpen} className="mt-6 w-full py-2">
+      <IssueDetailSection className="w-full py-2 px-0">
+        <Collapsible open={isOpen} onOpenChange={setOpen} className="w-full py-2">
         <div className="flex justify-between px-6">
           <div>
             <CollapsibleTrigger asChild>
@@ -71,7 +73,8 @@ export function SubIssueView({ childIssues, issueId }: SubIssueViewProps) {
             ))}
           </div>
         </CollapsibleContent>
-      </Collapsible>
+        </Collapsible>
+      </IssueDetailSection>
       <NewIssueDialog
         open={newIssueDialog}
         setOpen={setNewIssueDialog}

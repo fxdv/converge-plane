@@ -19,14 +19,57 @@ import { useIssueData } from 'hooks/issues';
 
 import { useCreateIssueCommentMutation } from 'services/issues';
 
+import { useContextStore } from 'store/global-context-provider';
+import { UserContext } from 'store/user-context';
+
 import { FileUpload } from '../../file-upload';
 
 export function IssueComment() {
   const issueData = useIssueData();
   const [commentValue, setCommentValue] = React.useState('');
-  const { mutate: createIssueComment } = useCreateIssueCommentMutation({});
+  const { commentsStore } = useContextStore();
+  const user = React.useContext(UserContext);
+  const optimisticIdRef = React.useRef<string | null>(null);
   const suggestion = useMentionSuggestions();
   const { toast } = useToast();
+
+  const { mutate: createIssueComment } = useCreateIssueCommentMutation({
+    onMutate: () => {
+      if (!user?.id) {
+        return;
+      }
+      const { json } = getTiptapJSON(commentValue);
+      const now = new Date().toISOString();
+      const id = `pending-${crypto.randomUUID()}`;
+      optimisticIdRef.current = id;
+      commentsStore.update(
+        {
+          id,
+          issueId: issueData.id,
+          userId: user.id,
+          body: JSON.stringify(json),
+          createdAt: now,
+          updatedAt: now,
+          parentId: undefined,
+          sourceMetadata: undefined,
+        },
+        id,
+      );
+    },
+    onError: () => {
+      if (optimisticIdRef.current) {
+        commentsStore.deleteById(optimisticIdRef.current);
+        optimisticIdRef.current = null;
+      }
+    },
+    onSuccess: (data) => {
+      if (optimisticIdRef.current) {
+        commentsStore.deleteById(optimisticIdRef.current);
+        optimisticIdRef.current = null;
+      }
+      commentsStore.update(data, data.id);
+    },
+  });
 
   const onSubmit = () => {
     if (commentValue !== '') {
