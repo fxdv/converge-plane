@@ -266,9 +266,10 @@ What operators and integrators notice (wire details in
   (`issues:read`, `issues:write`, `comments:read`, `comments:write`, `work`,
   `sync:read`) and to some of the agent's teams. Everything else is refused
   with `403` (another team's issues answer `404`). Hard delete and
-  administration are never available to a scoped token. Tokens without scopes
-  keep the agent's full authority. Give external tools the narrowest token
-  that works.
+  administration are never available to a scoped token. A token stored with
+  no scopes keeps the agent's full authority until it is rotated. New
+  tokens must name scopes. The default life is 90 days and the longest
+  life is one year. Give external tools the narrowest token that works.
 - **External agents.** An agent created with `"driver": "external"` is worked
   by your own process through the work API (`GET /api/v1/agent/queue`, then
   claim, heartbeat and release an issue). The built-in runtime leaves such an
@@ -319,7 +320,7 @@ endpoint at `https://<your-domain>/api/v1/mcp`.
 1. In Settings → Members → Add agent (workspace owner or admin), pick the
    teams, set "Who works its issues" to "External tool (MCP or API)", and
    keep the defaults it applies: scopes `work`, `issues:write`,
-   `comments:write`, limited to those teams, expiring after one year. The
+   `comments:write`, limited to those teams, expiring after 90 days. The
    token is shown once, together with the setup below for this server's
    address. Keep it in an environment variable (`CONVERGE_TOKEN` below),
    not in a config file. Scripts can do the same through

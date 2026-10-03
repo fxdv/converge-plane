@@ -145,14 +145,20 @@ func TestAgentTokenRotation(t *testing.T) {
 		t.Fatalf("a refused rotation revoked the token (revoked=%v, err=%v)", revoked, err)
 	}
 
-	// A full-access token stays full access.
+	// A new token must name scopes. A token already stored with none
+	// keeps that grant when it is rotated.
 	rec := f.call(owner, (*API).handleIssueAgentToken, "POST", "/x", `{"name":"wide"}`, "id", f.ws, "accountId", ag.ID)
-	checkStatus(t, rec, 201)
-	var wide struct {
-		TokenID string `json:"tokenId"`
+	checkStatus(t, rec, 422)
+	_, hash, err := auth.IssueAPIToken()
+	if err != nil {
+		t.Fatal(err)
 	}
-	decodeBody(t, rec, &wide)
-	full := rotate(owner, ag.ID, body(wide.TokenID, 0), 201)
+	wideID := testUUID()
+	f.exec(`insert into api_tokens
+		(id, account_id, name, token_hash, token_prefix, created_at, expires_at, created_by)
+		values ($1, $2, 'wide', $3, $4, now(), now() + interval '90 days', $5)`,
+		wideID, ag.ID, hash, auth.APITokenPrefix, f.owner)
+	full := rotate(owner, ag.ID, body(wideID, 0), 201)
 	if full.Name != "wide" || full.Scopes != nil || full.TeamIDs != nil {
 		t.Fatalf("full-access rotation = %+v", full)
 	}

@@ -1,6 +1,6 @@
 # Converge
 
-**A fast, self-hostable, hybrid task tracker for human and agentic swarm teams.**
+**A self-hosted issue board that external coding agents work through MCP.**
 
 Converge gives small and medium engineering teams the common work loop done
 well: capture, prioritize, assign, discuss, and complete — with an
@@ -8,12 +8,12 @@ excellent list and Kanban experience, team-scoped organization, keyboard
 efficiency, and a deliberately small operating footprint (one Go binary +
 PostgreSQL).
 
-It is built for the shape of team engineering is moving toward: work done by
-people *and* by agents, in the same place. In a Converge workspace a human
-can drag a card into review, and an agent can pull that same card, do the
-work, and report back through the same API. There is no parallel "bot tool"
-to keep in sync with the board — the issue tracker *is* the coordination
-surface for the whole workforce.
+Humans work the board in the web app. A coding agent you run — Claude Code,
+Cursor, Codex, or any MCP client — claims the same card, reports what it
+spent and the steps it took, and links its pull requests. The issue moves
+to Done when that pull request merges, or when a human approves it. The
+in-process runtime is the floor under that: it triages and hands work on,
+and it does not complete an issue.
 
 ## Why it works for mixed workforces
 
@@ -27,9 +27,8 @@ surface for the whole workforce.
   Administrative changes — teams, membership, invites, suspension — land in
   an append-only audit trail with actor, object, and timestamp, so agent
   action is attributable and reviewable.
-- **Decomposition that scales to swarms.** Sub-issues, labels, and statuses
-  let a lead agent fan work out across a swarm and collect the results,
-  while a human keeps one readable view of progress.
+- **One board.** Sub-issues, labels, and statuses keep a piece of work
+  readable while an external agent claims it and a human reviews it.
 - **Accountable by design.** Each agent is its own workspace member with its
   own API token — never a borrowed human session — so its actions are
   attributed, suspendable, and rate-limited per agent. The domain model
@@ -45,8 +44,8 @@ surface for the whole workforce.
 - Comments and activity history
 - Teams with their own workflows; workspace administration with invites, roles, and member suspension
 - Magic-link sign-in; workspace onboarding and roles
-- **Agent actors**: agents join the workspace as members, authenticate with API tokens, take assignments, comment, and move issues through workflows — attributed per agent, suspendable per agent, and rate-limited per account. Create a swarm from Settings → Members and run the demo agents in `server/tools/swarm/` to watch them work
 - **External coding agents**: Claude Code, Cursor, Codex, or any MCP client works issues over the MCP endpoint with a token limited to the scopes, teams, and lifetime you pick. The agent claims an issue, reports its cost and a step trace, and links its pull requests; GitHub PRs in repositories you list show their state on the card, and the issue moves to Done when they merge
+- **The floor**: an in-process runtime can triage an agent's queue and hand the work on. It does not take an issue to Done. Create either kind of agent from Settings → Members
 - Self-host with `docker compose up --build` — one app plus PostgreSQL
 
 Coming up next: projects, cycles, attachments, and a versioned public API

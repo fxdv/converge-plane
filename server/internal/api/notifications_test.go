@@ -310,10 +310,9 @@ func TestMarkNotificationRead(t *testing.T) {
 		}
 	})
 	t.Run("a double read no-ops: 200, no write, no feed", func(t *testing.T) {
-		read := now.UTC().Format(iso)
 		pool := &fakePool{t: t, txs: []*fakeTx{{t: t, rules: []fakeRule{
 			// readAt set: the no-op branch returns before the write.
-			{frag: "from notifications n", rowVals: []any{id, "ws1", "iss1", 7, "comment", "u2", "Jane Doe", now, read, "u1"}},
+			{frag: "from notifications n", rowVals: []any{id, "ws1", "iss1", 7, "comment", "u2", "Jane Doe", now, now, "u1"}},
 			// No sync_sequences rule: an emit would fail loudly.
 		}}}}
 		a := apiForTests(t, pool)
@@ -325,8 +324,8 @@ func TestMarkNotificationRead(t *testing.T) {
 		}
 		var out notification
 		decodeBody(t, rec, &out)
-		if out.ReadAt == nil || *out.ReadAt != read {
-			t.Fatalf("ack readAt = %v, want %q (idempotent)", out.ReadAt, read)
+		if out.ReadAt == nil || *out.ReadAt != now.UTC().Format(iso) {
+			t.Fatalf("ack readAt = %v, want the stored timestamp", out.ReadAt)
 		}
 	})
 }
@@ -435,7 +434,7 @@ func TestCollectNotifications(t *testing.T) {
 	pool := &fakePool{t: t, rules: []fakeRule{
 		{frag: "from notifications n", rows: [][]any{
 			{"n1", "iss1", 7, "comment", "u2", "Jane Doe", now, nil},
-			{"n2", "iss2", 8, "assigned", nil, nil, now, now.UTC().Format(iso)},
+			{"n2", "iss2", 8, "assigned", nil, nil, now, now},
 		}},
 	}}
 	a := apiForTests(t, pool)

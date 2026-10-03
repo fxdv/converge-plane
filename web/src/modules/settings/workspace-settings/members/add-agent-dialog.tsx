@@ -287,9 +287,7 @@ export function AddAgentDialog({ setDialogOpen }: AddAgentDialogProps) {
                               <SelectItem value="scoped">
                                 Only the scopes below (recommended)
                               </SelectItem>
-                              <SelectItem value="full">
-                                Full access: everything the agent can do
-                              </SelectItem>
+                              <SelectItem value="full">Every scope</SelectItem>
                             </SelectGroup>
                           </SelectContent>
                         </Select>

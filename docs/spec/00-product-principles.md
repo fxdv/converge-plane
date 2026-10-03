@@ -3,6 +3,7 @@
 **Status:** Authoritative greenfield product specification v1
 **Effective date:** 2026-08-03
 **Addendum (2026-08-30):** [11-direction-v2.md](11-direction-v2.md) records the pivot to the Converge revival path (Tegon-derived UI, AGPL, Go backend). Where the two conflict, 11 controls for UI provenance, license, name, stack, auth, and topology; all other v1 contracts remain binding.
+**Addendum (2026-10-03):** The product statement and the release table below describe the product as shipped. GitHub linking, the in-app inbox, MCP, and external coding agents are part of the product. The in-process runtime is the floor that triages. Built-in conversational AI stays excluded. Where an older sentence in this file or in [10](10-open-decisions.md) still says the MVP has no integrations or that AI is excluded entirely, this addendum wins.
 **Research source:** Tegon repository at the current checkout
 **Product target:** a lightweight, self-hostable, open-source issue tracker for software teams
 
@@ -40,7 +41,7 @@ The earlier `greenfield-spec/` census remains historical research. It is superse
 
 ## Product statement
 
-For small and medium software teams that need a fast, understandable way to coordinate work, the product is a focused issue tracker that combines excellent list and Kanban workflows with team-scoped organization, keyboard efficiency, and credible self-hosting. Unlike broad project-management suites, support CRMs, or automation platforms, it makes the common issue loop excellent before adding planning and integrations.
+For small and medium software teams that need a fast, understandable way to coordinate work with the coding agents they already run, the product is a self-hosted issue board. Humans use the list and the board. An external coding agent works the same issue through MCP: it claims the card, reports its cost and its steps, and links its pull request. The in-process runtime triages and hands work on. It is not a second product, and it does not complete an issue.
 
 ## Outcomes
 
@@ -63,10 +64,10 @@ The product succeeds when a new team can:
 
 | Release | Commitment |
 | --- | --- |
-| **MVP — Minimal core** | Workspaces, teams, issues, workflows, labels, comments, list/Kanban, filters, search, and keyboard navigation, plus the identity and operational foundation they require. |
-| **NEXT — Collaboration** | Custom views, projects, cycles, Inbox, notifications, issue relations, attachments, and authorized realtime collaboration. |
-| **LATER — Integrations** | GitHub and Slack, templates, public API/SDK, outbound webhooks, and carefully bounded extension surfaces. |
-| **EXCLUDED — Optional RFC or never** | AI assistants, remote Actions, support/CRM, semantic-search infrastructure, and other rows marked DEFER or DROP. |
+| **Shipped** | The board (workspaces, teams, issues, workflows, labels, comments, list/Kanban, filters, search, saved views), in-app notifications, external coding agents over MCP, agent runs and cost, GitHub pull-request links and one-way issue import, and the in-process floor that triages. |
+| **NEXT — Collaboration** | Projects, cycles, attachments, and the notification controls that have not shipped (mute, grouping beyond the current inbox). |
+| **LATER — Integrations** | Slack, templates, a versioned public API/SDK beyond the agent API, and further outbound webhooks. |
+| **EXCLUDED — Optional RFC or never** | Built-in conversational AI, AI issue writing, prompt administration, remote Actions, support/CRM, semantic-search infrastructure, and other rows marked DEFER or DROP. |
 
 Only ADOPT or ADAPT rows assigned to the active release authorize implementation. Future rows must not receive speculative tables, services, navigation, or configuration during earlier releases.
 

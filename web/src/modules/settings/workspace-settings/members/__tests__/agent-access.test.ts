@@ -29,18 +29,23 @@ describe('agent access (the Add agent dialog)', () => {
       teamIds: ['t1', 't2'],
       driver: 'external',
       token: {
-        ttlHours: 8760,
+        ttlHours: 2160,
         scopes: ['work', 'issues:write', 'comments:write'],
         teamIds: ['t1', 't2'],
       },
     });
   });
 
-  it("keeps a runtime agent's full-authority token", () => {
+  it('gives a runtime agent the same narrow token', () => {
     const req = agentRequest(
       values({ driver: 'runtime', ...agentDefaults('runtime') }),
     );
-    assert.deepEqual(req.token, { ttlHours: 87600 });
+    assert.deepEqual(req.token, {
+      ttlHours: 2160,
+      scopes: ['work', 'issues:write', 'comments:write'],
+      teamIds: ['t1', 't2'],
+    });
+    assert.equal(req.driver, 'runtime');
   });
 
   it('sends scopes in canonical order and a team limit only when asked', () => {
@@ -48,7 +53,7 @@ describe('agent access (the Add agent dialog)', () => {
       values({ scopes: ['comments:read', 'work'], teamLimited: false }),
     );
     assert.deepEqual(req.token, {
-      ttlHours: 8760,
+      ttlHours: 2160,
       scopes: ['work', 'comments:read'],
     });
   });
@@ -63,9 +68,24 @@ describe('agent access (the Add agent dialog)', () => {
       accessProblem(values({ scopes: ['sync:read'], teamLimited: false })),
       undefined,
     );
+    assert.match(
+      accessProblem(values({ access: 'full', scopes: [] }))!,
+      /cannot be limited to teams/,
+    );
     assert.equal(
-      accessProblem(values({ access: 'full', scopes: [] })),
+      accessProblem(values({ access: 'full', scopes: [], teamLimited: false })),
       undefined,
+    );
+    assert.deepEqual(
+      agentRequest(values({ access: 'full', teamLimited: false })).token.scopes,
+      [
+        'work',
+        'issues:write',
+        'comments:write',
+        'issues:read',
+        'comments:read',
+        'sync:read',
+      ],
     );
   });
 

@@ -59,10 +59,12 @@ func AgentEmail(workspaceID, name string) string {
 // after the prefix is 256 bits of entropy.
 const APITokenPrefix = "conv_agent_"
 
-// APITokenTTL is the lifetime of a newly issued token. Agents are
-// long-lived workers; the bound exists so an unrevoked leaked token
-// expires on its own.
-const APITokenTTL = 10 * 365 * 24 * time.Hour
+// APITokenTTL is the lifetime of a newly issued token when the caller
+// does not name one. A leaked token then dies on its own.
+const APITokenTTL = 90 * 24 * time.Hour
+
+// MaxAPITokenTTL is the longest life a caller may request.
+const MaxAPITokenTTL = 365 * 24 * time.Hour
 
 // IssueAPIToken mints a token: prefix + 256 bits, returned as plaintext
 // with its SHA-256 hash. The plaintext is never persisted.
@@ -76,12 +78,11 @@ func IssueAPIToken() (plaintext, hash string, err error) {
 	return plaintext, hex.EncodeToString(sum[:]), nil
 }
 
-// MaxAPITokenTTL bounds a caller-chosen token lifetime.
-const MaxAPITokenTTL = APITokenTTL
-
-// Token scopes (docs/spec 07). A token without scopes carries the full
-// authority of its agent; a scoped token may call only the routes its
-// scopes name, and nothing an unscoped caller could not.
+// Token scopes (docs/spec 07). A token stored with no scopes, including
+// every token issued before scopes were required, carries the full
+// authority of its agent. A token with scopes may call only the routes
+// those scopes name, and nothing an unscoped caller could not. New
+// issuance requires scopes.
 const (
 	ScopeIssuesRead    = "issues:read"
 	ScopeIssuesWrite   = "issues:write"

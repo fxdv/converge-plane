@@ -22,16 +22,16 @@ export const AGENT_SCOPES: Array<{ value: AgentScope; hint: string }> = [
 ];
 
 export const DRIVER_HINT: Record<AgentDriver, string> = {
-  runtime: "The built-in swarm works this agent's issues.",
+  runtime:
+    'The in-process floor triages this agent’s issues and hands them on. It does not complete them.',
   external:
-    'A coding agent you run (Claude Code, Cursor, Codex, a script) works its issues over MCP or the API. The swarm leaves it alone.',
+    'A coding agent you run (Claude Code, Cursor, Codex) works its issues over MCP. The floor leaves it alone.',
 };
 
 export const EXPIRY_OPTIONS: Array<{ hours: number; label: string }> = [
   { hours: 720, label: '30 days' },
   { hours: 2160, label: '90 days' },
   { hours: 8760, label: '1 year' },
-  { hours: 87600, label: '10 years' },
 ];
 
 export type AgentAccess = 'scoped' | 'full';
@@ -46,35 +46,34 @@ export interface AgentAccessValues {
   expiryHours: number;
 }
 
-// An external agent starts with least privilege. A runtime agent keeps the
-// token it always had (full access, ten years): the runtime never uses it,
-// and runner scripts written against it keep working.
+// Both drivers start narrow: the scopes a coding agent needs, for 90 days,
+// limited to the teams named on the form. "Every scope" is an explicit
+// list, never an omitted grant.
 export function agentDefaults(
   driver: AgentDriver,
 ): Pick<
   AgentAccessValues,
   'access' | 'scopes' | 'teamLimited' | 'expiryHours'
 > {
-  if (driver === 'external') {
-    return {
-      access: 'scoped',
-      scopes: ['work', 'issues:write', 'comments:write'],
-      teamLimited: true,
-      expiryHours: 8760,
-    };
+  switch (driver) {
+    case 'runtime':
+    case 'external':
+      return {
+        access: 'scoped',
+        scopes: ['work', 'issues:write', 'comments:write'],
+        teamLimited: true,
+        expiryHours: 2160,
+      };
   }
-  return { access: 'full', scopes: [], teamLimited: false, expiryHours: 87600 };
 }
 
 export function accessProblem(v: AgentAccessValues): string | undefined {
-  if (v.access === 'scoped' && v.scopes.length === 0) {
-    return 'Pick at least one scope, or give full access';
+  const scopes =
+    v.access === 'full' ? AGENT_SCOPES.map((s) => s.value) : v.scopes;
+  if (scopes.length === 0) {
+    return 'Pick at least one scope';
   }
-  if (
-    v.teamLimited &&
-    v.access === 'scoped' &&
-    v.scopes.includes('sync:read')
-  ) {
+  if (v.teamLimited && scopes.includes('sync:read')) {
     return 'sync:read covers the whole workspace, so it cannot be limited to teams';
   }
   return undefined;
@@ -87,11 +86,11 @@ export function agentRequest(v: AgentAccessValues): {
   token: AgentTokenSpec;
 } {
   const token: AgentTokenSpec = { ttlHours: v.expiryHours };
-  if (v.access === 'scoped') {
-    token.scopes = AGENT_SCOPES.map((s) => s.value).filter((s) =>
-      v.scopes.includes(s),
-    );
-  }
+  const chosen =
+    v.access === 'full' ? AGENT_SCOPES.map((s) => s.value) : v.scopes;
+  token.scopes = AGENT_SCOPES.map((s) => s.value).filter((s) =>
+    chosen.includes(s),
+  );
   if (v.teamLimited) {
     token.teamIds = [...v.teamIds];
   }
