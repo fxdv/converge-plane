@@ -36,6 +36,7 @@ import { NoTeamContainer } from './no-team-container';
 import { ActivityFeed } from '../activity-feed';
 import { FiltersView } from '../filters-view/filters-view';
 import { OverviewInsights } from '../overview-insights';
+import { ProductPositioningLine } from '../components/product-positioning-line';
 import { SwarmPanel } from '../swarm-panel';
 
 export const AllIssues = withApplicationStore(
@@ -153,6 +154,7 @@ export const AllIssues = withApplicationStore(
               className="w-full flex flex-col"
             >
               <div id="board" tabIndex={-1} className="outline-none">
+                {hasAgents && <ProductPositioningLine />}
                 <FiltersView Actions={<IssuesViewOptions />} />
                 <ListView />
               </div>
