@@ -7,6 +7,7 @@ import {
   agentDefaults,
   agentRequest,
   expiryLabel,
+  agentTokensAtAGlance,
   grantSummary,
   mcpEndpoint,
   mcpSnippets,
@@ -125,6 +126,34 @@ describe('agent access (the Add agent dialog)', () => {
     for (const s of snippets) {
       assert.doesNotMatch(s.text, /conv_agent_/);
     }
+  });
+});
+
+describe('agentTokensAtAGlance (Members list)', () => {
+  const now = new Date('2026-09-27T12:00:00Z');
+
+  it('summarizes driver, scopes, and expiry', () => {
+    const line = agentTokensAtAGlance(
+      {
+        driver: 'external',
+        tokens: [
+          {
+            id: '1',
+            name: 'default',
+            scopes: ['work', 'issues:write'],
+            teamIds: ['t1'],
+            expiresAt: '2026-12-27T12:00:00Z',
+            lastUsedAt: null,
+            createdAt: '2026-09-01T00:00:00Z',
+          },
+        ],
+      },
+      () => 'Alpha',
+      now,
+    );
+    assert.match(line, /External \(MCP\)/);
+    assert.match(line, /work, issues:write/);
+    assert.match(line, /1 token/);
   });
 });
 

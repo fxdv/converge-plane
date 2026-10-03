@@ -1,5 +1,8 @@
 import { useToast } from '@converge/ui/components/use-toast';
+import React from 'react';
 import { useMutation } from 'react-query';
+
+import { useIssueConflict } from 'modules/issues/issue-conflict';
 
 import type { IssueType, IssueRelationEnum } from 'common/types';
 
@@ -61,8 +64,10 @@ export function useUpdateIssueMutation({
   onSuccess,
   onError,
 }: MutationParams) {
-  const { issuesStore } = useContextStore();
+  const { issuesStore, teamsStore } = useContextStore();
   const { toast } = useToast();
+  const { openConflict } = useIssueConflict();
+  const rollbackRef = React.useRef<IssueType | undefined>(undefined);
 
   const update = ({ id, ...otherParams }: UpdateIssueParams) => {
     const issue = issuesStore.getIssueById(id);
@@ -76,19 +81,50 @@ export function useUpdateIssueMutation({
         version: issue?.version,
       });
     } catch (e) {
-      issuesStore.updateIssue(issue, id);
+      if (issue) {
+        issuesStore.updateIssue(issue, id);
+      }
       return undefined;
     }
   };
 
-  const onMutationTriggered = () => {
+  const onMutationTriggered = (variables: UpdateIssueParams) => {
     onMutate && onMutate();
+    const snapshot = issuesStore.getIssueById(variables.id);
+    rollbackRef.current = snapshot ? { ...snapshot } : undefined;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onMutationError = (errorResponse: any) => {
+  const onMutationError = (errorResponse: any, variables: UpdateIssueParams) => {
+    const snapshot = rollbackRef.current;
+    rollbackRef.current = undefined;
+    if (snapshot && snapshot.id === variables.id) {
+      issuesStore.updateIssue(snapshot, variables.id);
+    }
+
+    if (errorResponse?.resStatus === 412) {
+      const body = errorResponse?.errors as
+        | { version?: number; error?: string }
+        | undefined;
+      if (typeof body?.version === 'number') {
+        issuesStore.updateIssue({ version: body.version }, variables.id);
+      }
+      const team = teamsStore.getTeamWithId(variables.teamId);
+      const number =
+        snapshot?.number ?? issuesStore.getIssueById(variables.id)?.number;
+      const issueLabel =
+        team && number !== undefined
+          ? `${team.identifier}-${number}`
+          : 'This issue';
+      openConflict({ issueLabel });
+      onError && onError(body?.error ?? 'version conflict');
+      return;
+    }
+
     const errorText =
-      errorResponse?.errors?.message || 'The server refused the change';
+      errorResponse?.errors?.message ||
+      errorResponse?.message ||
+      'The server refused the change';
 
     toast({
       variant: 'destructive',

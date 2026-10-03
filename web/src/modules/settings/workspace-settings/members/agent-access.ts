@@ -5,8 +5,10 @@
 import type {
   AgentData,
   AgentDriver,
+  AgentListEntry,
   AgentScope,
   AgentTokenSpec,
+  AgentTokenInfo,
 } from '@converge/services';
 
 export const AGENT_SCOPES: Array<{ value: AgentScope; hint: string }> = [
@@ -108,6 +110,29 @@ export function grantSummary(
       ? data.tokenTeamIds.map(teamName).join(', ')
       : 'all of its teams',
   };
+}
+
+/** One line for the Members list (Phase 1). */
+export function agentTokensAtAGlance(
+  entry: Pick<AgentListEntry, 'tokens' | 'driver'>,
+  teamName: (id: string) => string,
+  now: Date = new Date(),
+): string {
+  const driver =
+    entry.driver === 'runtime' ? 'Floor runtime' : 'External (MCP)';
+  if (entry.tokens.length === 0) {
+    return `${driver} · no live tokens`;
+  }
+  const primary: AgentTokenInfo = entry.tokens[0];
+  const grant = grantSummary(
+    { tokenScopes: primary.scopes, tokenTeamIds: primary.teamIds },
+    teamName,
+  );
+  const count =
+    entry.tokens.length === 1
+      ? '1 token'
+      : `${entry.tokens.length} tokens`;
+  return `${driver} · ${count} · ${grant.scopes} · ${expiryLabel(primary.expiresAt, now)}`;
 }
 
 // When a rotated-out token stops working (the rotation's graceHours).

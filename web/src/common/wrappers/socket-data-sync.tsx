@@ -23,6 +23,7 @@ import {
   seedTabHighWater,
   tabHighWater,
 } from './socket-data-util';
+import { useSyncFeedStatus } from './sync-feed-status';
 
 // How long a stream record may wait for the sequence before it. Commits
 // publish from separate goroutines, so small reorderings resolve within
@@ -57,6 +58,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       notificationsStore,
     } = useContextStore();
     const user = React.useContext(UserContext);
+    const { setStatus: setSyncFeedStatus } = useSyncFeedStatus();
     const hashKey = `${workspace.id}__${user.id}`;
 
     // R-8: realtime is an SSE stream, not socket.io. It is a hint — the
@@ -163,6 +165,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
           return;
         }
         reconciling = true;
+        setSyncFeedStatus('catching-up');
         try {
           // Fetch from this tab's own cursor (SWR-51): whatever another
           // tab wrote to the shared key cannot make this tab skip or
@@ -179,10 +182,14 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
             await apply(dedupeLiveRecords(resp.syncActions));
             localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
             feedStale = true;
+            setSyncFeedStatus('stale');
             return;
           }
           await apply(acceptDeltaBatch(resp.syncActions, resp.lastSequenceId));
           advanceShared(tabHighWater());
+          if (!feedStale && !hasSequenceGap()) {
+            setSyncFeedStatus('live');
+          }
         } catch {
           // Reconciliation failed (session expired mid-flight, etc.).
           // The next reconnect or gap retries; a reload re-syncs.
@@ -193,6 +200,8 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
             void reconcile();
           } else if (hasSequenceGap()) {
             scheduleGapRepair();
+          } else if (!feedStale) {
+            setSyncFeedStatus('live');
           }
         }
       };
@@ -201,6 +210,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         if (gapTimerRef.current || feedStale) {
           return;
         }
+        setSyncFeedStatus('catching-up');
         gapTimerRef.current = setTimeout(() => {
           gapTimerRef.current = undefined;
           void reconcile();
@@ -215,6 +225,9 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         } else {
           clearTimeout(gapTimerRef.current);
           gapTimerRef.current = undefined;
+          if (!feedStale && !reconciling) {
+            setSyncFeedStatus('live');
+          }
         }
       };
 

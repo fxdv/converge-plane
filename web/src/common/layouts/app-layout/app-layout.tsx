@@ -20,6 +20,7 @@ import {
 
 import type { UsersOnWorkspaceType } from 'common/types';
 import { AllProviders } from 'common/wrappers/all-providers';
+import { SyncFeedBanner } from 'common/wrappers/sync-feed-status';
 
 import { useCurrentTeam } from 'hooks/teams';
 
@@ -116,11 +117,12 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
 
         <div
           className={cn(
-            'w-full',
+            'w-full flex flex-col min-h-0',
             applicationStore.sidebarCollapsed && 'max-w-[100vw]',
             !applicationStore.sidebarCollapsed && 'max-w-[calc(100vw_-_190px)]',
           )}
         >
+          <SyncFeedBanner />
           {children}
         </div>
       </div>

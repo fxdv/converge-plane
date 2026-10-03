@@ -18,6 +18,7 @@ interface MemberItemProps {
   isAdmin?: boolean;
   isSuspended?: boolean;
   isAgent?: boolean;
+  agentGlance?: string;
 }
 
 export const MemberItem = observer(
@@ -30,6 +31,7 @@ export const MemberItem = observer(
     isAdmin,
     isSuspended,
     isAgent,
+    agentGlance,
   }: MemberItemProps) => {
     const { workspaceStore } = useContextStore();
 
@@ -58,6 +60,11 @@ export const MemberItem = observer(
               )}
             </div>
             <div className="text-muted-foreground">{email}</div>
+            {isAgent && agentGlance && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {agentGlance}
+              </div>
+            )}
           </div>
         </div>
 

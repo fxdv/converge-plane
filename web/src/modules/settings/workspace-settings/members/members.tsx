@@ -9,10 +9,14 @@ import { SettingSection } from 'modules/settings/setting-section';
 import type { User } from 'common/types';
 
 import { useUsersData } from 'hooks/users';
+import { useCurrentWorkspace } from 'hooks/workspace';
+
+import { useGetAgentsQuery } from 'services/workspace';
 
 import { useContextStore } from 'store/global-context-provider';
 import { UserContext } from 'store/user-context';
 
+import { agentTokensAtAGlance } from './agent-access';
 import { AddAgentDialog } from './add-agent-dialog';
 import { AddMemberDialog } from './add-member-dialog';
 import { AgentsBriefingDialog } from './agents-briefing-dialog';
@@ -20,13 +24,22 @@ import { MemberItem } from './member-item';
 
 export const Members = observer(() => {
   const { users, isLoading } = useUsersData(false);
-  const { workspaceStore } = useContextStore();
+  const { workspaceStore, teamsStore } = useContextStore();
   const [newMemberDialog, setNewMemberDialog] = React.useState(false);
   const [newAgentDialog, setNewAgentDialog] = React.useState(false);
   const [briefingDialog, setBriefingDialog] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState('');
   const currentUser = React.useContext(UserContext);
   const userRole = workspaceStore.getUserData(currentUser.id)?.role;
+  const workspace = useCurrentWorkspace();
+  const { data: agentRoster } = useGetAgentsQuery(workspace?.id, !!workspace?.id);
+  const teamName = (teamId: string) =>
+    teamsStore.getTeamWithId(teamId)?.name ?? teamId;
+
+  const agentGlanceFor = (userId: string) => {
+    const entry = agentRoster?.find((a) => a.id === userId);
+    return entry ? agentTokensAtAGlance(entry, teamName) : undefined;
+  };
 
   const isAgent = (user: User) =>
     user.kind === 'agent' ||
@@ -99,6 +112,7 @@ export const Members = observer(() => {
                     email={userData.email}
                     isAdmin={userRole === 'ADMIN'}
                     isAgent={isAgent(userData)}
+                    agentGlance={agentGlanceFor(userData.id)}
                     className={index === users.length - 1 && 'pb-0 !border-b-0'}
                   />
                 ))}
@@ -116,6 +130,7 @@ export const Members = observer(() => {
                       email={userData.email}
                       isSuspended
                       isAgent={isAgent(userData)}
+                      agentGlance={agentGlanceFor(userData.id)}
                       isAdmin={userRole === 'ADMIN'}
                       className={
                         index === users.length - 1 && 'pb-0 !border-b-0'

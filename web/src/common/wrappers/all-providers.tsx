@@ -1,5 +1,6 @@
 import { SessionAuth } from 'common/auth';
 
+import { IssueConflictProvider } from 'modules/issues/issue-conflict';
 import { NewIssueProvider } from 'modules/issues/new-issue';
 
 import { deleteCookies } from 'common/common-utils';
@@ -12,6 +13,7 @@ import { WorkspaceStoreInit } from 'store/workspace-store-provider';
 import { BootstrapWrapper } from './bootstrap-data';
 import { DatabaseWrapper } from './database-wrapper';
 import { SocketDataSyncWrapper } from './socket-data-sync';
+import { SyncFeedProvider } from './sync-feed-status';
 
 export const AllProviders = ({
   children,
@@ -28,11 +30,15 @@ export const AllProviders = ({
         <DatabaseWrapper>
           <BootstrapWrapper>
             <WorkspaceStoreInit>
-              <SocketDataSyncWrapper>
-                <NewIssueProvider>
-                  <IssueViewProvider>{children}</IssueViewProvider>
-                </NewIssueProvider>
-              </SocketDataSyncWrapper>
+              <SyncFeedProvider>
+                <IssueConflictProvider>
+                  <SocketDataSyncWrapper>
+                    <NewIssueProvider>
+                      <IssueViewProvider>{children}</IssueViewProvider>
+                    </NewIssueProvider>
+                  </SocketDataSyncWrapper>
+                </IssueConflictProvider>
+              </SyncFeedProvider>
             </WorkspaceStoreInit>
           </BootstrapWrapper>
         </DatabaseWrapper>
