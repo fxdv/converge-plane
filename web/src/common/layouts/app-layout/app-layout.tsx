@@ -12,7 +12,11 @@ import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import * as React from 'react';
 
-import { GlobalShortcuts, IssueShortcutDialogs } from 'modules/shortcuts';
+import {
+  GlobalShortcuts,
+  IssueShortcutDialogs,
+  ShortcutsDialogProvider,
+} from 'modules/shortcuts';
 
 import type { UsersOnWorkspaceType } from 'common/types';
 import { AllProviders } from 'common/wrappers/all-providers';
@@ -56,7 +60,7 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
   );
 
   return (
-    <>
+    <ShortcutsDialogProvider>
       <div className="h-[100vh] w-[100vw] flex">
         {!applicationStore.sidebarCollapsed && (
           <div className="w-[190px] flex flex-col h-full overflow-auto">
@@ -88,7 +92,7 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
                         {
                           title: 'Floor',
                           icon: AI,
-                          href: `/${workspaceSlug}/swarm`,
+                          href: `/${workspaceSlug}/floor`,
                         },
                         {
                           title: 'Metrics',
@@ -124,7 +128,7 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
       <GlobalShortcuts />
 
       {team && <IssueShortcutDialogs />}
-    </>
+    </ShortcutsDialogProvider>
   );
 });
 

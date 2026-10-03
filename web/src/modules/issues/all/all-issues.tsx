@@ -124,7 +124,7 @@ export const AllIssues = withApplicationStore(
                     className="gap-1.5"
                   >
                     <AI size={16} />
-                    <span className="text-xs font-medium">Swarm</span>
+                    <span className="text-xs font-medium">Floor</span>
                   </Button>
                 )}
                 <Button
