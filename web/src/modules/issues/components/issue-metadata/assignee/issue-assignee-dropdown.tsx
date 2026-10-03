@@ -53,11 +53,16 @@ export function IssueAssigneeDropdown({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'h-5 w-5 flex items-center justify-between !bg-transparent shadow-none p-0 border-0 focus-visible:ring-1 focus-visible:border-primary',
+            'h-5 w-auto flex items-center gap-1 !bg-transparent shadow-none p-0 border-0 focus-visible:ring-1 focus-visible:border-primary',
           )}
         >
           {value ? (
-            <UserAvatar user={getUserFromUsersData(users, value)} />
+            <>
+              <UserAvatar user={getUserFromUsersData(users, value)} />
+              <span className="text-xs text-foreground">
+                {getUserFromUsersData(users, value)?.fullname}
+              </span>
+            </>
           ) : (
             <div className="flex items-center justify-center">
               <AssigneeLine size={20} className="mr-1 text-muted-foreground" />

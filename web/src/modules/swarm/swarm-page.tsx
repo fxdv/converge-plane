@@ -128,10 +128,9 @@ export const SwarmPage = withApplicationStore(
             <div>
               <h2 className="text-base font-semibold">The swarm plane</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                One screen for the swarm: how the fleet coordinates, how each
-                agent is doing, and the work that waits on you. Changes below
-                take effect on the next swarm decision — no restart, no
-                redeploy.
+                This screen is the in-process floor. It triages, and it does not
+                complete an issue. Changes below take effect on the next swarm
+                decision — no restart, no redeploy.
               </p>
             </div>
           </section>
