@@ -13,7 +13,7 @@ import { SubscribeView } from './issue-activity/subscribe-view';
 
 export function Activity() {
   return (
-    <Tabs defaultValue="comments" className="mt-3 p-0 px-6">
+    <Tabs defaultValue="comments" className="mt-6 p-0 px-6">
       <div className="flex flex-col">
         <div className="flex justify-between items-start">
           <div className="flex flex-col gap-1">

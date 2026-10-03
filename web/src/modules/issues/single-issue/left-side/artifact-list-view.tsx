@@ -69,7 +69,7 @@ export const ArtifactListView = observer(() => {
   );
 
   return (
-    <div className="mt-2 px-6">
+    <div className="mt-6 px-6">
       <h2 className="text-md mb-1 flex items-center gap-1">
         <DocumentLine size={16} className="text-muted-foreground" />
         Documents

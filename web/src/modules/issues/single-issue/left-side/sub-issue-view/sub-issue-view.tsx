@@ -25,7 +25,7 @@ export function SubIssueView({ childIssues, issueId }: SubIssueViewProps) {
 
   return (
     <>
-      <Collapsible open={isOpen} onOpenChange={setOpen} className="w-full py-2">
+      <Collapsible open={isOpen} onOpenChange={setOpen} className="mt-6 w-full py-2">
         <div className="flex justify-between px-6">
           <div>
             <CollapsibleTrigger asChild>
