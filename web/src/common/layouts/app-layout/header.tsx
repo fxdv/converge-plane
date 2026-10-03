@@ -1,16 +1,18 @@
 import { Button } from '@converge/ui/components/button';
-import { CreateIssueLine, SearchLine } from '@converge/ui/icons';
+import { CreateIssueLine, HelpLine, SearchLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 
 import { useNewIssue } from 'modules/issues/new-issue';
 import { SearchDialog } from 'modules/search';
+import { useShortcutsDialog } from 'modules/shortcuts';
 
 import { TooltipWrapper } from 'common/wrappers/tooltip-wrapper';
 
 export const Header = observer(() => {
   const [search, setSearch] = React.useState(false);
   const { openNewIssue } = useNewIssue();
+  const { openDialog: openShortcuts } = useShortcutsDialog();
 
   return (
     <>
@@ -38,6 +40,18 @@ export const Header = observer(() => {
             }}
           >
             <SearchLine size={18} />
+          </Button>
+        </TooltipWrapper>
+
+        <TooltipWrapper tooltip="Keyboard shortcuts (?)">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 justify-start w-fit px-1.5"
+            aria-label="Keyboard shortcuts"
+            onClick={() => openShortcuts()}
+          >
+            <HelpLine size={18} />
           </Button>
         </TooltipWrapper>
       </div>

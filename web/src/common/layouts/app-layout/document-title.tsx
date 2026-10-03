@@ -6,7 +6,7 @@ import { useCurrentTeam } from 'hooks/teams';
 
 const SECTION: Record<string, string> = {
   '/inbox': 'Inbox',
-  '/swarm': 'Floor',
+  '/floor': 'Floor',
   '/metrics': 'Metrics',
   '/my-issues': 'My issues',
   '/views': 'Views',

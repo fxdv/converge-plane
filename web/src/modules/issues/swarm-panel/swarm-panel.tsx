@@ -36,7 +36,7 @@ export const SwarmPanel = observer(() => {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 py-3 border-b border-grayAlpha-100 dark:border-grayAlpha-300 flex items-center gap-2">
         <AI size={16} />
-        <h2 className="text-sm font-semibold">Swarm</h2>
+        <h2 className="text-sm font-semibold">Floor</h2>
         {data && data.agents.length > 0 && (
           <span className="text-xs text-grayAlpha-500 dark:text-grayAlpha-400">
             {data.agents.length} agent{data.agents.length === 1 ? '' : 's'}
@@ -45,10 +45,10 @@ export const SwarmPanel = observer(() => {
         {workspace && (
           <button
             type="button"
-            onClick={() => router.push(`/${workspace.slug}/swarm`)}
+            onClick={() => router.push(`/${workspace.slug}/floor`)}
             className="ml-auto text-xs text-grayAlpha-500 dark:text-grayAlpha-400 hover:underline"
           >
-            Swarm page →
+            Floor page →
           </button>
         )}
         <button

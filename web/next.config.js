@@ -14,6 +14,11 @@ module.exports = {
         destination: '/auth',
         permanent: true,
       },
+      {
+        source: '/:workspaceSlug/swarm',
+        destination: '/:workspaceSlug/floor',
+        permanent: true,
+      },
     ];
   },
   // The /_next/image optimizer fetches and transcodes on request; nothing

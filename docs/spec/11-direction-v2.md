@@ -121,7 +121,7 @@ Documents updated: docker-compose.yaml, this document
 
 | ID | Item | Gate |
 | --- | --- | --- |
-| OD-15 | Concrete p95 performance budgets at 10k issues / 1k team / 100 sessions | v1 acceptance |
+| OD-15 | Concrete p95 performance budgets at 10k issues / 1k team / 100 sessions | **Defined** — doc 24 (Phase 0); measured verification still v1 acceptance |
 | OD-19 | Telemetry: removed from the forked web in the M3 trim (PostHog + Sentry); if analytics ever returns: off by default, operator opt-in, no issue content | **Resolved (M3)** |
 | OD-21/22 | Browser matrix, WCAG 2.2 AA process | v1 acceptance |
 | A1 | Crash-class sweep: audit client MST models and value-lookups against the Go wire contract (role, DELETE records, and priority found organically so far — all fixed; the rest must be audited, not discovered) | v1 acceptance |
