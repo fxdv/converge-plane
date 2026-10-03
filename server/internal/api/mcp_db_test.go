@@ -38,7 +38,8 @@ func newMCPFixture(t *testing.T) *mcpFixture {
 // token. scopes is a JSON array, or "" for a full-authority token.
 func (f *mcpFixture) agentToken(scopes string) (string, string) {
 	f.t.Helper()
-	tok := `{"ttlHours":1}`
+	defaultScopes := `["work","issues:write","comments:write"]`
+	tok := `{"scopes":` + defaultScopes + `,"ttlHours":1}`
 	if scopes != "" {
 		tok = `{"scopes":` + scopes + `,"ttlHours":1}`
 	}

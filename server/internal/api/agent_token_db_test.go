@@ -185,7 +185,8 @@ func TestTokenStreamEndsWhenTokenDies(t *testing.T) {
 	t.Cleanup(func() { ssePingInterval = prev })
 	srv := httptest.NewServer(f.tokenRouter())
 	t.Cleanup(srv.Close)
-	ag := f.createAgent(`{"name":"watcher-` + f.ws[:6] + `","teamIds":["` + f.t1 + `"],"driver":"external"}`)
+	ag := f.createAgent(`{"name":"watcher-` + f.ws[:6] + `","teamIds":["` + f.t1 + `"],"driver":"external",` +
+		`"token":{"scopes":["sync:read"],"ttlHours":720}}`)
 
 	req, err := http.NewRequest("GET", srv.URL+"/api/v1/sync_actions/stream?workspaceId="+f.ws, nil)
 	if err != nil {

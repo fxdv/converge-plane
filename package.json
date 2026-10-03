@@ -18,7 +18,13 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss@<8.5.23": "^8.5.23"
+      "postcss@<8.5.23": "^8.5.23",
+      "brace-expansion": "^1.1.20"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
     },
     "onlyBuiltDependencies": [
       "esbuild",
