@@ -7,13 +7,16 @@ import {
 import { ActivityLine, SendLine } from '@converge/ui/icons';
 import React from 'react';
 
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
+
 import { CommentsActivity } from './comments-activity';
 import { IssueActivity } from './issue-activity';
 import { SubscribeView } from './issue-activity/subscribe-view';
 
 export function Activity() {
   return (
-    <Tabs defaultValue="comments" className="mt-6 p-0 px-6">
+    <IssueDetailSection className="p-0">
+    <Tabs defaultValue="comments" className="p-0">
       <div className="flex flex-col">
         <div className="flex justify-between items-start">
           <div className="flex flex-col gap-1">
@@ -49,5 +52,6 @@ export function Activity() {
         </TabsContent>
       </div>
     </Tabs>
+    </IssueDetailSection>
   );
 }

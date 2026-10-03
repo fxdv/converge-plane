@@ -7,7 +7,9 @@ import {
 
 import type { IssueCommentType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 import { CommentArray } from './models';
 
@@ -52,6 +54,9 @@ export const CommentsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* (issueId: string) {
+      if (isMemoryAuthorityModel(MODELS.IssueComment)) {
+        return;
+      }
       const comments = issueId
         ? yield convergeDatabase.comments
             .where({

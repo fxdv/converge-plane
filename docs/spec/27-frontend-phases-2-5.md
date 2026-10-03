@@ -8,7 +8,7 @@
 | --- | --- |
 | Remove hardcoded `.text-primary` hex | Done — use theme `text-primary` only |
 | Icon/date policy | Done — `packages/ui/README.md`, `format-date.ts` |
-| Issue detail section primitive | Done — `IssueDetailSection` |
+| Issue detail section primitive | Done — all left-side blocks use `IssueDetailSection` |
 | Typography/spacing doc | Done — `packages/ui/README.md` |
 
 ## Phase 3 — R-9 data layer
@@ -16,10 +16,10 @@
 | Slice | Status |
 | --- | --- |
 | 1 — Issues + workflows MST-only (no Dexie writes) | Done — `client-cache-policy.ts`, save-data, prune, load |
-| 2 — Comments/history + optimistic mutations | Planned |
+| 2 — Comments/history + optimistic mutations | Done — memory authority; optimistic comment in `issue-comment.tsx` |
 | 3 — Runs/PRs/notifications; Dexie retirement | Planned |
 
-`SYNC_SCHEMA` bumped to `2026-10-04.r9-slice1` for one full rebootstrap.
+`SYNC_SCHEMA` bumped to `2026-10-04.r9-slice2` for one full rebootstrap.
 
 ## Phase 4 — Scale and reach
 

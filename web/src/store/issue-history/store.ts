@@ -8,7 +8,9 @@ import {
 
 import type { IssueHistoryType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 import { asSnapshot } from 'store/snapshot';
 
 import { IssueHistoriesModel, IssueHistory } from './models';
@@ -65,6 +67,9 @@ export const IssueHistoryStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* (issueId: string) {
+      if (isMemoryAuthorityModel(MODELS.IssueHistory)) {
+        return;
+      }
       const issueHistories = issueId
         ? yield convergeDatabase.issueHistory
             .where({

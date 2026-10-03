@@ -17,6 +17,7 @@ import {
 } from 'common/types';
 
 import { useTeamWithId } from 'hooks/teams';
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 
 import { useDeleteIssueRelationMutation } from 'services/issues';
 
@@ -148,7 +149,7 @@ export const RelatedIssueView = observer(({ issue }: RelatedIssueViewProps) => {
   }
 
   return (
-    <div className="mt-6 py-2">
+    <IssueDetailSection className="py-2 px-0">
       <div className="px-6 py-1 text-md text-foreground">Related</div>
       {relations.map((relation) => (
         <RelatedRow
@@ -160,6 +161,6 @@ export const RelatedIssueView = observer(({ issue }: RelatedIssueViewProps) => {
           }
         />
       ))}
-    </div>
+    </IssueDetailSection>
   );
 });
