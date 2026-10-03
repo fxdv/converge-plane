@@ -13,7 +13,7 @@
     "typecheck": "pnpm turbo run typecheck"
   },
   "dependencies": {
-    "dotenv-cli": "^7.4.4",
+    "dotenv-cli": "^11.0.0",
     "turbo": "^2.11.3"
   },
   "pnpm": {
