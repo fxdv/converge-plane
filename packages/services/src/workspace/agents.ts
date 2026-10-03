@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// runtime: the built-in swarm works the agent's issues. external: an
-// outside process works them through the work API or MCP.
+// runtime: the in-process floor triages the agent's issues. external: a
+// coding agent works them through the work API or MCP.
 export type AgentDriver = 'runtime' | 'external';
 
 export type AgentScope =
@@ -12,7 +12,9 @@ export type AgentScope =
   | 'work'
   | 'sync:read';
 
-// Omitted scopes / teamIds keep the agent's full authority.
+// scopes is required on issuance. teamIds omitted means every team the
+// agent belongs to. A stored token may still report null scopes: that
+// grant predates the requirement and keeps full authority until rotated.
 export interface AgentTokenSpec {
   scopes?: AgentScope[];
   teamIds?: string[];
@@ -85,8 +87,7 @@ export async function getAgents(workspaceId: string) {
   return response.data;
 }
 
-// A new token beside the agent's others; it gets the full authority unless
-// the spec narrows it.
+// A new token beside the agent's others. The spec must name scopes.
 export async function issueAgentToken(
   workspaceId: string,
   accountId: string,

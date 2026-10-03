@@ -105,10 +105,11 @@ func Run(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) (string, err
 		}
 		_ = plaintext // shown once at creation via the API; the seed never prints tokens
 		if err := exec("seed agent token "+name, `
-			insert into api_tokens (account_id, name, token_hash, token_prefix, expires_at, created_by)
-			values ($1, 'default', $2, $3, $4, $5)`,
+			insert into api_tokens (account_id, name, token_hash, token_prefix, expires_at, created_by, scopes)
+			values ($1, 'default', $2, $3, $4, $5, $6)`,
 			ids["acc:agent:"+name], hash, auth.APITokenPrefix,
-			now.Add(auth.APITokenTTL), ids["acc:"+demoEmail]); err != nil {
+			now.Add(auth.APITokenTTL), ids["acc:"+demoEmail],
+			[]string{"work", "issues:write", "comments:write"}); err != nil {
 			return "", err
 		}
 	}

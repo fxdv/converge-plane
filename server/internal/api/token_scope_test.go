@@ -170,17 +170,18 @@ func TestTokenSpecValidate(t *testing.T) {
 		spec    tokenSpec
 		problem string
 	}{
-		{"full authority", tokenSpec{}, ""},
+		{"scopes required", tokenSpec{}, "scopes must name at least one scope"},
 		{"scoped", tokenSpec{Scopes: []string{"work", "work", "issues:write"}}, ""},
-		{"team-limited", tokenSpec{TeamIDs: []string{t1}}, ""},
-		{"empty scopes", tokenSpec{Scopes: []string{}}, "scopes must name at least one scope (omit it for full access)"},
+		{"team-limited", tokenSpec{Scopes: []string{"work"}, TeamIDs: []string{t1}}, ""},
+		{"empty scopes", tokenSpec{Scopes: []string{}}, "scopes must name at least one scope"},
 		{"unknown scope", tokenSpec{Scopes: []string{"admin"}}, "unknown scope: admin"},
-		{"empty teams", tokenSpec{TeamIDs: []string{}}, "teamIds must name at least one team (omit it for every team)"},
-		{"foreign team", tokenSpec{TeamIDs: []string{t2}}, "token teamIds must be teams the agent belongs to"},
+		{"empty teams", tokenSpec{Scopes: []string{"work"}, TeamIDs: []string{}}, "teamIds must name at least one team (omit it for every team)"},
+		{"foreign team", tokenSpec{Scopes: []string{"work"}, TeamIDs: []string{t2}}, "token teamIds must be teams the agent belongs to"},
 		{"sync with teams", tokenSpec{Scopes: []string{"sync:read"}, TeamIDs: []string{t1}}, "sync:read covers the whole workspace and cannot be combined with teamIds"},
-		{"ttl too short", tokenSpec{TTLHours: hours(0)}, "ttlHours must be between 1 and 87600"},
-		{"ttl too long", tokenSpec{TTLHours: hours(87601)}, "ttlHours must be between 1 and 87600"},
-		{"ttl ok", tokenSpec{TTLHours: hours(24)}, ""},
+		{"ttl too short", tokenSpec{Scopes: []string{"work"}, TTLHours: hours(0)}, "ttlHours must be between 1 and 8760"},
+		{"ttl too long", tokenSpec{Scopes: []string{"work"}, TTLHours: hours(8761)}, "ttlHours must be between 1 and 8760"},
+		{"ttl ok", tokenSpec{Scopes: []string{"work"}, TTLHours: hours(24)}, ""},
+		{"ttl at the cap", tokenSpec{Scopes: []string{"work"}, TTLHours: hours(8760)}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -191,8 +192,8 @@ func TestTokenSpecValidate(t *testing.T) {
 			if c.name == "scoped" && len(out.Scopes) != 2 {
 				t.Fatalf("scopes not deduplicated: %v", out.Scopes)
 			}
-			if c.name == "full authority" && (out.Scopes != nil || out.TeamIDs != nil) {
-				t.Fatalf("omitted grants must stay nil (full authority): %+v", out)
+			if c.name == "scopes required" && out.Scopes != nil {
+				t.Fatalf("a refused spec must not invent scopes: %+v", out)
 			}
 		})
 	}

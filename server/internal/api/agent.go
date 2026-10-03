@@ -18,6 +18,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -50,9 +51,10 @@ const (
 
 func validDriver(d string) bool { return d == agentDriverRuntime || d == agentDriverExternal }
 
-// tokenSpec is the requested grant of a new token. Omitted (null)
-// scopes or teamIds keep the agent's full authority; an empty list is
-// refused rather than read as either extreme.
+// tokenSpec is the requested grant of a new token. Scopes are required.
+// An empty list is refused. teamIds may be omitted, which means every
+// team the agent belongs to; an empty list is refused. A token already
+// stored with no scopes keeps that grant through rotation only.
 type tokenSpec struct {
 	Scopes   []string `json:"scopes"`
 	TeamIDs  []string `json:"teamIds"`
@@ -72,11 +74,18 @@ type issuedToken struct {
 // memberships (a grant may only narrow them). It returns the normalized
 // spec (deduplicated) or a client-visible error.
 func (s tokenSpec) validate(agentTeams []string) (tokenSpec, string) {
+	return s.check(agentTeams, true)
+}
+
+// check validates the grant. requireScopes is false only when rotating a
+// token that was stored with no scopes: that grant is kept, and a new
+// request cannot ask for it.
+func (s tokenSpec) check(agentTeams []string, requireScopes bool) (tokenSpec, string) {
 	out := tokenSpec{TTLHours: s.TTLHours}
-	if s.Scopes != nil {
-		if len(s.Scopes) == 0 {
-			return out, "scopes must name at least one scope (omit it for full access)"
-		}
+	if requireScopes && len(s.Scopes) == 0 {
+		return out, "scopes must name at least one scope"
+	}
+	if len(s.Scopes) > 0 {
 		seen := map[string]bool{}
 		out.Scopes = []string{}
 		for _, sc := range s.Scopes {
@@ -115,7 +124,7 @@ func (s tokenSpec) validate(agentTeams []string) (tokenSpec, string) {
 		}
 	}
 	if s.TTLHours != nil && (*s.TTLHours < 1 || time.Duration(*s.TTLHours)*time.Hour > auth.MaxAPITokenTTL) {
-		return out, "ttlHours must be between 1 and 87600"
+		return out, fmt.Sprintf("ttlHours must be between 1 and %d", int(auth.MaxAPITokenTTL/time.Hour))
 	}
 	return out, ""
 }
@@ -727,7 +736,7 @@ func (a *API) handleRotateAgentToken(w http.ResponseWriter, r *http.Request) {
 		hours = max(1, min(hours, int(auth.MaxAPITokenTTL/time.Hour)))
 		spec.TTLHours = &hours
 	}
-	spec, problem := spec.validate(teams)
+	spec, problem := spec.check(teams, spec.Scopes != nil)
 	if problem != "" {
 		writeError(w, http.StatusUnprocessableEntity, problem)
 		return

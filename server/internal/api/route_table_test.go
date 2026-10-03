@@ -1403,6 +1403,9 @@ var rtRouteCases = []routeCase{
 			{frag: "group by 1, 2 order by 3 desc", rows: [][]any{}},
 			// The six bounded-window counts share two shapes (24h / 7d);
 			// one rule per window covers all six calls.
+			{frag: "where cost > 0", rowVals: []any{int64(0), 0}},
+			{frag: "count(*) filter (", rowVals: []any{0, 0, 0}},
+			{frag: "field = 'status'\n\t\t  and lower(h.to_value)", rowVals: []any{0}},
 			{frag: "created_at > now() - interval '24 hours'", rowVals: []any{0}},
 			{frag: "interval '7 days'", rowVals: []any{0}},
 			{frag: "select count(*) from sync_outbox where workspace_id = $1", rowVals: []any{0}},
@@ -1410,7 +1413,7 @@ var rtRouteCases = []routeCase{
 			// The agent-share count must come before the roster rule:
 			// the roster's statement contains its fragment too, and the
 			// first match wins.
-			{frag: "count(*) filter (where a.kind = $2)", rowVals: []any{0, 0}},
+			{frag: "count(*) filter (where a.kind = $2)", rowVals: []any{0, 0, 0}},
 			{frag: "where a.kind = $2", rows: [][]any{}},
 			{frag: "not in ('COMPLETED', 'CANCELED')", rowVals: []any{0, 0}},
 			{frag: "select count(*) filter (where h.action = 'paused')", rowVals: []any{0, 0}},
@@ -1489,6 +1492,7 @@ var rtRouteCases = []routeCase{
 		path:      "/api/v1/workspaces/" + rtWS + "/agents/" + rtAgent + "/token",
 		urlParams: []string{"id", rtWS, "accountId", rtAgent},
 		handler:   (*API).handleIssueAgentToken,
+		body:      `{"scopes":["work"]}`,
 		pool: &fakePool{
 			rules: []fakeRule{
 				rtRole("owner"),

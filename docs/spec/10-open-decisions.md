@@ -2,7 +2,7 @@
 
 Open decisions do not authorize broader scope. Each row has a recommended default that governs prototypes and discussion, but a blocking row must be explicitly accepted before its gate.
 
-> **Status as of 2026-09-26.** [Doc 11](11-direction-v2.md) controls where it conflicts with this document. It closed OD-01 (R-2), OD-02 (R-3, R-12), OD-03 (R-4), OD-04 (R-5), OD-05 (R-6), OD-09 (R-7), OD-16 (R-8), and OD-19 (resolved in M3); the Status column below is updated accordingly. The remaining rows are open as written.
+> **Status as of 2026-10-03.** [Doc 11](11-direction-v2.md) controls where it conflicts with this document. It closed OD-01 (R-2), OD-02 (R-3, R-12), OD-03 (R-4), OD-04 (R-5), OD-05 (R-6), OD-09 (R-7), OD-16 (R-8), and OD-19 (resolved in M3). Doc 00's 2026-10-03 addendum names the shipped product: the board, external coding agents over MCP, and an in-process floor that triages. The "Decisions already fixed" list below that still describes an MVP without inbox or integrations is historical. The remaining rows are open as written.
 
 | ID | Decision | Recommended default | Gate | Status |
 | --- | --- | --- | --- | --- |
@@ -19,11 +19,11 @@ Open decisions do not authorize broader scope. Each row has a recommended defaul
 | OD-11 | MVP job execution | PostgreSQL transactional outbox and leased worker, runnable in same artifact; no Trigger.dev/external scheduler | Before outbox implementation | OPEN — default strong |
 | OD-12 | NEXT attachment storage/scanning | S3-compatible interface plus local-development adapter; short-lived URLs; pluggable scanning hook and quarantine policy | Before attachment schema/API | OPEN — NEXT blocking |
 | OD-13 | NEXT project/cycle rules | Projects cross teams without granting access; cycles single-team/non-overlapping; explicit incomplete-item rollover | Before planning schema | OPEN — NEXT blocking |
-| OD-14 | NEXT notification triggers/grouping | Assignment, mention, comment, relation, watched issue; deterministic burst grouping; in-app only; user mute controls | Before notification projector | OPEN — NEXT blocking |
+| OD-14 | NEXT notification triggers/grouping | Assignment, mention, comment, relation, watched issue; deterministic burst grouping; in-app only; user mute controls | Before notification projector | OPEN for mute and grouping — the in-app inbox has shipped |
 | OD-15 | Performance budgets and representative scale | Define p95 API/UI budgets using 10k issues/workspace, 1k/team active collection, 100 concurrent sessions as initial fixture—not claimed capacity | Before MVP UI acceptance | OPEN — blocking for beta |
 | OD-16 | Realtime transport | SSE in NEXT; refetch/gap recovery authoritative; WebSocket only for measured bidirectional need | Before NEXT realtime implementation | CLOSED — SSE (doc 11 R-8) |
 | OD-17 | Public API versioning/support | Resource-oriented `/v1`, cursor pagination, idempotency, scoped credentials, published deprecation window and ownership | Before LATER public API | OPEN — LATER blocking |
-| OD-18 | GitHub/Slack exact workflows | GitHub linking before sync; Slack bounded notification/intake; validate with users and provider policy | Before provider installation work | OPEN — LATER blocking |
+| OD-18 | GitHub/Slack exact workflows | GitHub linking before sync; Slack bounded notification/intake; validate with users and provider policy | Before provider installation work | OPEN for Slack — GitHub pull-request links and one-way issue import have shipped |
 | OD-19 | Telemetry and crash reporting | Off by default for self-host; explicit operator opt-in; publish fields/retention; no issue content | Before any analytics dependency | CLOSED — no telemetry; forked analytics removed (doc 11, M3) |
 | OD-20 | Localization and timezone baseline | English-first externalized copy; UTC instants, account display timezone, date-only due/cycle dates | Before date/presentation schema | OPEN — default strong |
 | OD-21 | Browser support | Current and previous major Chrome/Edge/Firefox/Safari; responsive web, no native app/offline mutation | Before test matrix freeze | OPEN — default strong |
@@ -33,12 +33,11 @@ Open decisions do not authorize broader scope. Each row has a recommended defaul
 
 These are not open implementation choices:
 
-- Tegon architecture is rejected as a greenfield base.
+- Tegon architecture is rejected as a greenfield base. The web is a Tegon-derived fork; doc 11 records that.
 - The product is workspace-tenant and team-restricted.
 - Authentication alone is insufficient; object authorization uses the explicit matrix.
-- MVP contains no custom views, projects, cycles, Inbox, attachments, integrations, API, or generic automation.
-- NEXT contains no provider integrations or public extension compatibility promise.
-- Arbitrary remote Actions, in-process third-party code, token injection, full client database replication, WAL dependence, support/CRM, AI assistants, and semantic/vector search are excluded.
+- Saved views, the in-app inbox, external coding agents, and GitHub linking have shipped. Projects, cycles, and attachments have not.
+- Arbitrary remote Actions, in-process third-party code, token injection, full client database replication, WAL dependence, support/CRM, built-in conversational AI, and semantic/vector search are excluded. Coding agents the operator runs are not that exclusion.
 - Public/shared URLs, projects, assignments, notifications, and integrations never grant permission implicitly.
 - Security, accessibility, audit, backup/restore, upgrade safety, and tests are delivery requirements, not optional hardening.
 
@@ -68,4 +67,4 @@ Documents/contracts updated:
 5. OD-05 and OD-20 freeze content/date representation.
 6. Convert the accepted decisions into an architecture decision record set and an executable MVP vertical-slice backlog.
 
-Until those blocking decisions close, repository work should remain specification, prototype, or throwaway-spike work—not production greenfield implementation.
+Those early gates have passed. Open rows still do not authorize work outside their own decision.
