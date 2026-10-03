@@ -46,7 +46,7 @@ function getIfTouched(form: IssueDraftForm, index: number) {
   return false;
 }
 
-export function NewIssueTitle({ form, index }: NewIssueTitleProps) {
+export function NewIssueTitle({ form, index, isSubIssue }: NewIssueTitleProps) {
   const description = useWatch({
     control: form.control,
     name: `issues.${index}.description`,
@@ -106,6 +106,7 @@ export function NewIssueTitle({ form, index }: NewIssueTitleProps) {
                   className="border-0 py-0 resize-none bg-transparent no-scrollbar overflow-hidden outline-hidden focus-visible:ring-0 w-fit"
                   placeholderClassName="font-medium"
                   placeholder="Issue title"
+                  autoFocus={index === 0 && !isSubIssue}
                   {...field}
                 />
               </div>

@@ -1,18 +1,25 @@
+import { RoleEnum } from '@converge/types';
 import { Button } from '@converge/ui/components/button';
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@converge/ui/components/resizable';
-import { ActivityLine, AI, RightSidebarClosed, RightSidebarOpen } from '@converge/ui/icons';
-import { RoleEnum } from '@converge/types';
+import {
+  ActivityLine,
+  AI,
+  RightSidebarClosed,
+  RightSidebarOpen,
+} from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
+import { useRouter } from 'next/router';
 import React from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 
 import { AppLayout } from 'common/layouts/app-layout';
 import { MainLayout } from 'common/layouts/main-layout';
-import type { UsersOnWorkspaceType } from 'common/types';
 import { SCOPES } from 'common/scopes';
+import type { UsersOnWorkspaceType } from 'common/types';
 import { withApplicationStore } from 'common/wrappers/with-application-store';
 
 import { IssueViewContext } from 'components/side-issue-view';
@@ -36,7 +43,7 @@ export const AllIssues = withApplicationStore(
     useScope(SCOPES.AllIssues);
 
     const team = useCurrentTeam();
-    const { workspaceStore } = useContextStore();
+    const { workspaceStore, issuesStore } = useContextStore();
     const [overview, setOverview] = useLocalState('insightsSidebar', false);
     // D2: the swarm panel (fleet roster + paused issues), toggleable
     // from the header next to the insights panel.
@@ -46,6 +53,36 @@ export const AllIssues = withApplicationStore(
     // the synced stores.
     const [activity, setActivity] = useLocalState('activityPanel', false);
     const { closeIssueView } = React.useContext(IssueViewContext);
+    const router = useRouter();
+
+    useHotkeys(
+      'o',
+      (event) => {
+        if (router.asPath.includes('/issue/')) {
+          return;
+        }
+        const slug = router.query.workspaceSlug;
+        const first = issuesStore.getIssues({ teamId: team?.id })[0];
+        if (!first || !slug) {
+          return;
+        }
+        const ident =
+          team?.identifier ?? String(router.query.teamIdentifier ?? '');
+        if (!ident) {
+          return;
+        }
+        void router.push(`/${slug}/issue/${ident}-${first.number}#issue-title`);
+        event.preventDefault();
+      },
+      { scopes: [SCOPES.AllIssues] },
+    );
+
+    React.useEffect(() => {
+      if (window.location.hash !== '#board') {
+        return;
+      }
+      document.getElementById('board')?.focus();
+    }, []);
 
     // The button appears only when the workspace has machine members
     // (M6): read from the synced users store, no extra request.
@@ -115,8 +152,10 @@ export const AllIssues = withApplicationStore(
               id="issues"
               className="w-full flex flex-col"
             >
-              <FiltersView Actions={<IssuesViewOptions />} />
-              <ListView />
+              <div id="board" tabIndex={-1} className="outline-none">
+                <FiltersView Actions={<IssuesViewOptions />} />
+                <ListView />
+              </div>
             </ResizablePanel>
             {overview && (
               <>

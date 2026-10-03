@@ -21,12 +21,23 @@ export function IssueTitle({ value, onChange }: IssueTitleProps) {
     debouncedUpdates(value);
   };
 
+  React.useEffect(() => {
+    if (window.location.hash !== '#issue-title') {
+      return;
+    }
+    document
+      .querySelector<HTMLElement>('#issue-title [contenteditable]')
+      ?.focus();
+  }, []);
+
   return (
-    <AdjustableTextArea
-      className="border-0 px-6 py-0 font-medium resize-none bg-transparent no-scrollbar overflow-hidden outline-hidden focus-visible:ring-0 text-xl"
-      value={inputValue}
-      placeholder="Issue title"
-      onChange={onInputChange}
-    />
+    <div id="issue-title">
+      <AdjustableTextArea
+        className="border-0 px-6 py-0 font-medium resize-none bg-transparent no-scrollbar overflow-hidden outline-hidden focus-visible:ring-0 text-xl"
+        value={inputValue}
+        placeholder="Issue title"
+        onChange={onInputChange}
+      />
+    </div>
   );
 }

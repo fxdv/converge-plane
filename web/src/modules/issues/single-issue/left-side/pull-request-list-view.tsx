@@ -12,7 +12,7 @@ import {
   pullRequestDisplay,
   pullRequestHref,
 } from 'common/lib/pull-request-format';
-import type { IssuePullRequestType } from 'common/types';
+import type { IssuePullRequestType, IssueType, TeamType } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
 
@@ -36,13 +36,48 @@ const STATE_HINT: Partial<Record<string, string>> = {
     'GitHub did not return this pull request: it may be private to the configured token, deleted, or moved',
 };
 
+function alsoOnIssue(
+  pullRequests: { values: () => Iterable<IssuePullRequestType> },
+  issues: { getIssueById: (id: string) => IssueType | undefined },
+  teams: { teams: TeamType[] },
+  issueId: string,
+  pr: IssuePullRequestType,
+): string[] {
+  const labels: string[] = [];
+  for (const other of pullRequests.values()) {
+    if (
+      other.issueId === issueId ||
+      other.repo !== pr.repo ||
+      other.number !== pr.number
+    ) {
+      continue;
+    }
+    const linked = issues.getIssueById(other.issueId);
+    if (!linked) {
+      continue;
+    }
+    const team = teams.teams.find(
+      (candidate) => candidate.id === linked.teamId,
+    );
+    labels.push(
+      team ? `${team.identifier}-${linked.number}` : `#${linked.number}`,
+    );
+  }
+  return labels;
+}
+
 interface PullRequestRowProps {
   pr: IssuePullRequestType;
   onUnlink: (pr: IssuePullRequestType) => void;
   unlinking: boolean;
 }
 
-const PullRequestRow = ({ pr, onUnlink, unlinking }: PullRequestRowProps) => {
+const PullRequestRow = ({
+  pr,
+  onUnlink,
+  unlinking,
+  alsoOn,
+}: PullRequestRowProps & { alsoOn: string[] }) => {
   const display = pullRequestDisplay(pr);
   const href = pullRequestHref(pr);
   const ref = `${pr.repo}#${pr.number}`;
@@ -70,6 +105,11 @@ const PullRequestRow = ({ pr, onUnlink, unlinking }: PullRequestRowProps) => {
       <span className="text-foreground truncate" title={pr.title ?? undefined}>
         {pr.title ?? ''}
       </span>
+      {alsoOn.length > 0 && (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          Also on {alsoOn.join(', ')}
+        </span>
+      )}
       <span className="flex-1" />
       <span
         className={`shrink-0 text-xs ${PULL_REQUEST_STYLE[display]}`}
@@ -162,7 +202,7 @@ const LinkPullRequestForm = ({ issueId, onDone }: LinkPullRequestFormProps) => {
 export const PullRequestListView = observer(() => {
   const issue = useIssueData();
   const user = React.useContext(UserContext);
-  const { issuePullRequestsStore } = useContextStore();
+  const { issuePullRequestsStore, issuesStore, teamsStore } = useContextStore();
   const { toast } = useToast();
   const [linking, setLinking] = React.useState(false);
   const { mutate: unlink, isLoading: unlinking } = useUnlinkPullRequestMutation(
@@ -213,6 +253,13 @@ export const PullRequestListView = observer(() => {
           <PullRequestRow
             key={pr.id}
             pr={pr}
+            alsoOn={alsoOnIssue(
+              issuePullRequestsStore.pullRequests,
+              issuesStore,
+              teamsStore,
+              issue.id,
+              pr,
+            )}
             unlinking={unlinking}
             onUnlink={(target) =>
               unlink({ issueId: issue.id, linkId: target.id })

@@ -49,12 +49,14 @@ export const RightSide = observer(() => {
       <div className="grow p-6 flex flex-col gap-4 pb-10">
         <div className="flex flex-col items-start">
           <label className="text-xs">Status</label>
-          <IssueStatusDropdown
-            value={issue.stateId}
-            onChange={statusChange}
-            variant={IssueStatusDropdownVariant.LINK}
-            teamIdentifier={team.identifier}
-          />
+          <div id="issue-status">
+            <IssueStatusDropdown
+              value={issue.stateId}
+              onChange={statusChange}
+              variant={IssueStatusDropdownVariant.LINK}
+              teamIdentifier={team.identifier}
+            />
+          </div>
         </div>
 
         <div className="flex flex-col items-start">

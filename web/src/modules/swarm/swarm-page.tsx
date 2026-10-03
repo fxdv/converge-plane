@@ -118,7 +118,7 @@ export const SwarmPage = withApplicationStore(
       <MainLayout
         header={
           <HeaderLayout>
-            <h3> Swarm </h3>
+            <h3> Floor </h3>
           </HeaderLayout>
         }
       >
@@ -126,7 +126,7 @@ export const SwarmPage = withApplicationStore(
           <section className="flex items-start gap-3">
             <AI size={20} className="mt-0.5" />
             <div>
-              <h2 className="text-base font-semibold">The swarm plane</h2>
+              <h2 className="text-base font-semibold">Floor</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 This screen is the in-process floor. It triages, and it does not
                 complete an issue. Changes below take effect on the next swarm

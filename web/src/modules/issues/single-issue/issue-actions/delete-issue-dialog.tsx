@@ -35,6 +35,10 @@ export function DeleteIssueDialog({
     push,
   } = useRouter();
 
+  const label = currentTeam
+    ? `${currentTeam.identifier}-${issue.number}`
+    : `issue ${issue.number}`;
+
   const onDeleteIssue = () => {
     deleteIssue({ issueId: issue.id, teamId: currentTeam.id });
     setDeleteIssueDialog(false);
@@ -45,16 +49,16 @@ export function DeleteIssueDialog({
     <AlertDialog open={deleteIssueDialog} onOpenChange={setDeleteIssueDialog}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {label}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently remove this the
-            issue.
+            Deleting {label} removes the issue permanently. This cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={onDeleteIssue}>
-            Continue
+            Delete {label}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

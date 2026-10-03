@@ -54,7 +54,7 @@ export function IssueComment() {
   };
 
   return (
-    <div className="flex items-start w-full">
+    <div id="issue-comment" className="flex items-start w-full">
       <div className="w-full ">
         <Editor
           value={commentValue}

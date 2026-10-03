@@ -6,7 +6,7 @@ import { useCurrentTeam } from 'hooks/teams';
 
 const SECTION: Record<string, string> = {
   '/inbox': 'Inbox',
-  '/swarm': 'Swarm',
+  '/swarm': 'Floor',
   '/metrics': 'Metrics',
   '/my-issues': 'My issues',
   '/views': 'Views',
@@ -29,7 +29,9 @@ export const DocumentTitle = observer(() => {
     } else if (team?.name) {
       bits.push(team.name);
     } else if (typeof settingsSection === 'string' && settingsSection) {
-      bits.push(settingsSection.charAt(0).toUpperCase() + settingsSection.slice(1));
+      bits.push(
+        settingsSection.charAt(0).toUpperCase() + settingsSection.slice(1),
+      );
     } else {
       const section = Object.entries(SECTION).find(([path]) =>
         router.pathname.includes(path),
