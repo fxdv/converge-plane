@@ -190,7 +190,17 @@ const Vitals = ({ data }: { data: WorkspaceMetrics }) => {
 
 // ---- the four sections ----
 
-const SwarmSection = ({ swarm }: { swarm: SwarmMetrics }) => (
+const fleetHasNoTraffic = (nodes: FleetNodeStat[]) =>
+  nodes.length > 0 &&
+  nodes.every((node) => !node.lastError && !node.lastSuccessAt);
+
+const SwarmSection = ({
+  swarm,
+  noTraffic,
+}: {
+  swarm: SwarmMetrics;
+  noTraffic: boolean;
+}) => (
   <Section
     title={`Fleet — ${swarm.agents} agents, ${swarm.activeAgents} active`}
   >
@@ -288,10 +298,10 @@ const SwarmSection = ({ swarm }: { swarm: SwarmMetrics }) => (
             : '—'}
         </span>
       </span>
-      <span>
+      <span title="The floor's share of decisions in 24 hours. An em dash means the fleet reported no traffic.">
         Fallback rate 24h{' '}
         <span className="font-mono tabular-nums">
-          {formatPct(swarm.fallbackRate24h)}
+          {noTraffic ? '—' : formatPct(swarm.fallbackRate24h)}
         </span>
       </span>
       <span>
@@ -463,7 +473,7 @@ const ProductSection = ({ product }: { product: ProductMetrics }) => {
             <Td right>—</Td>
           </tr>
           <tr>
-            <Td>Issues done</Td>
+            <Td>Done moves</Td>
             <Td right>{product.issuesDone24h}</Td>
             <Td right>{product.issuesDone7d}</Td>
             <Td right>{product.issuesDoneAll}</Td>
@@ -663,7 +673,7 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   add(
     'product',
-    'issues done',
+    'done moves',
     String(p.issuesDone24h),
     'count',
     '24h',
@@ -671,7 +681,7 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   );
   add(
     'product',
-    'issues done',
+    'done moves',
     String(p.issuesDone7d),
     'count',
     '7d',
@@ -839,7 +849,7 @@ function buildRegistry(data: WorkspaceMetrics): RegistryRow[] {
   add(
     'swarm',
     'fallback rate',
-    formatPct(s.fallbackRate24h),
+    fleetHasNoTraffic(pr.nodes) ? '—' : formatPct(s.fallbackRate24h),
     '',
     '24h',
     Math.round(s.fallbackRate24h * 1000) / 10,
@@ -1073,7 +1083,10 @@ export const MetricsPage = withApplicationStore(() => {
           ) : data ? (
             <>
               <Vitals data={data} />
-              <SwarmSection swarm={data.swarm} />
+              <SwarmSection
+                swarm={data.swarm}
+                noTraffic={fleetHasNoTraffic(data.proxy.nodes)}
+              />
               <ProxySection proxy={data.proxy} />
               <ProductSection product={data.product} />
               <CodebaseSection codebase={data.codebase} />

@@ -186,7 +186,7 @@ export const IssueListItem = observer(
                       >
                         <PullRequestLine size={12} />
                         {pullRequests.length === 1
-                          ? `#${pullRequests[0].number}`
+                          ? `${pullRequests[0].repo}#${pullRequests[0].number}`
                           : pullRequests.length}
                       </span>
                     )}

@@ -9,9 +9,10 @@ import * as React from 'react';
 import { HeaderLayout } from 'common/header-layout';
 import { AppLayout } from 'common/layouts/app-layout';
 import { MainLayout } from 'common/layouts/main-layout';
-import type { NotificationType, TeamType } from 'common/types';
+import type { NotificationType, TeamType, User } from 'common/types';
 import { withApplicationStore } from 'common/wrappers/with-application-store';
 
+import { useUsersData } from 'hooks/users';
 import { useCurrentWorkspace } from 'hooks/workspace';
 
 import {
@@ -38,8 +39,21 @@ import { useContextStore } from 'store/global-context-provider';
 // The trigger matrix's vocabulary, rendered as the human sentence. The
 // type rides as a plain string on purpose: a new kind degrades to the
 // generic line, never a crash.
-function phrase(n: NotificationType, label: string): string {
-  const actor = n.actorName || 'Someone';
+function actorName(n: NotificationType, users: User[]): string {
+  if (n.actorName) {
+    return n.actorName;
+  }
+  if (n.actorId) {
+    const member = users.find((user) => user.id === n.actorId);
+    if (member?.fullname) {
+      return member.fullname;
+    }
+  }
+  return 'Someone';
+}
+
+function phrase(n: NotificationType, label: string, users: User[]): string {
+  const actor = actorName(n, users);
   switch (n.type) {
     case 'assigned':
       return `${actor} assigned ${label} to you`;
@@ -73,6 +87,7 @@ const InboxRow = observer(
     onRead: (n: NotificationType) => void;
   }) => {
     const { issuesStore, teamsStore } = useContextStore();
+    const { users } = useUsersData(true);
     const router = useRouter();
 
     // The label: the issue's number, prefixed when the issue is in this
@@ -114,7 +129,9 @@ const InboxRow = observer(
         >
           {label}
         </button>
-        <span className="text-sm truncate">{phrase(notification, label)}</span>
+        <span className="text-sm truncate">
+          {phrase(notification, label, users)}
+        </span>
         <span className="ml-auto text-xs text-muted-foreground shrink-0">
           {formatDistanceToNow(new Date(notification.createdAt), {
             addSuffix: true,
