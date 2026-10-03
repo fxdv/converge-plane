@@ -238,7 +238,7 @@ export const RunListView = observer(() => {
   const totals = agentRunsStore.getIssueTotals(issue.id);
 
   return (
-    <div className="mt-2 px-6">
+    <div className="mt-6 px-6">
       <h2 className="text-md mb-1 flex items-center gap-1">
         <CodingLine size={16} className="text-muted-foreground" />
         Agent runs

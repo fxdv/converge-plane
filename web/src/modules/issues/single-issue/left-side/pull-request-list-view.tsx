@@ -184,7 +184,7 @@ export const PullRequestListView = observer(() => {
   }
 
   return (
-    <div className="mt-2 px-6">
+    <div className="mt-6 px-6">
       <div className="mb-1 flex items-center">
         <h2 className="text-md flex flex-1 items-center gap-1">
           <PullRequestLine size={16} className="text-muted-foreground" />

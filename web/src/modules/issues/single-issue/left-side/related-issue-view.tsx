@@ -148,7 +148,7 @@ export const RelatedIssueView = observer(({ issue }: RelatedIssueViewProps) => {
   }
 
   return (
-    <div className="py-2">
+    <div className="mt-6 py-2">
       <div className="px-6 py-1 text-md text-foreground">Related</div>
       {relations.map((relation) => (
         <RelatedRow
