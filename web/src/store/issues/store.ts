@@ -8,7 +8,9 @@ import {
 
 import type { IssueType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 import { Issue, IssuesMap } from './models';
 
@@ -42,6 +44,9 @@ export const IssuesStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
+      if (isMemoryAuthorityModel(MODELS.Issue)) {
+        return;
+      }
       const issues = yield convergeDatabase.issues.toArray();
 
       issues.forEach((issue: IssueType) => {

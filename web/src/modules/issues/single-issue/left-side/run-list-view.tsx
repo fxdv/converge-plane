@@ -12,6 +12,7 @@ import {
 import type { AgentRunType, User } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 import { useUsersData } from 'hooks/users';
 
 import { useRunEventsQuery } from 'services/workspace';
@@ -238,7 +239,7 @@ export const RunListView = observer(() => {
   const totals = agentRunsStore.getIssueTotals(issue.id);
 
   return (
-    <div className="mt-6 px-6">
+    <IssueDetailSection>
       <h2 className="text-md mb-1 flex items-center gap-1">
         <CodingLine size={16} className="text-muted-foreground" />
         Agent runs
@@ -254,6 +255,6 @@ export const RunListView = observer(() => {
           <RunRow key={run.id} run={run} />
         ))}
       </div>
-    </div>
+    </IssueDetailSection>
   );
 });

@@ -6,7 +6,6 @@ import React from 'react';
 
 import { IssueViewContext } from 'components/side-issue-view';
 
-import { convergeDatabase } from './database';
 import { useContextStore } from './global-context-provider';
 
 export const IssueStoreInit = ({
@@ -17,39 +16,36 @@ export const IssueStoreInit = ({
   sideView: boolean;
 }) => {
   const [loading, setLoading] = React.useState(true);
-  const { issuesHistoryStore, commentsStore, issueArtifactsStore } =
+  const { issuesHistoryStore, commentsStore, issueArtifactsStore, issuesStore, teamsStore } =
     useContextStore();
 
   const { issueId: paramIssueId } = useParams();
   const { issueId: viewIssueId } = React.useContext(IssueViewContext);
   const issueId = sideView ? viewIssueId : paramIssueId;
 
-  // All data related to team
   const initIssueBasedStored = React.useCallback(async () => {
     setLoading(true);
 
     let issueData;
     if (!sideView) {
       const teamIdentifier = (issueId as string).split('-')[0];
-      const id = (issueId as string).split('-')[1];
-
-      const team = await convergeDatabase.teams.get({
-        identifier: teamIdentifier,
-      });
-
-      issueData = await convergeDatabase.issues.get({
-        number: parseInt(id),
-        teamId: team.id,
-      });
+      const team = teamsStore.getTeamWithIdentifier(teamIdentifier);
+      if (!team) {
+        setLoading(false);
+        return;
+      }
+      issueData = issuesStore.getIssueByNumber(issueId as string, team.id);
     } else {
-      issueData = await convergeDatabase.issues.get({
-        id: issueId,
-      });
+      issueData = issuesStore.getIssueById(issueId as string);
+    }
+
+    if (!issueData?.id) {
+      setLoading(false);
+      return;
     }
 
     await issuesHistoryStore.load(issueData.id);
     await commentsStore.load(issueData.id);
-    // SWR-56: the swarm's documents (audits, plans, manifests).
     await issueArtifactsStore.load(issueData.id);
 
     setLoading(false);
@@ -58,7 +54,7 @@ export const IssueStoreInit = ({
 
   React.useEffect(() => {
     if (issueId) {
-      initIssueBasedStored();
+      void initIssueBasedStored();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issueId]);

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint . --fix",
     "typecheck": "tsc --noEmit",
-    "test": "bash scripts/wire-contract.sh"
+    "test": "bash scripts/wire-contract.sh",
+    "test:a11y": "node scripts/a11y-static.mjs"
   },
   "dependencies": {
     "@converge/services": "workspace:*",

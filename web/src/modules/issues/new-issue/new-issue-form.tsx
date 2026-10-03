@@ -9,7 +9,6 @@ import { usePathname } from 'next/navigation';
 import React from 'react';
 import { useWatch, type UseFieldArrayRemove } from 'react-hook-form';
 
-import { AiWritingExtension } from 'common/editor/ai-writing';
 import type { IssueType } from 'common/types';
 
 import { useSuggestionItems } from './hooks';
@@ -146,7 +145,6 @@ export const NewIssueForm = observer(
                       className="new-issue-editor min-h-[100px]"
                       editorClassName="min-h-[100px]"
                       autoFocus
-                      extensions={[AiWritingExtension]}
                       onCreate={(editor) => setEditor(editor)}
                     >
                       <EditorExtensions suggestionItems={suggestionItems}>

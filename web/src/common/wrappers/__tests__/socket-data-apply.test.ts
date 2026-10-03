@@ -25,6 +25,7 @@ import {
   seedTabHighWater,
 } from 'common/wrappers/socket-data-util';
 
+import { persistModelToDexie } from 'store/client-cache-policy';
 import { CommentsStore } from 'store/comments/store';
 import * as database from 'store/database';
 import { IssueArtifactsStore } from 'store/issue-artifacts/store';
@@ -450,8 +451,17 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.equal(map[MODELS.Notification].notifications.length, 1);
     assert.equal(map[MODELS.Notification].notifications[0].recipientId, 'u2');
 
-    // Every table-backed model got its cache row; swarm is in-memory.
+    // Every Dexie-backed model got its cache row; R-9 slice 1 skips Issue
+    // and Workflow; swarm is in-memory.
     for (const model of Object.keys(TABLE_PROPS)) {
+      if (!persistModelToDexie(model)) {
+        assert.equal(
+          tableStubs.get(model)!.puts.length,
+          0,
+          `expected no cache put for ${model}`,
+        );
+        continue;
+      }
       assert.equal(
         tableStubs.get(model)!.puts.length,
         1,
@@ -499,7 +509,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.equal(map[MODELS.IssueComment].comments.size, 0);
     assert.equal(map[MODELS.IssueArtifact].issueArtifacts.size, 0);
     assert.deepEqual(tableStubs.get(MODELS.Label)!.dels, ['l1']);
-    assert.deepEqual(tableStubs.get(MODELS.Issue)!.dels, ['i1']);
+    assert.deepEqual(tableStubs.get(MODELS.Issue)!.dels, []);
     assert.deepEqual(tableStubs.get(MODELS.UsersOnWorkspaces)!.dels, ['m1']);
     assert.deepEqual(tableStubs.get(MODELS.IssueHistory)!.dels, ['h1']);
     assert.deepEqual(tableStubs.get(MODELS.IssueComment)!.dels, ['c1']);
