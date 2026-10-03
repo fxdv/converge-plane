@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { IssueArtifactType, User } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 import { useUsersData } from 'hooks/users';
 
 import { useContextStore } from 'store/global-context-provider';
@@ -69,7 +70,7 @@ export const ArtifactListView = observer(() => {
   );
 
   return (
-    <div className="mt-6 px-6">
+    <IssueDetailSection>
       <h2 className="text-md mb-1 flex items-center gap-1">
         <DocumentLine size={16} className="text-muted-foreground" />
         Documents
@@ -79,6 +80,6 @@ export const ArtifactListView = observer(() => {
           <DocumentRow key={artifact.id} artifact={artifact} />
         ))}
       </div>
-    </div>
+    </IssueDetailSection>
   );
 });

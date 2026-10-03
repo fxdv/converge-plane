@@ -8,7 +8,9 @@ import {
 
 import { type WorkflowType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 import { asSnapshot } from 'store/snapshot';
 
 import { Workflow } from './models';
@@ -48,6 +50,9 @@ export const WorkflowsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
+      if (isMemoryAuthorityModel(MODELS.Workflow)) {
+        return;
+      }
       const workflows = yield convergeDatabase.workflows.toArray();
 
       // Clear existing data

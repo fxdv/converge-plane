@@ -2,6 +2,7 @@ import { runInAction } from 'mobx';
 
 import type { SyncActionRecord } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { saveAgentRunsData } from 'store/agent-runs';
 import { saveCommentsData } from 'store/comments';
 import { convergeDatabase } from 'store/database';
@@ -464,6 +465,11 @@ async function localRowsForModel(
     case MODELS.View:
       return db.views.where('workspaceId').equals(domain.workspaceId).toArray();
     case MODELS.Workflow:
+      if (isMemoryAuthorityModel(MODELS.Workflow)) {
+        return Array.from(
+          MODEL_STORE_MAP[MODELS.Workflow]?.workflows.values() ?? [],
+        ).map((row: { id: string }) => ({ id: row.id }));
+      }
       return domain.teamIds.size
         ? db.workflows
             .where('teamId')
@@ -471,6 +477,17 @@ async function localRowsForModel(
             .toArray()
         : [];
     case MODELS.Issue:
+      if (isMemoryAuthorityModel(MODELS.Issue)) {
+        const store = MODEL_STORE_MAP[MODELS.Issue];
+        if (!store?.issuesMap) {
+          return [];
+        }
+        return Array.from(store.issuesMap.values())
+          .filter((issue: { teamId: string }) =>
+            domain.teamIds.size ? domain.teamIds.has(issue.teamId) : true,
+          )
+          .map((issue: { id: string }) => ({ id: issue.id }));
+      }
       return domain.teamIds.size
         ? db.issues
             .where('teamId')
@@ -552,13 +569,25 @@ export async function pruneStaleLocalRecords(
       .equals(workspaceId)
       .toArray();
     const teamIds = new Set(teams.map((t) => t.id));
-    const issues = teamIds.size
-      ? await convergeDatabase.issues
-          .where('teamId')
-          .anyOf([...teamIds])
-          .toArray()
-      : [];
-    const issueIds = new Set(issues.map((i) => i.id));
+    let issueIds: Set<string>;
+    if (isMemoryAuthorityModel(MODELS.Issue)) {
+      const store = MODEL_STORE_MAP[MODELS.Issue];
+      issueIds = new Set(
+        store?.issuesMap
+          ? Array.from(store.issuesMap.values())
+              .filter((i: { teamId: string }) => teamIds.has(i.teamId))
+              .map((i: { id: string }) => i.id)
+          : [],
+      );
+    } else {
+      const issues = teamIds.size
+        ? await convergeDatabase.issues
+            .where('teamId')
+            .anyOf([...teamIds])
+            .toArray()
+        : [];
+      issueIds = new Set(issues.map((i) => i.id));
+    }
     const domain: PruneDomain = {
       workspaceId,
       teamIds,
