@@ -33,7 +33,7 @@
     "http-proxy": "^1.18.1",
     "javascript-time-ago": "^2.5.9",
     "lodash.isequal": "^4.5.0",
-    "lucide-react": "^0.316.0",
+    "lucide-react": "^1.49.0",
     "mobx": "^7.0.5",
     "mobx-react-lite": "^5.1.0",
     "mobx-state-tree": "^8.0.0",
