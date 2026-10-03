@@ -16,6 +16,8 @@ import { useEditorPasteHandler } from 'hooks/use-editor-paste-handler';
 
 import { useUpdateIssueMutation } from 'services/issues';
 
+import { useContextStore } from 'store/global-context-provider';
+
 import { Activity } from './activity';
 import { ArtifactListView } from './artifact-list-view';
 import { FileUpload } from './file-upload';
@@ -52,12 +54,20 @@ export const LeftSide = observer(() => {
 
   const { handlePaste } = useEditorPasteHandler();
   const imported = importedIssueText(issue.description);
+  const { teamsStore } = useContextStore();
+  const team = teamsStore.getTeamWithId(issue.teamId);
+  const ticketId = team
+    ? `${team.identifier}-${issue.number}`
+    : `#${issue.number}`;
 
   return (
     <ScrollArea className="grow flex h-full justify-center w-full">
       <div className="flex h-full justify-center w-full pb-[150px]">
         <div className="grow flex flex-col gap-2 h-full max-w-[97ch]">
           <div className="py-6 flex flex-col">
+            <div className="mb-1 px-6 text-xs font-mono text-muted-foreground">
+              {ticketId}
+            </div>
             <IssueTitle value={issue.title} onChange={onIssueChange} />
             {issue.parentId && (
               <div className="px-6">
