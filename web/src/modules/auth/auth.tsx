@@ -139,6 +139,7 @@ export function Auth() {
                       <Input
                         placeholder="Email address"
                         className="h-9"
+                        autoFocus
                         {...field}
                       />
                     </FormControl>

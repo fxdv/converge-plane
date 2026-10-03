@@ -93,6 +93,11 @@ export const ViewsList = observer(() => {
         <div className="min-w-[70px]">Created by</div>
       </div>
 
+      {views.length === 0 && (
+        <p className="px-8 py-6 text-sm text-muted-foreground">
+          No saved views.
+        </p>
+      )}
       {views
         .filter((view: ViewType) => view.isBookmarked)
         .map((view: ViewType) => (

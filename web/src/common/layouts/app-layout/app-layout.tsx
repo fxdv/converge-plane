@@ -86,7 +86,7 @@ export const AppLayoutChild = observer(({ children }: LayoutProps) => {
                   ...(hasAgents
                     ? [
                         {
-                          title: 'Swarm',
+                          title: 'Floor',
                           icon: AI,
                           href: `/${workspaceSlug}/swarm`,
                         },

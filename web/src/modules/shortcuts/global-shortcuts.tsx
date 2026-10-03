@@ -17,6 +17,10 @@ import { CommandDialog } from './command';
 
 const SHORTCUTS: Array<[string, string]> = [
   ['C', 'Create issue'],
+  ['O', 'Open the first issue'],
+  ['S', 'Edit status'],
+  ['M', 'Comment'],
+  ['U', 'Return to the board'],
   ['F', 'Filter'],
   ['?', 'This list'],
   ['Esc', 'Close'],

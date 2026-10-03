@@ -1,3 +1,4 @@
+import { useToast } from '@converge/ui/components/use-toast';
 import { useMutation } from 'react-query';
 
 import type { IssueType, IssueRelationEnum } from 'common/types';
@@ -61,6 +62,7 @@ export function useUpdateIssueMutation({
   onError,
 }: MutationParams) {
   const { issuesStore } = useContextStore();
+  const { toast } = useToast();
 
   const update = ({ id, ...otherParams }: UpdateIssueParams) => {
     const issue = issuesStore.getIssueById(id);
@@ -85,8 +87,14 @@ export function useUpdateIssueMutation({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMutationError = (errorResponse: any) => {
-    const errorText = errorResponse?.errors?.message || 'Error occured';
+    const errorText =
+      errorResponse?.errors?.message || 'The server refused the change';
 
+    toast({
+      variant: 'destructive',
+      title: 'Could not save this issue',
+      description: `${errorText}. Try again.`,
+    });
     onError && onError(errorText);
   };
 
