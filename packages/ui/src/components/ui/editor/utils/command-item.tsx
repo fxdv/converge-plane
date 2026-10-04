@@ -7,7 +7,8 @@ import { useAtomValue } from 'jotai';
 import { forwardRef } from 'react';
 import React from 'react';
 
-import { rangeAtom } from '../utils/atoms';
+import { rangeAtom } from './atoms';
+import { novelStore } from './store';
 
 export interface EditorCommandItemProps {
   readonly onCommand: ({
@@ -24,7 +25,7 @@ export const EditorCommandItem = forwardRef<
   EditorCommandItemProps & ComponentPropsWithoutRef<typeof CommandItem>
 >(({ children, onCommand, ...rest }, ref) => {
   const { editor } = useCurrentEditor();
-  const range = useAtomValue(rangeAtom);
+  const range = useAtomValue(rangeAtom, { store: novelStore });
 
   if (!editor || !range) {
     return null;

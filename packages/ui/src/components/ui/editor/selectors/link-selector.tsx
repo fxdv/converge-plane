@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
 } from '@converge/ui/components/popover';
 import { Check, Trash } from 'lucide-react';
-import { useEditor } from 'novel';
+import { useEditor } from '../converge-editor';
 import { useEffect, useRef } from 'react';
 
 import { LinkLine } from '@converge/ui/icons';

@@ -1,6 +1,5 @@
 import { ImageIcon } from 'lucide-react';
-import { createSuggestionItems } from 'novel/extensions';
-import { Command } from 'novel/extensions';
+import { createSuggestionItems, Command } from './converge-editor';
 
 import {
   BulletListLine,

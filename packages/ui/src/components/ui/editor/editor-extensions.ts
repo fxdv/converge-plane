@@ -12,7 +12,7 @@ import {
   HighlightExtension,
   AIHighlight,
   MarkdownExtension,
-} from 'novel/extensions';
+} from './converge-editor';
 
 import { fileExtension } from './file-extension';
 import { imageExtension } from './image-extension';

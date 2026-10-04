@@ -24,6 +24,11 @@ import { useComputedWorkflows } from 'hooks/workflows';
 import { useContextStore } from 'store/global-context-provider';
 
 import { BoardIssueItem } from '../../../../components/issue-board-item/issue-board-item';
+import {
+  BOARD_DEFAULT_ROW_HEIGHT,
+  BOARD_OVERSCAN_ROW_COUNT,
+  boardVirtualRowCount,
+} from '../../board-virtual-config';
 import { useFilterIssues } from '../../../../issues-utils';
 
 interface LabelBoardItemProps {
@@ -41,18 +46,19 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
 
   const computedIssues = useFilterIssues(issues, workflows);
 
-  // Create a CellMeasurerCache instance
-  const cache = new CellMeasurerCache({
-    defaultHeight: 100, // Default row height
-    fixedWidth: true, // Rows have fixed width but dynamic height
-  });
-
   if (
     computedIssues.length === 0 &&
     !applicationStore.displaySettings.showEmptyGroups
   ) {
     return null;
   }
+
+  const cache = React.useRef(
+    new CellMeasurerCache({
+      defaultHeight: BOARD_DEFAULT_ROW_HEIGHT,
+      fixedWidth: true,
+    }),
+  ).current;
 
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const issue = computedIssues[index];
@@ -116,9 +122,10 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
         droppableProvided: DroppableProvided,
         snapshot: DroppableStateSnapshot,
       ) => {
-        const itemCount: number = snapshot.isUsingPlaceholder
-          ? issues.length + 1
-          : issues.length;
+        const itemCount = boardVirtualRowCount(
+          computedIssues.length,
+          snapshot.isUsingPlaceholder,
+        );
 
         return (
           <div className="flex flex-col max-h-[100%] w-[350px]">
@@ -138,7 +145,7 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
                 {({ width, height }) => (
                   <List
                     height={height}
-                    overscanRowCount={10}
+                    overscanRowCount={BOARD_OVERSCAN_ROW_COUNT}
                     noRowsRenderer={() => <></>}
                     width={width}
                     rowCount={itemCount}
@@ -169,18 +176,19 @@ export const NoLabelBoardList = observer(() => {
 
   const computedIssues = useFilterIssues(issues, workflows);
 
-  // Create a CellMeasurerCache instance
-  const cache = new CellMeasurerCache({
-    defaultHeight: 100, // Default row height
-    fixedWidth: true, // Rows have fixed width but dynamic height
-  });
-
   if (
     computedIssues.length === 0 &&
     !applicationStore.displaySettings.showEmptyGroups
   ) {
     return null;
   }
+
+  const cache = React.useRef(
+    new CellMeasurerCache({
+      defaultHeight: BOARD_DEFAULT_ROW_HEIGHT,
+      fixedWidth: true,
+    }),
+  ).current;
 
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const issue = computedIssues[index];
@@ -236,9 +244,10 @@ export const NoLabelBoardList = observer(() => {
         droppableProvided: DroppableProvided,
         snapshot: DroppableStateSnapshot,
       ) => {
-        const itemCount: number = snapshot.isUsingPlaceholder
-          ? issues.length + 1
-          : issues.length;
+        const itemCount = boardVirtualRowCount(
+          computedIssues.length,
+          snapshot.isUsingPlaceholder,
+        );
 
         return (
           <div className="flex flex-col max-h-[100%] w-[350px]">
@@ -258,7 +267,7 @@ export const NoLabelBoardList = observer(() => {
                 {({ width, height }) => (
                   <List
                     height={height}
-                    overscanRowCount={10}
+                    overscanRowCount={BOARD_OVERSCAN_ROW_COUNT}
                     noRowsRenderer={() => <></>}
                     width={width}
                     rowCount={itemCount}

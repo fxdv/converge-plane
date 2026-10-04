@@ -1,6 +1,6 @@
 import type { SelectorItem } from './node-selector';
 
-import { EditorBubbleItem, useEditor } from 'novel';
+import { EditorBubbleItem, useEditor } from '../converge-editor';
 
 import {
   BoldLine,
