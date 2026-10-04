@@ -150,10 +150,10 @@ func run() (err error) {
 		PublicURL:      cfg.PublicURL,
 		WebOrigin:      cfg.WebOrigin,
 		TrustedOrigins: auth.TrustedOrigins(cfg),
-		Ready:       database.Healthy,
-		MountApp:    apiSvc.Mount,
-		ReadTimeout: cfg.HTTPTimeout,
-		ClientIP:    netx.NewResolver(cfg.TrustedProxies),
+		Ready:          database.Healthy,
+		MountApp:       apiSvc.Mount,
+		ReadTimeout:    cfg.HTTPTimeout,
+		ClientIP:       netx.NewResolver(cfg.TrustedProxies),
 	})
 
 	return server.Run(ctx, cfg.HTTPAddr)
