@@ -47,7 +47,7 @@ export function useUpdateIssueCommentMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(updateIssueComment, {
+  return useMutation({ mutationFn: updateIssueComment,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

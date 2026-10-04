@@ -47,7 +47,7 @@ export function useUpdateViewMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(updateView, {
+  return useMutation({ mutationFn: updateView,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

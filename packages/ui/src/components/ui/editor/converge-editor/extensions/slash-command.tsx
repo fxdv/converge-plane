@@ -5,7 +5,10 @@ import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
 import type { RefObject } from "react";
 import type { ReactNode } from "react";
 import tippy, { type GetReferenceClientRect, type Instance, type Props } from "tippy.js";
-import { EditorCommandOut } from '../../utils/render-items';
+import {
+  EditorCommandOut,
+  handleCommandNavigation,
+} from '../../utils/render-items';
 
 const Command = Extension.create({
   name: "slash-command",
@@ -96,14 +99,4 @@ export interface SuggestionItem {
 
 export const createSuggestionItems = (items: SuggestionItem[]) => items;
 
-export const handleCommandNavigation = (event: KeyboardEvent) => {
-  if (["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
-    const slashCommand = document.querySelector("#slash-command");
-    if (slashCommand) {
-      return true;
-    }
-  }
-  return undefined;
-};
-
-export { Command, renderItems };
+export { Command, handleCommandNavigation, renderItems };

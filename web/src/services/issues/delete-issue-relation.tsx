@@ -59,7 +59,7 @@ export function useDeleteIssueRelationMutation({
     return deleteIssueRelation({ issueRelationId: relationId });
   };
 
-  return useMutation(deleteRelation, {
+  return useMutation({ mutationFn: deleteRelation,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -133,7 +133,7 @@ interface RelatedIssueViewProps {
 
 export const RelatedIssueView = observer(({ issue }: RelatedIssueViewProps) => {
   const { toast } = useToast();
-  const { mutate: deleteRelation, isLoading: deleting } =
+  const { mutate: deleteRelation, isPending: deleting } =
     useDeleteIssueRelationMutation({
       onError: (message) => {
         toast({

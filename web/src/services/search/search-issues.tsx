@@ -1,4 +1,4 @@
-import { type UseQueryResult, useQuery } from 'common/lib/react-query';
+import { keepPreviousData, type UseQueryResult, useQuery } from 'common/lib/react-query';
 
 import type { IssueType } from 'common/types';
 
@@ -30,11 +30,13 @@ export function useGetSearchIssuesQuery(
   data: SearchIssuesParams,
   enabled = false,
 ): UseQueryResult<IssueType[], XHRErrorResponse> {
-  return useQuery([SearchIssuesQuery, data.query], () => searchIssue(data), {
+  return useQuery({
+    queryKey: [SearchIssuesQuery, data.query],
+    queryFn: () => searchIssue(data),
     retry: 1,
     staleTime: 1,
-    refetchOnWindowFocus: false, // Frequency of Change would be Low
+    refetchOnWindowFocus: false,
     enabled,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 }

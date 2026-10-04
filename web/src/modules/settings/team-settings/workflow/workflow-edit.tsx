@@ -21,7 +21,7 @@ export function WorkflowEdit({
 }: WorkflowEditProps) {
   const team = useCurrentTeam();
 
-  const { mutate: updateWorkflow, isLoading } = useUpdateWorkflowMutation({
+  const { mutate: updateWorkflow, isPending } = useUpdateWorkflowMutation({
     onSuccess: () => {
       onCancel();
     },
@@ -44,7 +44,7 @@ export function WorkflowEdit({
       submit={onSubmit}
       category={category}
       onCancel={onCancel}
-      isLoading={isLoading}
+      isLoading={isPending}
       workflow={workflow}
     />
   );

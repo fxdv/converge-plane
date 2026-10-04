@@ -145,7 +145,7 @@ interface LinkPullRequestFormProps {
 const LinkPullRequestForm = ({ issueId, onDone }: LinkPullRequestFormProps) => {
   const [url, setUrl] = React.useState('');
   const [error, setError] = React.useState<string | undefined>();
-  const { mutate: link, isLoading } = useLinkPullRequestMutation({
+  const { mutate: link, isPending } = useLinkPullRequestMutation({
     onSuccess: onDone,
     onError: setError,
   });
@@ -184,7 +184,7 @@ const LinkPullRequestForm = ({ issueId, onDone }: LinkPullRequestFormProps) => {
           type="submit"
           size="sm"
           variant="secondary"
-          disabled={isLoading || url.trim() === ''}
+          disabled={isPending || url.trim() === ''}
         >
           Link
         </Button>
@@ -207,7 +207,7 @@ export const PullRequestListView = observer(() => {
   const { issuePullRequestsStore, issuesStore, teamsStore } = useContextStore();
   const { toast } = useToast();
   const [linking, setLinking] = React.useState(false);
-  const { mutate: unlink, isLoading: unlinking } = useUnlinkPullRequestMutation(
+  const { mutate: unlink, isPending: unlinking } = useUnlinkPullRequestMutation(
     {
       onError: (message) => {
         toast({

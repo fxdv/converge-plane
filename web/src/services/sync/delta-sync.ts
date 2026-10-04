@@ -1,4 +1,6 @@
-import { type UseQueryResult, useQuery } from 'common/lib/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
+
+import { useQueryWithOnSuccess } from 'common/lib/query-on-success';
 
 import type { BootstrapResponse } from 'common/types';
 
@@ -41,15 +43,14 @@ export function useDeltaRecords({
   userId,
   onSuccess,
 }: QueryParams): UseQueryResult<BootstrapResponse, XHRErrorResponse> {
-  return useQuery(
-    [GetDeltaRecords, modelNames, lastSequenceId, workspaceId, userId],
-    () => getDeltaRecords(workspaceId, modelNames, lastSequenceId, userId),
-    {
-      retry: 1,
-      staleTime: 1,
-      enabled: false,
-      onSuccess,
-      refetchOnWindowFocus: false, // Frequency of Change would be Low
-    },
-  );
+  return useQueryWithOnSuccess({
+    queryKey: [GetDeltaRecords, modelNames, lastSequenceId, workspaceId, userId],
+    queryFn: () =>
+      getDeltaRecords(workspaceId, modelNames, lastSequenceId, userId),
+    retry: 1,
+    staleTime: 1,
+    enabled: false,
+    onSuccess,
+    refetchOnWindowFocus: false,
+  });
 }

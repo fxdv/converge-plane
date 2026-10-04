@@ -71,7 +71,7 @@ export const ProjectChip = observer(
     const [name, setName] = React.useState(project.name);
     const [confirmDelete, setConfirmDelete] = React.useState(false);
     const { mutate: updateProject } = useUpdateProjectMutation({});
-    const { mutate: deleteProject, isLoading: deleting } =
+    const { mutate: deleteProject, isPending: deleting } =
       useDeleteProjectMutation({});
 
     React.useEffect(() => {

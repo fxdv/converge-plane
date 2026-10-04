@@ -106,15 +106,14 @@ const RunRow = observer(({ run }: { run: AgentRunType }) => {
   const agent = users.find((user: User) => user.id === run.agentId);
   const running = run.endedAt === null;
   const tokens = run.inputTokens + run.outputTokens;
-  const latest = useQuery(
-    ['runLatest', run.id, run.eventCount],
-    () => getRunEvents(run.issueId, run.id, Math.max(0, run.eventCount - 1)),
-    {
-      enabled: run.eventCount > 0,
-      staleTime: 10_000,
-      refetchOnWindowFocus: false,
-    },
-  );
+  const latest = useQuery({
+    queryKey: ['runLatest', run.id, run.eventCount],
+    queryFn: () =>
+      getRunEvents(run.issueId, run.id, Math.max(0, run.eventCount - 1)),
+    enabled: run.eventCount > 0,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+  });
   const step = latest.data?.events[latest.data.events.length - 1]?.message;
 
   return (

@@ -34,7 +34,7 @@ export function useDeletePatMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(deletePat, {
+  return useMutation({ mutationFn: deletePat,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

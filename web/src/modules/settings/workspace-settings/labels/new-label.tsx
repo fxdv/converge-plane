@@ -17,7 +17,7 @@ export function NewLabel({ onCancel, teamId }: NewLabelProps) {
   const [labelName, setLabelName] = React.useState('');
   const workspace = useCurrentWorkspace();
   const color = React.useMemo(() => generateOklchColor(), []);
-  const { mutate: createLabel, isLoading } = useCreateLabelMutation({
+  const { mutate: createLabel, isPending } = useCreateLabelMutation({
     onSuccess: () => {
       onCancel();
     },
@@ -49,10 +49,10 @@ export function NewLabel({ onCancel, teamId }: NewLabelProps) {
         </div>
 
         <div className="flex gap-4">
-          <Button variant="ghost" disabled={isLoading} onClick={onCancel}>
+          <Button variant="ghost" disabled={isPending} onClick={onCancel}>
             Cancel
           </Button>
-          <Button isLoading={isLoading} variant="secondary" onClick={onSubmit}>
+          <Button isLoading={isPending} variant="secondary" onClick={onSubmit}>
             Save
           </Button>
         </div>

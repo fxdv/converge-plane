@@ -105,7 +105,7 @@ export function AddAgentDialog({ setDialogOpen }: AddAgentDialogProps) {
     setDialogOpen(false);
   };
 
-  const { mutate: createAgent, isLoading } = useCreateAgentMutation({
+  const { mutate: createAgent, isPending } = useCreateAgentMutation({
     onSuccess: (data) => {
       if (!data.token) {
         toast({
@@ -396,7 +396,7 @@ export function AddAgentDialog({ setDialogOpen }: AddAgentDialogProps) {
                   <Button
                     variant="secondary"
                     type="submit"
-                    isLoading={isLoading}
+                    isLoading={isPending}
                   >
                     Create agent
                   </Button>

@@ -29,7 +29,7 @@ export function useCreatePatMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createPat, {
+  return useMutation({ mutationFn: createPat,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

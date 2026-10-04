@@ -35,7 +35,7 @@ export function useUpdateWorkspacePreferencesMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation(updateWorkspacePreferences, {
+  return useMutation({ mutationFn: updateWorkspacePreferences,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

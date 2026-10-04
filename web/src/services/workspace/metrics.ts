@@ -16,16 +16,14 @@ export function useMetricsQuery(
   isLoading: boolean;
   refetch: () => void;
 } {
-  const { data, isLoading, refetch } = useQuery(
-    ['metrics', workspaceId],
-    () => getWorkspaceMetrics(workspaceId),
-    {
-      enabled: Boolean(workspaceId) && enabled,
-      staleTime: 15_000,
-      refetchInterval: enabled ? 30_000 : false,
-      refetchOnWindowFocus: false,
-    },
-  );
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['metrics', workspaceId],
+    queryFn: () => getWorkspaceMetrics(workspaceId),
+    enabled: Boolean(workspaceId) && enabled,
+    staleTime: 15_000,
+    refetchInterval: enabled ? 30_000 : false,
+    refetchOnWindowFocus: false,
+  });
 
   return { data, isLoading, refetch };
 }

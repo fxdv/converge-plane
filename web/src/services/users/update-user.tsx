@@ -45,7 +45,7 @@ export function useUpdateUserMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(updateUser, {
+  return useMutation({ mutationFn: updateUser,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

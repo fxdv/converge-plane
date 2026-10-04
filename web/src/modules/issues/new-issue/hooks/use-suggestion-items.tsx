@@ -13,7 +13,7 @@ export const useSuggestionItems = (
   subIssueOperations: Partial<UseFieldArrayReturn>,
 ) => {
   const workspace = useCurrentWorkspace();
-  const { mutate: generateSubIssues, isLoading } =
+  const { mutate: generateSubIssues, isPending } =
     useSubIssueGenerationMutation({
       onSuccess: (data: string[]) => {
         if (data && data.length > 0) {
@@ -76,5 +76,5 @@ export const useSuggestionItems = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { suggestionItems: appendedSuggestionItems, isLoading };
+  return { suggestionItems: appendedSuggestionItems, isPending };
 };

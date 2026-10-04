@@ -86,7 +86,7 @@ export const HandoffIssueDialog = observer(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, issue?.id]);
 
-    const { mutate: handoff, isLoading } = useHandoffIssueMutation({
+    const { mutate: handoff, isPending } = useHandoffIssueMutation({
       onSuccess: () => {
         onOpenChange(false);
       },
@@ -225,11 +225,11 @@ export const HandoffIssueDialog = observer(
             <Button
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              disabled={isLoading}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button onClick={submit} disabled={isLoading}>
+            <Button onClick={submit} disabled={isPending}>
               Hand off
             </Button>
           </DialogFooter>

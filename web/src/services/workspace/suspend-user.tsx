@@ -35,7 +35,7 @@ export function useSuspendUserMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation(suspendUser, {
+  return useMutation({ mutationFn: suspendUser,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

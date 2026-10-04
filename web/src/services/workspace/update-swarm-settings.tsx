@@ -31,8 +31,8 @@ export function useUpdateSwarmSettingsMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation(
-    (variables: {
+  return useMutation({
+    mutationFn: (variables: {
       workspaceId: string;
       topology: string;
       foremanAccountId: string | null;
@@ -41,10 +41,8 @@ export function useUpdateSwarmSettingsMutation({
         topology: variables.topology,
         foremanAccountId: variables.foremanAccountId,
       }),
-    {
-      onError: onMutationError,
-      onMutate: onMutationTriggered,
-      onSuccess: onMutationSuccess,
-    },
-  );
+    onError: onMutationError,
+    onMutate: onMutationTriggered,
+    onSuccess: onMutationSuccess,
+  });
 }

@@ -64,7 +64,7 @@ export const NewIssueForm = observer(
 
     const { team, setTeam } = useTeamForNewIssue(issue.teamId);
     const [editor, setEditor] = React.useState(undefined);
-    const { suggestionItems, isLoading: aiLoading } =
+    const { suggestionItems, isPending: aiLoading } =
       useSuggestionItems(subIssueOperations);
 
     const defaultValuesForForm = useDefaultValues(team, defaultValues);

@@ -45,17 +45,15 @@ export function useLinkPullRequestMutation({
 }: MutationParams) {
   const { issuePullRequestsStore } = useContextStore();
 
-  return useMutation(
-    ({ issueId, url }: { issueId: string; url: string }) =>
+  return useMutation({
+    mutationFn: ({ issueId, url }: { issueId: string; url: string }) =>
       linkPullRequest(issueId, url),
-    {
-      onSuccess: (pr: IssuePullRequestType) => {
-        issuePullRequestsStore.update(pr, pr.id);
-        onSuccess && onSuccess(pr);
-      },
-      onError: (errorResponse) => onError && onError(errorText(errorResponse)),
+    onSuccess: (pr: IssuePullRequestType) => {
+      issuePullRequestsStore.update(pr, pr.id);
+      onSuccess && onSuccess(pr);
     },
-  );
+    onError: (errorResponse) => onError && onError(errorText(errorResponse)),
+  });
 }
 
 export function useUnlinkPullRequestMutation({
@@ -64,15 +62,13 @@ export function useUnlinkPullRequestMutation({
 }: MutationParams) {
   const { issuePullRequestsStore } = useContextStore();
 
-  return useMutation(
-    ({ issueId, linkId }: { issueId: string; linkId: string }) =>
+  return useMutation({
+    mutationFn: ({ issueId, linkId }: { issueId: string; linkId: string }) =>
       unlinkPullRequest(issueId, linkId),
-    {
-      onSuccess: (pr: IssuePullRequestType) => {
-        issuePullRequestsStore.deleteById(pr.id);
-        onSuccess && onSuccess(pr);
-      },
-      onError: (errorResponse) => onError && onError(errorText(errorResponse)),
+    onSuccess: (pr: IssuePullRequestType) => {
+      issuePullRequestsStore.deleteById(pr.id);
+      onSuccess && onSuccess(pr);
     },
-  );
+    onError: (errorResponse) => onError && onError(errorText(errorResponse)),
+  });
 }

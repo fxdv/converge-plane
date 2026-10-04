@@ -43,7 +43,7 @@ export function useAITitleMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(aiTitleIssues, {
+  return useMutation({ mutationFn: aiTitleIssues,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

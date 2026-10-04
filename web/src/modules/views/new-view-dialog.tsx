@@ -62,7 +62,7 @@ export const NewViewDialog = observer(
       },
     });
 
-    const { mutate: createView, isLoading } = useCreateViewMutation({
+    const { mutate: createView, isPending } = useCreateViewMutation({
       onSuccess: (data: ViewType) => {
         toast({
           title: `Your view was successfully created`,
@@ -152,7 +152,7 @@ export const NewViewDialog = observer(
                   <div className="flex justify-end gap-2">
                     <Button
                       variant="ghost"
-                      disabled={isLoading}
+                      disabled={isPending}
                       onClick={() => setOpen(false)}
                     >
                       Cancel
@@ -160,7 +160,7 @@ export const NewViewDialog = observer(
                     <Button
                       type="submit"
                       variant="secondary"
-                      isLoading={isLoading}
+                      isLoading={isPending}
                     >
                       Save
                     </Button>

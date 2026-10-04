@@ -18,7 +18,7 @@ export const DeleteTeamButton = observer(() => {
   const team = useCurrentTeam();
   const { issuesStore } = useContextStore();
   const issues = issuesStore.getIssuesForTeam({ teamId: team.id });
-  const { mutate: deleteTeamMutation, isLoading } = useDeleteTeamMutation({});
+  const { mutate: deleteTeamMutation, isPending } = useDeleteTeamMutation({});
 
   const deleteTeam = () => {
     deleteTeamMutation({
@@ -45,7 +45,7 @@ export const DeleteTeamButton = observer(() => {
         <Button
           variant="destructive"
           onClick={deleteTeam}
-          isLoading={isLoading}
+          isLoading={isPending}
         >
           Yes, delete team
         </Button>
@@ -60,7 +60,7 @@ export const DeleteTeamButton = observer(() => {
           className="w-fit mt-2"
           variant="destructive"
           onClick={() => setOpen(true)}
-          isLoading={isLoading}
+          isLoading={isPending}
         >
           Delete this team
         </Button>

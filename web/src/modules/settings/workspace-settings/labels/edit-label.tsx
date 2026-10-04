@@ -14,7 +14,7 @@ interface NewLabelProps {
 export function EditLabel({ onCancel, label }: NewLabelProps) {
   const [labelName, setLabelName] = React.useState(label.name);
 
-  const { mutate: updateLabel, isLoading } = useUpdateLabelMutation({
+  const { mutate: updateLabel, isPending } = useUpdateLabelMutation({
     onSuccess: () => {
       onCancel();
     },
@@ -44,10 +44,10 @@ export function EditLabel({ onCancel, label }: NewLabelProps) {
         </div>
 
         <div className="flex gap-4">
-          <Button variant="outline" disabled={isLoading} onClick={onCancel}>
+          <Button variant="outline" disabled={isPending} onClick={onCancel}>
             Cancel
           </Button>
-          <Button isLoading={isLoading} onClick={onSubmit}>
+          <Button isLoading={isPending} onClick={onSubmit}>
             Save
           </Button>
         </div>

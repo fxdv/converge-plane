@@ -44,7 +44,7 @@ export function useUpdateLabelMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(updateLabel, {
+  return useMutation({ mutationFn: updateLabel,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

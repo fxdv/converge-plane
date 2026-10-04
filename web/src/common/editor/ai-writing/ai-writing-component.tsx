@@ -16,7 +16,7 @@ import { useAIContinueWritingMutation } from 'services/issues';
 export const AIWritingComponent = (props: any) => {
   const { editor } = useEditor();
   const [prompt, setPrompt] = React.useState('Continue writing');
-  const { responses, mutate, isLoading } = useAIContinueWritingMutation({
+  const { responses, mutate, isPending: isLoading } = useAIContinueWritingMutation({
     baseHost: process.env.NEXT_PUBLIC_BACKEND_HOST,
   });
   const workspace = useCurrentWorkspace();

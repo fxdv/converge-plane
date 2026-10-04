@@ -525,6 +525,20 @@ Rolling back the *application* is a re-build of the previous tag; v1 schema
 changes are additive, so an old image remains compatible with a newer
 database.
 
+### Web client `SYNC_SCHEMA` bumps
+
+The browser stores a **sync schema** key (`SYNC_SCHEMA` in
+`web/src/common/wrappers/bootstrap-data.tsx`) in `localStorage`. When you
+ship a client change that requires a **full rebootstrap** (for example
+R-9 memory-authority or a breaking IndexedDB shape), bump that string to a
+new value (date + label). On the next load, tabs that already bootstrapped
+under the old key take a fresh bootstrap snapshot instead of trusting stale
+local rows.
+
+**Operator steps:** deploy the new web image; ask users to hard-refresh once
+(or sign out and in). No server migration is tied to this key unless you also
+changed API sync payloads.
+
 ### Upgrading to the hand-linking release (migration 0024)
 
 - **Nothing to do.** The migration adds two nullable columns; people can

@@ -35,7 +35,7 @@ export function useRemoveTeamMemberMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation(removeTeamMember, {
+  return useMutation({ mutationFn: removeTeamMember,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

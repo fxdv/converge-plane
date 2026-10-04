@@ -45,7 +45,7 @@ export function EditViewDialog({ open, setOpen, view }: EditViewDialogProps) {
     },
   });
 
-  const { mutate: updateView, isLoading } = useUpdateViewMutation({
+  const { mutate: updateView, isPending } = useUpdateViewMutation({
     onSuccess: () => {
       toast({
         title: `Your view was successfully updated`,
@@ -122,12 +122,12 @@ export function EditViewDialog({ open, setOpen, view }: EditViewDialogProps) {
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
-                    disabled={isLoading}
+                    disabled={isPending}
                     onClick={() => setOpen(false)}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" isLoading={isLoading}>
+                  <Button type="submit" isLoading={isPending}>
                     Save
                   </Button>
                 </div>

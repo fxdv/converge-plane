@@ -18,7 +18,7 @@ export function Invites() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const { mutate: inviteAction, isLoading } = useInviteActionMutation({
+  const { mutate: inviteAction, isPending } = useInviteActionMutation({
     onSuccess: (data: Invite) => {
       if (data.status === 'ACCEPTED') {
         toast({
@@ -81,14 +81,14 @@ export function Invites() {
                   <div className="flex gap-2">
                     <Button
                       variant="ghost"
-                      disabled={isLoading}
+                      disabled={isPending}
                       onClick={() => onAction(false, invite.id)}
                     >
                       Decline
                     </Button>
                     <Button
                       variant="secondary"
-                      disabled={isLoading}
+                      disabled={isPending}
                       onClick={() => onAction(true, invite.id)}
                     >
                       Accept
