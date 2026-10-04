@@ -1,4 +1,4 @@
-import { type UseQueryResult, useQuery } from 'react-query';
+import { type UseQueryResult, useQuery } from 'common/lib/react-query';
 
 import type { User } from 'common/types';
 

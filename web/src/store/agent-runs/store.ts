@@ -7,7 +7,9 @@ import {
 
 import type { AgentRunType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 import { AgentRun } from './models';
 
@@ -35,6 +37,9 @@ export const AgentRunsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
+      if (isMemoryAuthorityModel(MODELS.AgentRun)) {
+        return;
+      }
       const runs: AgentRunType[] = yield convergeDatabase.agentRuns.toArray();
       runs.forEach((run) => self.runs.set(run.id, run));
     });

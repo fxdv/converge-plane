@@ -1,4 +1,4 @@
-import { type UseQueryResult, useQuery } from 'react-query';
+import { type UseQueryResult, useQuery } from 'common/lib/react-query';
 
 import { type XHRErrorResponse, ajaxGet } from 'services/utils';
 

@@ -11,7 +11,7 @@ import {
   type AgentTokenRotation,
   type AgentTokenSpec,
 } from '@converge/services';
-import { useMutation, useQuery, useQueryClient } from 'react-query';
+import { useMutation, useQuery, useQueryClient } from 'common/lib/react-query';
 
 import { GetUserQuery } from 'services/users';
 

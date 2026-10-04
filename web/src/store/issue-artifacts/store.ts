@@ -7,7 +7,9 @@ import {
 
 import type { IssueArtifactType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 import { IssueArtifactArray } from './models';
 
@@ -56,6 +58,9 @@ export const IssueArtifactsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* (issueId: string) {
+      if (isMemoryAuthorityModel(MODELS.IssueArtifact)) {
+        return;
+      }
       const artifacts = issueId
         ? yield convergeDatabase.issueArtifacts
             .where({

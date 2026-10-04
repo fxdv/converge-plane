@@ -14,7 +14,7 @@ import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
 import React from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { Hydrate, QueryClientProvider } from 'react-query';
+import { HydrationBoundary, QueryClientProvider } from 'common/lib/react-query';
 
 import { initSession } from 'common/init-config';
 import { DocumentTitle } from 'common/layouts/app-layout/document-title';
@@ -49,7 +49,7 @@ export const MyApp: NextComponentType<
         <TooltipProvider delayDuration={500}>
           <StoreContext.Provider value={storeContextStore}>
             <QueryClientProvider client={queryClientRef.current}>
-              <Hydrate state={dehydratedState}>
+              <HydrationBoundary state={dehydratedState}>
                 <div
                   className={cn(
                     'min-h-screen font-sans antialiased flex',
@@ -62,7 +62,7 @@ export const MyApp: NextComponentType<
                 </div>
 
                 <Toaster />
-              </Hydrate>
+              </HydrationBoundary>
             </QueryClientProvider>
           </StoreContext.Provider>
         </TooltipProvider>

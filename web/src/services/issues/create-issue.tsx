@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 import type { IssueType } from 'common/types';
 

@@ -7,20 +7,28 @@ import {
 } from 'store/client-cache-policy';
 import { MODELS } from 'store/models';
 
+const MEMORY_MODELS = [
+  MODELS.Issue,
+  MODELS.Workflow,
+  MODELS.IssueComment,
+  MODELS.IssueHistory,
+  MODELS.IssueArtifact,
+  MODELS.AgentRun,
+  MODELS.IssuePullRequest,
+  MODELS.Notification,
+] as const;
+
 describe('client-cache-policy (R-9)', () => {
-  it('keeps issues, workflows, comments, and history in memory authority', () => {
-    assert.equal(isMemoryAuthorityModel(MODELS.Issue), true);
-    assert.equal(isMemoryAuthorityModel(MODELS.Workflow), true);
-    assert.equal(isMemoryAuthorityModel(MODELS.IssueComment), true);
-    assert.equal(isMemoryAuthorityModel(MODELS.IssueHistory), true);
-    assert.equal(persistModelToDexie(MODELS.Issue), false);
-    assert.equal(persistModelToDexie(MODELS.Workflow), false);
-    assert.equal(persistModelToDexie(MODELS.IssueComment), false);
-    assert.equal(persistModelToDexie(MODELS.IssueHistory), false);
+  it('keeps issue-scoped and inbox models in memory authority', () => {
+    for (const model of MEMORY_MODELS) {
+      assert.equal(isMemoryAuthorityModel(model), true);
+      assert.equal(persistModelToDexie(model), false);
+    }
   });
 
-  it('still persists other synced models to Dexie', () => {
-    assert.equal(persistModelToDexie(MODELS.IssueArtifact), true);
+  it('still persists workspace metadata to Dexie', () => {
     assert.equal(persistModelToDexie(MODELS.Team), true);
+    assert.equal(persistModelToDexie(MODELS.Label), true);
+    assert.equal(persistModelToDexie(MODELS.View), true);
   });
 });

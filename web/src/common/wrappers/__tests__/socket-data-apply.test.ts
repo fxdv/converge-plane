@@ -513,7 +513,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.deepEqual(tableStubs.get(MODELS.UsersOnWorkspaces)!.dels, ['m1']);
     assert.deepEqual(tableStubs.get(MODELS.IssueHistory)!.dels, []);
     assert.deepEqual(tableStubs.get(MODELS.IssueComment)!.dels, []);
-    assert.deepEqual(tableStubs.get(MODELS.IssueArtifact)!.dels, ['a1']);
+    assert.deepEqual(tableStubs.get(MODELS.IssueArtifact)!.dels, []);
   });
 
   it('a degraded record fails its own model only (the batch survives)', async () => {
@@ -655,12 +655,8 @@ describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
       map[MODELS.Notification].notifications.map((n: { id: string }) => n.id),
       ['n1'],
     );
-    // The object cache keeps the same set: another member's nudge never
-    // lands in the local store of this account.
-    assert.equal(
-      tableStubs.get(MODELS.Notification)!.puts.length,
-      putsBefore + 1,
-    );
+    // R-9 slice 3: notifications are MST-only; Dexie is not written.
+    assert.equal(tableStubs.get(MODELS.Notification)!.puts.length, putsBefore);
   });
 
   it('a row without a recognizable recipient is dropped (never guessed)', async () => {
@@ -695,9 +691,6 @@ describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
       map,
     );
     assert.equal(map[MODELS.Notification].notifications.length, 0);
-    assert.equal(
-      tableStubs.get(MODELS.Notification)!.dels.length,
-      delsBefore + 1,
-    );
+    assert.equal(tableStubs.get(MODELS.Notification)!.dels.length, delsBefore);
   });
 });

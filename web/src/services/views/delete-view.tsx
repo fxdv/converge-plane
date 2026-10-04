@@ -1,4 +1,4 @@
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 import { ajaxDelete } from 'services/utils';
 

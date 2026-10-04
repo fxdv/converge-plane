@@ -24,6 +24,11 @@ import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import {
+  BOARD_DEFAULT_ROW_HEIGHT,
+  BOARD_OVERSCAN_ROW_COUNT,
+  boardVirtualRowCount,
+} from '../../board-virtual-config';
 import { useFilterIssues } from '../../../../issues-utils';
 
 interface PriorityBoardListProps {
@@ -51,11 +56,12 @@ export const PriorityBoardList = observer(
 
     const PriorityIcon = PriorityIcons[priority];
 
-    // Create a CellMeasurerCache instance
-    const cache = new CellMeasurerCache({
-      defaultHeight: 100, // Default row height
-      fixedWidth: true, // Rows have fixed width but dynamic height
-    });
+    const cache = React.useRef(
+      new CellMeasurerCache({
+        defaultHeight: BOARD_DEFAULT_ROW_HEIGHT,
+        fixedWidth: true,
+      }),
+    ).current;
 
     const rowRender = ({ index, style, key, parent }: ListRowProps) => {
       const issue = computedIssues[index];
@@ -111,9 +117,10 @@ export const PriorityBoardList = observer(
           droppableProvided: DroppableProvided,
           snapshot: DroppableStateSnapshot,
         ) => {
-          const itemCount: number = snapshot.isUsingPlaceholder
-            ? computedIssues.length + 1
-            : computedIssues.length;
+          const itemCount = boardVirtualRowCount(
+            computedIssues.length,
+            snapshot.isUsingPlaceholder,
+          );
 
           return (
             <div className="flex flex-col max-h-[100%] w-[350px]">
@@ -133,7 +140,7 @@ export const PriorityBoardList = observer(
                   {({ width, height }) => (
                     <List
                       height={height}
-                      overscanRowCount={10}
+                      overscanRowCount={BOARD_OVERSCAN_ROW_COUNT}
                       noRowsRenderer={() => <></>}
                       width={width}
                       rowCount={itemCount}

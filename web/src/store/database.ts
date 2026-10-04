@@ -21,10 +21,9 @@ import type {
 
 import { MODELS } from './models';
 
-// Local object-cache tables for the models the client syncs (v1 scope).
-// Forked models outside the active release were trimmed in the M3
-// dead-feature pass. R-9 (data-layer workstream) replaces this cache with
-// server-authoritative state + bounded caching.
+// Local object-cache for workspace metadata (teams, labels, views, …).
+// Issue-scoped models and notifications are MST-authoritative (R-9); Dexie
+// tables for those models remain for schema compatibility but are not written.
 export class ConvergeDatabase extends Dexie {
   workspaces: Dexie.Table<WorkspaceType, string>;
   labels: Dexie.Table<LabelType, string>;

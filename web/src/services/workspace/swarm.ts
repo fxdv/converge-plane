@@ -1,6 +1,6 @@
 import { getSwarmStatus, type SwarmStatus } from '@converge/services';
 
-import { useQuery } from 'react-query';
+import { useQuery } from 'common/lib/react-query';
 
 // D2: the swarm panel polls the fleet roster while open (30s keeps it
 // live without pressuring the API; issue-level changes already arrive

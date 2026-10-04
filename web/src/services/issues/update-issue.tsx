@@ -1,6 +1,6 @@
 import { useToast } from '@converge/ui/components/use-toast';
 import React from 'react';
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 import { useIssueConflict } from 'modules/issues/issue-conflict';
 

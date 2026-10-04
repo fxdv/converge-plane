@@ -7,7 +7,9 @@ import {
 
 import type { NotificationType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 import { NotificationArray } from './models';
 
@@ -57,6 +59,9 @@ export const NotificationsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* (workspaceId: string) {
+      if (isMemoryAuthorityModel(MODELS.Notification)) {
+        return;
+      }
       const recipientId = self.recipientId;
       if (!recipientId) {
         self.notifications.clear();
