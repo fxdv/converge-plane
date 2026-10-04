@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"converge/internal/config"
 )
 
 func TestRequireSameOrigin(t *testing.T) {
@@ -51,6 +53,39 @@ func TestRequireSameOrigin(t *testing.T) {
 			for k, v := range c.headers {
 				r.Header.Set(k, v)
 			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != c.want {
+				t.Fatalf("status = %d, want %d", w.Code, c.want)
+			}
+		})
+	}
+}
+
+func TestRequireSameOriginLoopbackAliases(t *testing.T) {
+	s := testService()
+	s.log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	s.origins = TrustedOrigins(config.Config{
+		DevMode:   true,
+		WebOrigin: "http://localhost:3000",
+		PublicURL: "http://localhost:3001",
+	})
+	h := s.RequireSameOrigin(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	cases := []struct {
+		origin string
+		want   int
+	}{
+		{"http://127.0.0.1:3000", http.StatusNoContent},
+		{"http://localhost:3000", http.StatusNoContent},
+		{"http://192.168.0.5:3000", http.StatusForbidden},
+	}
+	for _, c := range cases {
+		t.Run(c.origin, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/api/auth/signin/code", nil)
+			r.Header.Set("Origin", c.origin)
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, r)
 			if w.Code != c.want {

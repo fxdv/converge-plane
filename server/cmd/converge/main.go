@@ -145,10 +145,11 @@ func run() (err error) {
 	}
 
 	server := httpx.New(httpx.Dependencies{
-		Logger:      logger,
-		Version:     version,
-		PublicURL:   cfg.PublicURL,
-		WebOrigin:   cfg.WebOrigin,
+		Logger:         logger,
+		Version:        version,
+		PublicURL:      cfg.PublicURL,
+		WebOrigin:      cfg.WebOrigin,
+		TrustedOrigins: auth.TrustedOrigins(cfg),
 		Ready:       database.Healthy,
 		MountApp:    apiSvc.Mount,
 		ReadTimeout: cfg.HTTPTimeout,

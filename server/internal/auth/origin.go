@@ -71,6 +71,12 @@ func trustedOrigins(raw ...string) map[string]bool {
 	return out
 }
 
+// NormalizeOrigin reduces an origin or URL to "scheme://host[:port]",
+// lowercased and without a default port.
+func NormalizeOrigin(raw string) string {
+	return normalizeOrigin(raw)
+}
+
 // normalizeOrigin reduces an origin or URL to "scheme://host[:port]",
 // lowercased and without a default port; "" when it has neither.
 func normalizeOrigin(raw string) string {
