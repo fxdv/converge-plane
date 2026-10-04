@@ -71,4 +71,9 @@ export const MyApp: NextComponentType<
   );
 };
 
+// CSP nonces are per-request; opt out of static export for all pages.
+MyApp.getInitialProps = async (): Promise<AppInitialProps> => ({
+  pageProps: {},
+});
+
 export default MyApp;

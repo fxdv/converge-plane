@@ -18,9 +18,19 @@ export function AuthGuard(props: Props): React.ReactElement {
   }, []);
 
   async function checkForSession() {
-    if (await Session.doesSessionExist()) {
-      router.replace('/');
-    } else {
+    try {
+      const exists = await Promise.race([
+        Session.doesSessionExist(),
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(false), 8000);
+        }),
+      ]);
+      if (exists) {
+        router.replace('/');
+      } else {
+        setLoading(false);
+      }
+    } catch {
       setLoading(false);
     }
   }

@@ -25,6 +25,11 @@ export function middleware(request: NextRequest) {
     "form-action 'self'",
   ].join('; ');
 
+  // Next.js extracts the nonce from the CSP on the *request* during SSR so
+  // script tags get a matching nonce. Response-only CSP blocked hydration on
+  // statically optimized pages (e.g. /auth stuck on the loader).
+  requestHeaders.set('Content-Security-Policy', csp);
+
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
