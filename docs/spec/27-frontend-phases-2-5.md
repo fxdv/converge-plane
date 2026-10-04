@@ -27,13 +27,13 @@
 | --- | --- |
 | Responsive issue side panel (&lt;768px full width) | Done |
 | R-10 trim built-in AI writing on new issue | Done |
-| Board virtualization pass at 10k | Done — stable measurer cache, row-count fix, `board-profile.mjs`, overscan 5 |
+| Board virtualization pass at 10k | Done — all column views (category, team, priority, label, assignee); `board-profile.mjs`, overscan 5 |
 
 ## Phase 5 — Hardening
 
 | Item | Status |
 | --- | --- |
 | CSP nonces (H1) | Done — `src/middleware.ts` + `_document` nonce |
-| TipTap 3 (H4) | Blocked — `novel@0.5` / editor bundle needs migration before `@tiptap` 3 |
+| TipTap 3 (H4) | Done — `@tiptap` 3.31; in-repo `converge-editor` bundle (novel headless vendored, `novel` dep removed) |
 | TanStack Query v5 | Done — `@tanstack/react-query` + `common/lib/react-query` shim |
 | axe smoke on `/auth` in CI | Done — static HTML a11y checks |

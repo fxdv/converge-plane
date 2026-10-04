@@ -20,8 +20,8 @@
     "overrides": {
       "postcss@<8.5.23": "^8.5.23",
       "brace-expansion": "^1.1.20",
-      "@tiptap/pm": "2.27.3",
-      "@tiptap/suggestion": "2.27.3"
+      "@tiptap/pm": "3.31.4",
+      "@tiptap/suggestion": "3.31.4"
     },
     "auditConfig": {
       "ignoreGhsas": [

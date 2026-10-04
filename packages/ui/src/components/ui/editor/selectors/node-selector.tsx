@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { EditorBubbleItem, useEditor } from 'novel';
+import { EditorBubbleItem, useEditor } from '../converge-editor';
 import React from 'react';
 
 import {

@@ -1,11 +1,14 @@
 import type { Editor as EditorT, Extension, Mark, Node } from '@tiptap/core';
 
-import { EditorInstance, EditorContent, EditorBubble, useEditor } from 'novel';
 import {
+  EditorContent,
+  EditorBubble,
+  useEditor,
   ImageResizer,
   handleCommandNavigation,
+  type EditorInstance,
   type SuggestionItem,
-} from 'novel/extensions';
+} from './converge-editor';
 import * as React from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
