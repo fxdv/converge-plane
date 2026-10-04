@@ -1,5 +1,5 @@
 import { getRunEvents, type RunEventsPage } from '@converge/services';
-import { useInfiniteQuery } from 'react-query';
+import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 
 // A run's trace, page by page (200 lines each), fetched only while the
 // trace is open. The run's eventCount is part of the key, so a live run
@@ -10,14 +10,20 @@ export function useRunEventsQuery(
   eventCount: number,
   enabled: boolean,
 ) {
-  return useInfiniteQuery<RunEventsPage>(
-    ['runEvents', runId, eventCount],
-    ({ pageParam = 0 }) => getRunEvents(issueId, runId, pageParam),
-    {
-      enabled: enabled && eventCount > 0,
-      getNextPageParam: (last) => last.nextAfter ?? undefined,
-      staleTime: 10_000,
-      refetchOnWindowFocus: false,
-    },
-  );
+  return useInfiniteQuery<
+    RunEventsPage,
+    Error,
+    InfiniteData<RunEventsPage>,
+    readonly ['runEvents', string, number],
+    number
+  >({
+    queryKey: ['runEvents', runId, eventCount],
+    queryFn: ({ pageParam }) =>
+      getRunEvents(issueId, runId, pageParam),
+    initialPageParam: 0,
+    enabled: enabled && eventCount > 0,
+    getNextPageParam: (last) => last.nextAfter ?? undefined,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+  });
 }

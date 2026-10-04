@@ -2,7 +2,7 @@ import { getRunEvents } from '@converge/services';
 import { ChevronDown, CodingLine, LinkLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from 'common/lib/react-query';
 
 import {
   formatCost,

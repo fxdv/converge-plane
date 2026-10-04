@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 // spec cs:agents:evidence — a human records that an agent may move this
 // issue to Done. The approval is cleared when the issue leaves Done.

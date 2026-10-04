@@ -1,7 +1,7 @@
 import type { Workflow } from '@converge/types';
 
 import { updateWorkflow, type UpdateWorkflowInput } from '@converge/services';
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 import { useContextStore } from 'store/global-context-provider';
 

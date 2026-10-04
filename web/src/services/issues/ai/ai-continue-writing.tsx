@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 export function useAIContinueWritingMutation({
   baseHost,

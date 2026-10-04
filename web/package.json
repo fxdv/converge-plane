@@ -9,7 +9,8 @@
     "lint": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "bash scripts/wire-contract.sh",
-    "test:a11y": "node scripts/a11y-static.mjs"
+    "test:a11y": "node scripts/a11y-static.mjs",
+    "test:board-profile": "node scripts/board-profile.mjs 10000"
   },
   "dependencies": {
     "@converge/services": "workspace:*",
@@ -21,7 +22,9 @@
     "@tanstack/react-table": "^8.20.5",
     "@tiptap/core": "^2.27.3",
     "@tiptap/extension-mention": "^2.27.3",
+    "@tiptap/pm": "2.27.3",
     "@tiptap/react": "^2.27.3",
+    "@tiptap/suggestion": "2.27.3",
     "axios": "^1.6.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
@@ -46,7 +49,7 @@
     "react-dom": "^19",
     "react-hook-form": "7.88.0",
     "react-hotkeys-hook": "^5.3.3",
-    "react-query": "^3.39.3",
+    "@tanstack/react-query": "^5.90.5",
     "react-time-ago": "^7.3.1",
     "react-virtualized": "^9.22.6",
     "superagent": "^8.1.2",

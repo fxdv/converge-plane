@@ -7,7 +7,9 @@ import {
 
 import type { IssuePullRequestType } from 'common/types';
 
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 import { IssuePullRequest } from './models';
 
@@ -27,6 +29,9 @@ export const IssuePullRequestsStore: IAnyStateTreeNode = types
     };
 
     const load = flow(function* () {
+      if (isMemoryAuthorityModel(MODELS.IssuePullRequest)) {
+        return;
+      }
       const rows: IssuePullRequestType[] =
         yield convergeDatabase.issuePullRequests.toArray();
       rows.forEach((pr) => self.pullRequests.set(pr.id, pr));

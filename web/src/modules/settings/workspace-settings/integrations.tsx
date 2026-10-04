@@ -1,6 +1,6 @@
 import { Button } from '@converge/ui/components/button';
 import React from 'react';
-import { useQuery, useQueryClient } from 'react-query';
+import { useQuery, useQueryClient } from 'common/lib/react-query';
 
 import { SettingSection } from 'modules/settings/setting-section';
 
@@ -55,7 +55,9 @@ export function Integrations() {
     await ajaxPost({
       url: `/api/v1/workspaces/${workspace.id}/webhooks/deliveries/${eventId}/retry`,
     });
-    await queryClient.invalidateQueries(['webhook-deliveries', workspace?.id]);
+    await queryClient.invalidateQueries({
+      queryKey: ['webhook-deliveries', workspace?.id],
+    });
   };
 
   return (

@@ -24,31 +24,7 @@ module.exports = {
   // The /_next/image optimizer fetches and transcodes on request; nothing
   // here needs it, and with it off Next answers the route with a 404.
   images: { unoptimized: true },
-  // The browser calls /api same-origin through the proxy route, so no CORS
-  // headers are sent: a cross-origin caller gets nothing it can read. The
-  // CSP carries only directives that cannot break Next's inline bootstrap
-  // scripts; script-src needs nonces and is a separate change.
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value:
-              "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
-          },
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
-          },
-        ],
-      },
-    ];
-  },
+  // Security headers (incl. CSP nonces) are set in src/middleware.ts.
   devIndicators: {
     position: 'bottom-right',
   },

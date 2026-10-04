@@ -542,37 +542,88 @@ async function localRowsForModel(
             .toArray()
         : [];
     }
-    case MODELS.IssueArtifact:
+    case MODELS.IssueArtifact: {
+      if (isMemoryAuthorityModel(MODELS.IssueArtifact)) {
+        const store = MODEL_STORE_MAP[MODELS.IssueArtifact];
+        if (!store?.issueArtifacts) {
+          return [];
+        }
+        const rows: { id: string }[] = [];
+        for (const [issueId, artifacts] of store.issueArtifacts.entries()) {
+          if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
+            continue;
+          }
+          for (const row of artifacts as { id: string }[]) {
+            rows.push({ id: row.id });
+          }
+        }
+        return rows;
+      }
       return domain.issueIds.size
         ? db.issueArtifacts
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()
         : [];
-    case MODELS.AgentRun:
+    }
+    case MODELS.AgentRun: {
+      if (isMemoryAuthorityModel(MODELS.AgentRun)) {
+        const store = MODEL_STORE_MAP[MODELS.AgentRun];
+        if (!store?.runs) {
+          return [];
+        }
+        return Array.from(store.runs.values())
+          .filter((run: { issueId: string }) =>
+            domain.issueIds.size ? domain.issueIds.has(run.issueId) : true,
+          )
+          .map((run: { id: string }) => ({ id: run.id }));
+      }
       return domain.issueIds.size
         ? db.agentRuns
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()
         : [];
-    case MODELS.IssuePullRequest:
+    }
+    case MODELS.IssuePullRequest: {
+      if (isMemoryAuthorityModel(MODELS.IssuePullRequest)) {
+        const store = MODEL_STORE_MAP[MODELS.IssuePullRequest];
+        if (!store?.pullRequests) {
+          return [];
+        }
+        return Array.from(store.pullRequests.values())
+          .filter((pr: { issueId: string }) =>
+            domain.issueIds.size ? domain.issueIds.has(pr.issueId) : true,
+          )
+          .map((pr: { id: string }) => ({ id: pr.id }));
+      }
       return domain.issueIds.size
         ? db.issuePullRequests
             .where('issueId')
             .anyOf([...domain.issueIds])
             .toArray()
         : [];
+    }
     case MODELS.SwarmActivity:
       // In-memory only (no cache table): the whole store is the local set.
       return Array.from(
         MODEL_STORE_MAP[MODELS.SwarmActivity]?.activities.values() ?? [],
       );
-    case MODELS.Notification:
+    case MODELS.Notification: {
+      if (isMemoryAuthorityModel(MODELS.Notification)) {
+        const store = MODEL_STORE_MAP[MODELS.Notification];
+        if (!store?.notifications) {
+          return [];
+        }
+        return (store.notifications as { id: string; workspaceId: string }[])
+          .filter((n) => n.workspaceId === domain.workspaceId)
+          .map((n) => ({ id: n.id }));
+      }
       return db.notifications
         .where('workspaceId')
         .equals(domain.workspaceId)
         .toArray();
+    }
     default:
       return [];
   }

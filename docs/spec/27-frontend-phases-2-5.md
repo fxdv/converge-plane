@@ -17,9 +17,9 @@
 | --- | --- |
 | 1 — Issues + workflows MST-only (no Dexie writes) | Done — `client-cache-policy.ts`, save-data, prune, load |
 | 2 — Comments/history + optimistic mutations | Done — memory authority; optimistic comment in `issue-comment.tsx` |
-| 3 — Runs/PRs/notifications; Dexie retirement | Planned |
+| 3 — Runs/PRs/notifications; Dexie retirement | Done — + `IssueArtifact`; Dexie kept for workspace metadata only |
 
-`SYNC_SCHEMA` bumped to `2026-10-04.r9-slice2` for one full rebootstrap.
+`SYNC_SCHEMA` bumped to `2026-10-04.r9-slice3` for one full rebootstrap.
 
 ## Phase 4 — Scale and reach
 
@@ -27,13 +27,13 @@
 | --- | --- |
 | Responsive issue side panel (&lt;768px full width) | Done |
 | R-10 trim built-in AI writing on new issue | Done |
-| Board virtualization pass at 10k | Planned (profile before OD-15 run) |
+| Board virtualization pass at 10k | Done — stable measurer cache, row-count fix, `board-profile.mjs`, overscan 5 |
 
 ## Phase 5 — Hardening
 
 | Item | Status |
 | --- | --- |
-| CSP nonces (H1) | Planned — needs Next middleware + script policy |
-| TipTap 3 (H4) | Planned — prosemirror lockfile gate in CI |
-| TanStack Query v5 | Planned |
+| CSP nonces (H1) | Done — `src/middleware.ts` + `_document` nonce |
+| TipTap 3 (H4) | Blocked — `novel@0.5` / editor bundle needs migration before `@tiptap` 3 |
+| TanStack Query v5 | Done — `@tanstack/react-query` + `common/lib/react-query` shim |
 | axe smoke on `/auth` in CI | Done — static HTML a11y checks |

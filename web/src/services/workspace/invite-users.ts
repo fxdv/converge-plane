@@ -1,6 +1,6 @@
 import type { RoleEnum } from '@converge/types';
 
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 import { ajaxPost } from 'services/utils';
 

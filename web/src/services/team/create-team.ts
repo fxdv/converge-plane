@@ -1,7 +1,7 @@
 import type { Team } from '@converge/types';
 
 import { createTeam } from '@converge/services';
-import { useMutation } from 'react-query';
+import { useMutation } from 'common/lib/react-query';
 
 export interface MutationParams {
   onMutate?: () => void;

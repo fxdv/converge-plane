@@ -1,4 +1,4 @@
-import { type UseQueryResult, useQuery } from 'react-query';
+import { type UseQueryResult, useQuery } from 'common/lib/react-query';
 
 import type { BootstrapResponse } from 'common/types';
 

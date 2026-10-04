@@ -2,7 +2,9 @@ import type { NotificationsStoreType } from './store';
 
 import type { NotificationType, SyncActionRecord } from 'common/types';
 
+import { persistModelToDexie } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 // The addressed guard (SWR-13): the plane's stream and delta are
 // per-workspace — every member of the tenant receives every
@@ -26,6 +28,8 @@ export async function saveNotificationsData(
 ) {
   await Promise.all(
     data.map(async (record: SyncActionRecord) => {
+      const persist = persistModelToDexie(MODELS.Notification);
+
       switch (record.action) {
         case 'I':
         case 'U': {
@@ -33,7 +37,9 @@ export async function saveNotificationsData(
             return null;
           }
           const notification = record.data as NotificationType;
-          await convergeDatabase.notifications.put(notification);
+          if (persist) {
+            await convergeDatabase.notifications.put(notification);
+          }
           return notificationsStore.update(notification);
         }
 
@@ -41,7 +47,9 @@ export async function saveNotificationsData(
           // The retention horizon and the bootstrap prune's synthetic
           // deletes carry only the id. The store holds only this
           // recipient's rows, so an unknown id is a natural no-op.
-          await convergeDatabase.notifications.delete(record.data.id);
+          if (persist) {
+            await convergeDatabase.notifications.delete(record.data.id);
+          }
           return notificationsStore?.deleteById(record.data.id);
         }
 

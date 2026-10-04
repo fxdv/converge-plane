@@ -2,7 +2,9 @@ import type { IssueArtifactsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
+import { persistModelToDexie } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 // SWR-56: the sync handler for posted documents. Same contract as the
 // comments handler: the record's data is the full wire shape (8 keys),
@@ -25,9 +27,13 @@ export async function saveIssueArtifactsData(
         sourceMetadata: JSON.stringify(record.data.sourceMetadata),
       };
 
+      const persist = persistModelToDexie(MODELS.IssueArtifact);
+
       switch (record.action) {
         case 'I': {
-          await convergeDatabase.issueArtifacts.put(artifact);
+          if (persist) {
+            await convergeDatabase.issueArtifacts.put(artifact);
+          }
           return (
             issueArtifactsStore &&
             (await issueArtifactsStore.update(artifact, record.data.id))
@@ -35,7 +41,9 @@ export async function saveIssueArtifactsData(
         }
 
         case 'U': {
-          await convergeDatabase.issueArtifacts.put(artifact);
+          if (persist) {
+            await convergeDatabase.issueArtifacts.put(artifact);
+          }
           return (
             issueArtifactsStore &&
             (await issueArtifactsStore.update(artifact, record.data.id))
@@ -43,7 +51,9 @@ export async function saveIssueArtifactsData(
         }
 
         case 'D': {
-          await convergeDatabase.issueArtifacts.delete(record.data.id);
+          if (persist) {
+            await convergeDatabase.issueArtifacts.delete(record.data.id);
+          }
           return (
             issueArtifactsStore &&
             (await issueArtifactsStore.deleteById(record.data.id))

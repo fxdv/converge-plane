@@ -1,7 +1,7 @@
 import type { Pat } from '@converge/types';
 
 import { deletePat } from '@converge/services';
-import { useMutation, useQueryClient } from 'react-query';
+import { useMutation, useQueryClient } from 'common/lib/react-query';
 
 import { GetPats } from './get-pats';
 

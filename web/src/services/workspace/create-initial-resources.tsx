@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from 'react-query';
+import { useMutation, useQueryClient } from 'common/lib/react-query';
 
 import type { WorkspaceType } from 'common/types';
 

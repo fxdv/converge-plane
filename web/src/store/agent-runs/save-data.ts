@@ -6,7 +6,9 @@ import type {
   SyncActionRecord,
 } from 'common/types';
 
+import { persistModelToDexie } from 'store/client-cache-policy';
 import { convergeDatabase } from 'store/database';
+import { MODELS } from 'store/models';
 
 // Maps an AgentRun wire record to the store shape. Pure, so the wire
 // contract harness can pin it.
@@ -47,16 +49,22 @@ export async function saveAgentRunsData(
 ) {
   await Promise.all(
     data.map(async (record: SyncActionRecord) => {
+      const persist = persistModelToDexie(MODELS.AgentRun);
+
       switch (record.action) {
         case 'I':
         case 'U': {
           const run = agentRunFromRecord(record.data);
-          await convergeDatabase.agentRuns.put(run);
+          if (persist) {
+            await convergeDatabase.agentRuns.put(run);
+          }
           return agentRunsStore && agentRunsStore.update(run, run.id);
         }
 
         case 'D': {
-          await convergeDatabase.agentRuns.delete(record.data.id);
+          if (persist) {
+            await convergeDatabase.agentRuns.delete(record.data.id);
+          }
           return agentRunsStore && agentRunsStore.deleteById(record.data.id);
         }
       }

@@ -102,6 +102,8 @@ jobs:
         run: pnpm --filter=web test
       - name: A11y static smoke
         run: node web/scripts/a11y-static.mjs
+      - name: Board profile smoke (10k)
+        run: pnpm --filter=web test:board-profile
 
   images:
     runs-on: ubuntu-latest

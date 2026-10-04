@@ -3,7 +3,7 @@ import {
   type WorkspaceMetrics,
 } from '@converge/services';
 
-import { useQuery } from 'react-query';
+import { useQuery } from 'common/lib/react-query';
 
 // The metrics plane polls on the swarm's cadence (30s): the sections are
 // live gauges (goroutines, pool, registry), so a slower clock would show
