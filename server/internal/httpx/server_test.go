@@ -15,6 +15,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"converge/internal/auth"
+	"converge/internal/config"
 )
 
 func testLogger(buf *bytes.Buffer) *slog.Logger {
@@ -208,15 +211,17 @@ func TestRequestLoggerEmitsOneLine(t *testing.T) {
 func TestCORSMatchingOrigin(t *testing.T) {
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
-	h := CORS("http://localhost:3000")(inner)
+	h := CORS(auth.TrustedOrigins(config.Config{
+		DevMode: true, WebOrigin: "http://localhost:3000", PublicURL: "http://localhost:3001",
+	}))(inner)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/x", nil)
-	r.Header.Set("Origin", "http://localhost:3000")
+	r.Header.Set("Origin", "http://127.0.0.1:3000")
 	h.ServeHTTP(w, r)
 	if !called {
 		t.Fatal("matching-origin request was not passed through")
 	}
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://127.0.0.1:3000" {
 		t.Fatalf("allow-origin = %q", got)
 	}
 	if got := w.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
@@ -237,7 +242,7 @@ func TestCORSMatchingOrigin(t *testing.T) {
 func TestCORSPreFlightShortCircuits(t *testing.T) {
 	called := false
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
-	h := CORS("http://localhost:3000")(inner)
+	h := CORS(map[string]bool{auth.NormalizeOrigin("http://localhost:3000"): true})(inner)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodOptions, "/x", nil)
 	r.Header.Set("Origin", "http://localhost:3000")
@@ -255,7 +260,7 @@ func TestCORSPreFlightShortCircuits(t *testing.T) {
 
 func TestCORSForeignOriginIgnored(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-	h := CORS("http://localhost:3000")(inner)
+	h := CORS(map[string]bool{auth.NormalizeOrigin("http://localhost:3000"): true})(inner)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/x", nil)
 	r.Header.Set("Origin", "http://evil.example")

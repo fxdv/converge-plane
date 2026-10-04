@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"converge/internal/auth"
 	"converge/internal/metrics"
 	"converge/internal/netx"
 )
@@ -37,6 +38,9 @@ type Dependencies struct {
 	Version   string
 	PublicURL string
 	WebOrigin string
+	// TrustedOrigins allows CORS with credentials for browser clients.
+	// When nil, no cross-origin CORS headers are emitted.
+	TrustedOrigins map[string]bool
 	// Ready reports database readiness for the /readyz probe.
 	Ready func(ctx context.Context) error
 	// ReadTimeout bounds request reading (headers + body) for every
@@ -77,7 +81,7 @@ func New(d Dependencies) *Server {
 		RequestLogger(d.Logger),
 		Metrics(),
 		SecurityHeaders(),
-		CORS(d.WebOrigin),
+		CORS(d.TrustedOrigins),
 	)
 
 	if d.MountApp != nil {
@@ -323,11 +327,14 @@ func metricMethod(m string) string {
 // Self-hosted deployments commonly run web and API on different origins;
 // in single-domain layouts the origin never matches and no CORS headers
 // are emitted.
-func CORS(webOrigin string) func(http.Handler) http.Handler {
+func CORS(allowed map[string]bool) func(http.Handler) http.Handler {
+	if allowed == nil {
+		allowed = map[string]bool{}
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin == "" || origin != webOrigin {
+			if origin == "" || !allowed[auth.NormalizeOrigin(origin)] {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -109,7 +109,7 @@ func NewService(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, mailer 
 		emailLimit: netx.NewLimiter(authEmailRate, authEmailBurst),
 		revoked:    newRevocations(),
 		live:       newRevocations(),
-		origins:    trustedOrigins(cfg.WebOrigin, cfg.PublicURL),
+		origins:    TrustedOrigins(cfg),
 	}
 }
 
