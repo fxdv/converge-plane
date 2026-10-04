@@ -45,6 +45,13 @@ Containers:
 | `postgres` | Database; published on `127.0.0.1` only                     | 5432   |
 | `seed`     | One-shot demo-data seeder (the `seed` profile)             | —      |
 
+**SSH tunnel (Bravo).** To use the remote stack at `http://localhost:3000` without
+running web locally, run `pnpm tunnel:bravo` from the repo root (or
+`scripts/bravo-tunnel.sh`). It forwards local `:3000` and `:3001` to the remote
+host with a reconnect loop. Set `CONVERGE_WEB_ORIGIN` on the server to the URL
+you use for magic links; `CONVERGE_WEB_ORIGIN_EXTRA` (compose defaults) covers
+tunnel browser origins on published ports.
+
 The seeder creates the **Acme** demo workspace (sign in with
 `demo@converge.dev`) on a fresh database. It is idempotent and re-runs on
 every `up`. It is enabled by default via `COMPOSE_PROFILES=seed` in
@@ -66,6 +73,7 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_DATABASE_URL`    | — (required)                        | Postgres DSN                                        |
 | `CONVERGE_PUBLIC_URL`      | `http://localhost:3001`             | Public base URL; also an allowed request `Origin`    |
 | `CONVERGE_WEB_ORIGIN`      | `http://localhost:3000`             | Web client origin; CORS, SSE headers, magic-link URLs, allowed request `Origin` |
+| `CONVERGE_WEB_ORIGIN_EXTRA`| compose default: localhost/`127.0.0.1`/`[::1]` on `:3000` and `:3001` | Additional allowed browser `Origin` values (comma-separated); use when tunneling or when the app is opened on a different loopback name than `CONVERGE_WEB_ORIGIN` |
 | `CONVERGE_LOG_LEVEL`       | `info`                              | `debug` \| `info` \| `warn` \| `error`               |
 | `CONVERGE_HTTP_TIMEOUT`    | `30s`                               | Per-request read timeout                              |
 | `CONVERGE_DB_MIN_CONNS`    | `2` (compose) / `1` (binary)        | Connection pool floor                                 |

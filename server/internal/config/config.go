@@ -35,6 +35,9 @@ type Config struct {
 	// WebOrigin is the origin of the web client, used for CORS in
 	// cross-origin self-hosted layouts.
 	WebOrigin string
+	// WebOriginExtra lists additional allowed browser Origin values
+	// (comma-separated in CONVERGE_WEB_ORIGIN_EXTRA), e.g. tunnel URLs.
+	WebOriginExtra []string
 	// LogLevel selects the log level: debug, info, warn, error.
 	LogLevel string
 	// SessionCookieName is the name of the session cookie.
@@ -179,6 +182,7 @@ type Config struct {
 //	CONVERGE_DATABASE_URL      postgres DSN            (required)
 //	CONVERGE_PUBLIC_URL        public base URL         (default "http://localhost:3001")
 //	CONVERGE_WEB_ORIGIN        web origin for CORS     (default "http://localhost:3000")
+//	CONVERGE_WEB_ORIGIN_EXTRA  comma-separated extra allowed browser origins
 //	CONVERGE_LOG_LEVEL         debug|info|warn|error  (default "info")
 //	CONVERGE_HTTP_TIMEOUT      request timeout, e.g. "30s" (default "30s")
 //	CONVERGE_DB_MIN_CONNS      pool min conns          (default "1")
@@ -225,6 +229,7 @@ func Load() (Config, error) {
 		DatabaseURL:       os.Getenv("CONVERGE_DATABASE_URL"),
 		PublicURL:         strings.TrimRight(env("CONVERGE_PUBLIC_URL", "http://localhost:3001"), "/"),
 		WebOrigin:         strings.TrimRight(env("CONVERGE_WEB_ORIGIN", "http://localhost:3000"), "/"),
+		WebOriginExtra:    parseOriginList(os.Getenv("CONVERGE_WEB_ORIGIN_EXTRA")),
 		LogLevel:          env("CONVERGE_LOG_LEVEL", "info"),
 		HTTPTimeout:       30 * time.Second,
 		DBMinConns:        1,
@@ -562,6 +567,21 @@ func parseTrustedProxies(v string) ([]netip.Prefix, error) {
 		out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
 	}
 	return out, nil
+}
+
+func parseOriginList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimRight(strings.TrimSpace(part), "/")
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func env(key, fallback string) string {

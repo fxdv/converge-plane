@@ -51,6 +51,7 @@ services:
       CONVERGE_DATABASE_URL: postgresql://${POSTGRES_USER:-converge}:${POSTGRES_PASSWORD:-converge}@postgres:5432/${POSTGRES_DB:-converge}?sslmode=disable
       CONVERGE_PUBLIC_URL: ${CONVERGE_PUBLIC_URL:-http://localhost:3001}
       CONVERGE_WEB_ORIGIN: ${CONVERGE_WEB_ORIGIN:-http://localhost:3000}
+      CONVERGE_WEB_ORIGIN_EXTRA: ${CONVERGE_WEB_ORIGIN_EXTRA:-http://localhost:3000,http://127.0.0.1:3000,http://[::1]:3000,http://localhost:3001,http://127.0.0.1:3001,http://[::1]:3001}
       CONVERGE_LOG_LEVEL: ${CONVERGE_LOG_LEVEL:-info}
       # Dev conveniences: the sign-in response includes the magic link, so
       # a local setup without an email provider is sign-in-able. The API

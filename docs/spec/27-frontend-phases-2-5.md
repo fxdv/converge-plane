@@ -2,6 +2,8 @@
 
 **Updated:** 2026-10-04
 
+Follow-ups are tracked in `docs/spec/28-frontend-follow-ups.md`.
+
 ## Phase 2 — Design system hygiene
 
 | Item | Status |

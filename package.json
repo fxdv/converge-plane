@@ -10,7 +10,8 @@
     "build": "dotenv -e .env -- pnpm turbo run build",
     "build:web": "dotenv -e .env -- pnpm turbo run build --filter=web",
     "lint": "pnpm turbo run lint",
-    "typecheck": "pnpm turbo run typecheck"
+    "typecheck": "pnpm turbo run typecheck",
+    "tunnel:bravo": "scripts/bravo-tunnel.sh"
   },
   "dependencies": {
     "dotenv-cli": "^7.4.4",
