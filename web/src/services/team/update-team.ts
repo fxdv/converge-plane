@@ -47,7 +47,7 @@ export function useUpdateTeamMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation(update, {
+  return useMutation({ mutationFn: update,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -34,22 +34,24 @@ export function Integrations() {
   const repos = user?.features?.githubRepos ?? [];
   const tracking = user?.features?.githubPullRequests === true;
 
-  const endpoints = useQuery(
-    ['webhooks', workspace?.id],
-    () =>
+  const endpoints = useQuery({
+    queryKey: ['webhooks', workspace?.id],
+    queryFn: () =>
       ajaxGet<WebhookEndpoint[]>({
         url: `/api/v1/workspaces/${workspace.id}/webhooks`,
       }),
-    { enabled: !!workspace?.id, retry: false },
-  );
-  const deliveries = useQuery(
-    ['webhook-deliveries', workspace?.id],
-    () =>
+    enabled: !!workspace?.id,
+    retry: false,
+  });
+  const deliveries = useQuery({
+    queryKey: ['webhook-deliveries', workspace?.id],
+    queryFn: () =>
       ajaxGet<WebhookDelivery[]>({
         url: `/api/v1/workspaces/${workspace.id}/webhooks/deliveries`,
       }),
-    { enabled: !!workspace?.id, retry: false },
-  );
+    enabled: !!workspace?.id,
+    retry: false,
+  });
 
   const retry = async (eventId: string) => {
     await ajaxPost({

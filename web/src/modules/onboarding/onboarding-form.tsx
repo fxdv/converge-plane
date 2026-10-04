@@ -28,7 +28,7 @@ export const OnboardingSchema = z.object({
 export function OnboardingForm() {
   const { toast } = useToast();
 
-  const { mutate: createInitialResources, isLoading } =
+  const { mutate: createInitialResources, isPending } =
     useCreateInitialResourcesMutation({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onError: (e: any) => {
@@ -122,7 +122,7 @@ export function OnboardingForm() {
           <Button
             className="flex gap-2"
             size="xl"
-            isLoading={isLoading}
+            isLoading={isPending}
             type="submit"
             variant="secondary"
           >

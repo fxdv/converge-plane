@@ -7,8 +7,8 @@ export function useAIContinueWritingMutation({
   baseHost: string;
 }) {
   const [responses, setResponses] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { mutate, isLoading: apiloading } = useMutation({
+  const [streaming, setStreaming] = useState(false);
+  const { mutate, isPending: apiloading } = useMutation({
     mutationFn: async ({
       description,
       workspaceId,
@@ -40,7 +40,7 @@ export function useAIContinueWritingMutation({
       return reader;
     },
     onSuccess: (reader) => {
-      setIsLoading(true);
+      setStreaming(true);
       readStream(reader);
     },
   });
@@ -51,7 +51,7 @@ export function useAIContinueWritingMutation({
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          setIsLoading(false);
+          setStreaming(false);
           return;
         }
 
@@ -63,5 +63,5 @@ export function useAIContinueWritingMutation({
     read();
   }
 
-  return { responses, mutate, isLoading: isLoading || apiloading };
+  return { responses, mutate, isPending: streaming || apiloading };
 }

@@ -27,7 +27,7 @@ export function useAddTeamMemberMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation(addTeamMember, {
+  return useMutation({ mutationFn: addTeamMember,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

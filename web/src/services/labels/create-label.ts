@@ -46,7 +46,7 @@ export function useCreateLabelMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createLabel, {
+  return useMutation({ mutationFn: createLabel,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

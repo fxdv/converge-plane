@@ -66,7 +66,7 @@ export const ProjectRail = observer(
     const [creating, setCreating] = React.useState(false);
     const [name, setName] = React.useState('');
     const color = React.useMemo(() => generateOklchColor(), [creating]);
-    const { mutate: createProject, isLoading: creatingBusy } =
+    const { mutate: createProject, isPending: creatingBusy } =
       useCreateProjectMutation({
         onSuccess: () => {
           setCreating(false);

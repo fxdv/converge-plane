@@ -69,7 +69,7 @@ export function AddMemberDialog({ setDialogOpen }: AddMemberDialogProps) {
 
   const workspace = useCurrentWorkspace();
 
-  const { mutate: inviteUsers, isLoading } = useInviteUsersMutation({
+  const { mutate: inviteUsers, isPending } = useInviteUsersMutation({
     onSuccess: () => {
       toast({
         title: 'Invites sent',
@@ -197,7 +197,7 @@ export function AddMemberDialog({ setDialogOpen }: AddMemberDialogProps) {
                 <Button variant="ghost" type="button" onClick={onClose}>
                   Cancel
                 </Button>
-                <Button variant="secondary" type="submit" isLoading={isLoading}>
+                <Button variant="secondary" type="submit" isLoading={isPending}>
                   Invite
                 </Button>
               </div>

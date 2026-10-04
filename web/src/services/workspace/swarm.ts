@@ -15,16 +15,14 @@ export function useSwarmQuery(
   isLoading: boolean;
   refetch: () => void;
 } {
-  const { data, isLoading, refetch } = useQuery(
-    ['swarm', workspaceId],
-    () => getSwarmStatus(workspaceId),
-    {
-      enabled: Boolean(workspaceId) && enabled,
-      staleTime: 15_000,
-      refetchInterval: enabled ? 30_000 : false,
-      refetchOnWindowFocus: false,
-    },
-  );
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['swarm', workspaceId],
+    queryFn: () => getSwarmStatus(workspaceId),
+    enabled: Boolean(workspaceId) && enabled,
+    staleTime: 15_000,
+    refetchInterval: enabled ? 30_000 : false,
+    refetchOnWindowFocus: false,
+  });
 
   return { data, isLoading, refetch };
 }

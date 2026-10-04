@@ -29,14 +29,12 @@ export function useGetSimilarIssuesQuery(
   data: SimilarIssuesParams,
   enabled = false,
 ): UseQueryResult<IssueType[], XHRErrorResponse> {
-  return useQuery(
-    [SimilarIssuesQuery, data.issueId],
-    () => similarIssues(data),
-    {
-      retry: 1,
-      staleTime: 1,
-      refetchOnWindowFocus: false, // Frequency of Change would be Low
-      enabled,
-    },
-  );
+  return useQuery({
+    queryKey: [SimilarIssuesQuery, data.issueId],
+    queryFn: () => similarIssues(data),
+    retry: 1,
+    staleTime: 1,
+    refetchOnWindowFocus: false,
+    enabled,
+  });
 }

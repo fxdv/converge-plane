@@ -47,7 +47,7 @@ export function useUpdateIssueSubscribeMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation(updateIssueSubscribe, {
+  return useMutation({ mutationFn: updateIssueSubscribe,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

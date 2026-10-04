@@ -29,7 +29,7 @@ export function useDeleteTeamMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation(deleteTeam, {
+  return useMutation({ mutationFn: deleteTeam,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

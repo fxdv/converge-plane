@@ -27,7 +27,7 @@ export function useAuthorizeMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation(authorizeCode, {
+  return useMutation({ mutationFn: authorizeCode,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

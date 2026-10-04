@@ -57,7 +57,7 @@ export function useDeleteProjectMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(deleteProject, {
+  return useMutation({ mutationFn: deleteProject,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

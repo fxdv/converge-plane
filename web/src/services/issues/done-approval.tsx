@@ -15,7 +15,7 @@ export function useApproveDoneMutation({
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }) {
-  return useMutation((issueId: string) => approveDone(issueId), {
+  return useMutation({ mutationFn: (issueId: string) => approveDone(issueId),
     onSuccess: () => onSuccess && onSuccess(),
     onError: (errorResponse: { response?: { data?: { error?: string } } }) =>
       onError &&

@@ -29,7 +29,7 @@ export function useUpdateTeamPreferencesMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation(updateTeamPreferences, {
+  return useMutation({ mutationFn: updateTeamPreferences,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

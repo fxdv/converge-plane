@@ -319,8 +319,11 @@ Search\cs{feat:search} & PostgreSQL full-text + trigram,
   permission-scoped, deterministic & \shipped\\
 Saved views\cs{feat:views} & Filter + grouping + display, shared or
   personal & \shipped\\
-List / Kanban\cs{feat:boards} & Virtualized; group by status, assignee,
-  label, priority, team; drag = one mutation; the swarm's live signal as a pulsing chip plus the latest handoff line (\S\ref{sec:activity}) & \shipped\\
+List / Kanban\cs{feat:boards} & Virtualized (OD-15: $\sim$11 mounted rows
+  per column at 10k issues); group by status, assignee, label, priority,
+  team; drag = one mutation; responsive side panel; the swarm's live signal
+  as a pulsing chip plus the latest handoff line (\S\ref{sec:activity}) &
+  \shipped\\
 Sync engine\cs{feat:realtime} & Bootstrap / delta / SSE stream;
   transactional outbox; sequence watermarks; stale-gap recovery &
   \shipped\\
@@ -1387,9 +1390,10 @@ review commits nothing.
 
 A modular monolith: one Go artifact serving web, API, and in-process
 workers; PostgreSQL as the only stateful dependency; a Next.js client
-(mobx-state-tree + bounded IndexedDB cache). Configuration is
-environment-only; a reverse proxy provides TLS. No Redis, no queue
-broker, no vector store --- in v1.
+(mobx-state-tree with issue-scoped models in memory authority, workspace
+metadata in IndexedDB; TanStack Query~v5 for server-backed reads).
+Configuration is environment-only; a reverse proxy provides TLS. No Redis,
+no queue broker, no vector store --- in v1.
 
 \section{Seams}
 \label{sec:seams}
@@ -1580,7 +1584,9 @@ NEXT ordering (swarm-first vs.\ greenfield order) & \owner{owner}\\
 
 OD-06 admin visibility, OD-07 team identifiers, OD-08 retention windows,
 OD-12 attachment storage, OD-13 project/cycle rules, OD-14 notification
-triggers, OD-15 performance budgets, OD-16 realtime transport, OD-17
+triggers, OD-15 performance budgets (numeric budgets in doc~24; structural
+CI gates on board virtualization and panel layout; full p95 on 10k fixture
+still manual), OD-16 realtime transport, OD-17
 public API versioning, OD-18 integration workflows, OD-19 telemetry,
 OD-20 localization/timezone, OD-21 browser matrix, OD-22 accessibility
 process --- unchanged; each keeps its pre-pivot gate.

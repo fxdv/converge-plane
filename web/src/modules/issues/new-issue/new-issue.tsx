@@ -60,7 +60,7 @@ export function NewIssue({
     },
   });
 
-  const { mutate: createIssue, isLoading } = useCreateIssueMutation({
+  const { mutate: createIssue, isPending } = useCreateIssueMutation({
     onSuccess: (data: IssueType) => {
       form.reset();
       toast({
@@ -186,7 +186,7 @@ export function NewIssue({
                     index={index}
                     defaultValues={defaultValues}
                     isTemplate={!!createOutsideFunction}
-                    isLoading={isLoading}
+                    isLoading={isPending}
                     onClose={onClose}
                     // Sub issue controllers
                     subIssueOperations={{

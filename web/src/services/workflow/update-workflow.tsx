@@ -49,7 +49,7 @@ export function useUpdateWorkflowMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(update, {
+  return useMutation({ mutationFn: update,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

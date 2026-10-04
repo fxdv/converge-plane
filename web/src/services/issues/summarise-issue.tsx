@@ -16,9 +16,11 @@ export function getSummarizeIssue(issueId: string) {
 export function useSummarizeIssue(
   issueId: string,
 ): UseQueryResult<string[], XHRErrorResponse> {
-  return useQuery([SummarizeIssue], () => getSummarizeIssue(issueId), {
+  return useQuery({
+    queryKey: [SummarizeIssue, issueId],
+    queryFn: () => getSummarizeIssue(issueId),
     retry: 1,
     staleTime: 1,
-    refetchOnWindowFocus: false, // Frequency of Change would be Low
+    refetchOnWindowFocus: false,
   });
 }

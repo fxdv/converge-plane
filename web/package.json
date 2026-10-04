@@ -11,7 +11,11 @@
     "test": "bash scripts/wire-contract.sh",
     "test:a11y": "node scripts/a11y-static.mjs",
     "test:board-profile": "node scripts/board-profile.mjs 10000",
-    "test:csp-nonce": "node scripts/csp-nonce-smoke.mjs"
+    "test:csp-nonce": "node scripts/csp-nonce-smoke.mjs",
+    "test:issue-panel": "node scripts/issue-panel-smoke.mjs",
+    "test:dexie-policy": "node scripts/dexie-policy-smoke.mjs",
+    "test:editor": "node scripts/editor-smoke.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@converge/services": "workspace:*",
@@ -78,6 +82,7 @@
     "postcss": "^8",
     "prettier": "^3.9.9",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.3",
+    "@playwright/test": "^1.51.1"
   }
 }

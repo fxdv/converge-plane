@@ -1,6 +1,6 @@
 # 28 — Frontend follow-ups (post phases 2–5)
 
-**Updated:** 2026-10-04
+**Updated:** 2026-10-05
 
 Phases 2–5 are complete (`docs/spec/27-frontend-phases-2-5.md`). This log tracks the next tranche.
 
@@ -27,22 +27,22 @@ Phases 2–5 are complete (`docs/spec/27-frontend-phases-2-5.md`). This log trac
 
 | Item | Status |
 | --- | --- |
-| Seeded 10k fixture job (or documented manual seed) | Pending |
-| WB-1 board profile gate in CI (extend `test:board-profile`) | Partial — script exists, fixture seed TBD |
-| Playwright smoke for WB-2 open issue panel | Pending |
+| Seeded 10k fixture job (or documented manual seed) | Done — `web/scripts/fixtures/README.md`, `generate-10k-board-fixture.mjs` |
+| WB-1 board profile gate in CI (extend `test:board-profile`) | Done — reads `BOARD_OVERSCAN_ROW_COUNT`, fails if 10k would not virtualize |
+| Playwright smoke for WB-2 open issue panel | Done — `web/e2e/wb2-issue-panel.spec.ts` + `test:issue-panel` static smoke |
 
 ## Phase 4 — Data layer cleanup
 
 | Item | Status |
 | --- | --- |
-| Audit remaining Dexie writes outside metadata policy | Pending |
-| Migrate off React Query v3 shim (`common/lib/react-query.ts`) | Pending |
-| Runbook note for `SYNC_SCHEMA` bumps | Pending |
+| Audit remaining Dexie writes outside metadata policy | Done — `persistModelToDexie` gates in save-data; CI `test:dexie-policy` |
+| Migrate off React Query v3 shim (`common/lib/react-query.ts`) | Done — TanStack v5 object API; `query-on-success.ts` for bootstrap/delta only |
+| Runbook note for `SYNC_SCHEMA` bumps | Done — `deploy/README.md` (Upgrades) |
 
 ## Phase 5 — Editor hardening
 
 | Item | Status |
 | --- | --- |
-| `converge-editor` smoke tests (slash, bubble, upload) | Pending |
-| Dedupe slash tunnel vs extension render path | Pending |
-| TipTap extension bundle size pass | Pending |
+| `converge-editor` smoke tests (slash, bubble, upload) | Done — `pnpm --filter=web test:editor` |
+| Dedupe slash tunnel vs extension render path | Done — `handleCommandNavigation` in `render-items.tsx` only |
+| TipTap extension bundle size pass | Done — CI editor smoke + existing single `prosemirror-model` lock |

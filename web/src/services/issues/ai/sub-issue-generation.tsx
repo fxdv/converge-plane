@@ -47,7 +47,7 @@ export function useSubIssueGenerationMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(aiSubIssueGeneration, {
+  return useMutation({ mutationFn: aiSubIssueGeneration,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

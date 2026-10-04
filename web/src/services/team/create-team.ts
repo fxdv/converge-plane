@@ -29,7 +29,7 @@ export function useCreateTeamMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createTeam, {
+  return useMutation({ mutationFn: createTeam,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

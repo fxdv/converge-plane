@@ -56,7 +56,7 @@ export function NewIssueTitle({ form, index, isSubIssue }: NewIssueTitleProps) {
 
   const descriptionString = getDescription(description);
   const workspace = useCurrentWorkspace();
-  const { mutate, isLoading } = useAITitleMutation({
+  const { mutate, isPending } = useAITitleMutation({
     onSuccess: (data) => {
       if (data) {
         if (data === 'null') {
@@ -78,7 +78,7 @@ export function NewIssueTitle({ form, index, isSubIssue }: NewIssueTitleProps) {
           <Button
             variant="link"
             className="px-0"
-            isLoading={isLoading}
+            isLoading={isPending}
             onClick={() => {
               if (descriptionString) {
                 mutate({

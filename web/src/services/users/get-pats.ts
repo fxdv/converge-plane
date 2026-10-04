@@ -11,9 +11,11 @@ import { type XHRErrorResponse } from 'services/utils';
 export const GetPats = 'getPats';
 
 export function useGetPatsQuery(): UseQueryResult<Pat[], XHRErrorResponse> {
-  return useQuery([GetPats], () => getPats(), {
+  return useQuery({
+    queryKey: [GetPats],
+    queryFn: () => getPats(),
     retry: 1,
     staleTime: 1,
-    refetchOnWindowFocus: false, // Frequency of Change would be Low
+    refetchOnWindowFocus: false,
   });
 }

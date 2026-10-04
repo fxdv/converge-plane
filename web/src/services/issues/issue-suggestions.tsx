@@ -52,7 +52,7 @@ export function useSuggestionIssueMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(suggestionIssue, {
+  return useMutation({ mutationFn: suggestionIssue,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

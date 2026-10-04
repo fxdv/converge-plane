@@ -43,25 +43,21 @@ export function useCreateAgentMutation({
 }: MutationParams) {
   const queryClient = useQueryClient();
 
-  return useMutation(
-    ({ workspaceId, ...data }: CreateAgentVariables) =>
+  return useMutation({
+    mutationFn: ({ workspaceId, ...data }: CreateAgentVariables) =>
       createAgent(workspaceId, data),
-    {
-      onMutate: () => onMutate && onMutate(),
-      onError: (
-        e: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          response?: { data?: { error?: string } };
-        } & Error,
-      ) => onError && onError(errorText(e)),
-      onSuccess: (data) => {
-        // The new membership lands through the realtime stream, but the
-        // users list the dialog's team checkboxes read from is query-cached.
-        queryClient.invalidateQueries({ queryKey: [GetUserQuery] });
-        onSuccess && onSuccess(data);
-      },
+    onMutate: () => onMutate && onMutate(),
+    onError: (
+      e: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        response?: { data?: { error?: string } };
+      } & Error,
+    ) => onError && onError(errorText(e)),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [GetUserQuery] });
+      onSuccess && onSuccess(data);
     },
-  );
+  });
 }
 
 export function useGetAgentsQuery(
@@ -72,7 +68,9 @@ export function useGetAgentsQuery(
   isLoading: boolean;
   refetch: () => void;
 } {
-  return useQuery(['agents', workspaceId], () => getAgents(workspaceId), {
+  return useQuery({
+    queryKey: ['agents', workspaceId],
+    queryFn: () => getAgents(workspaceId),
     enabled,
     staleTime: 30_000,
   });
@@ -87,8 +85,8 @@ export function useIssueAgentTokenMutation({
 }) {
   const queryClient = useQueryClient();
 
-  return useMutation(
-    ({
+  return useMutation({
+    mutationFn: ({
       workspaceId,
       accountId,
       ...data
@@ -97,21 +95,19 @@ export function useIssueAgentTokenMutation({
       accountId: string;
       name?: string;
     } & AgentTokenSpec) => issueAgentToken(workspaceId, accountId, data),
-    {
-      onMutate: () => onMutate && onMutate(),
-      onError: (
-        e: {
-          response?: { data?: { error?: string } };
-        } & Error,
-      ) => onError && onError(errorText(e)),
-      onSuccess: (data, params) => {
-        queryClient.invalidateQueries({
-          queryKey: ['agents', params.workspaceId],
-        });
-        onSuccess && onSuccess(data);
-      },
+    onMutate: () => onMutate && onMutate(),
+    onError: (
+      e: {
+        response?: { data?: { error?: string } };
+      } & Error,
+    ) => onError && onError(errorText(e)),
+    onSuccess: (data, params) => {
+      queryClient.invalidateQueries({
+        queryKey: ['agents', params.workspaceId],
+      });
+      onSuccess && onSuccess(data);
     },
-  );
+  });
 }
 
 export function useRotateAgentTokenMutation({
@@ -123,8 +119,8 @@ export function useRotateAgentTokenMutation({
 }) {
   const queryClient = useQueryClient();
 
-  return useMutation(
-    (params: {
+  return useMutation({
+    mutationFn: (params: {
       workspaceId: string;
       accountId: string;
       tokenId: string;
@@ -134,22 +130,20 @@ export function useRotateAgentTokenMutation({
         tokenId: params.tokenId,
         graceHours: params.graceHours,
       }),
-    {
-      onMutate: () => onMutate && onMutate(),
-      onError: (
-        e: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          response?: { data?: { error?: string } };
-        } & Error,
-      ) => onError && onError(errorText(e)),
-      onSuccess: (data, params) => {
-        queryClient.invalidateQueries({
-          queryKey: ['agents', params.workspaceId],
-        });
-        onSuccess && onSuccess(data);
-      },
+    onMutate: () => onMutate && onMutate(),
+    onError: (
+      e: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        response?: { data?: { error?: string } };
+      } & Error,
+    ) => onError && onError(errorText(e)),
+    onSuccess: (data, params) => {
+      queryClient.invalidateQueries({
+        queryKey: ['agents', params.workspaceId],
+      });
+      onSuccess && onSuccess(data);
     },
-  );
+  });
 }
 
 export function useRevokeAgentTokenMutation({
@@ -161,29 +155,31 @@ export function useRevokeAgentTokenMutation({
 }) {
   const queryClient = useQueryClient();
 
-  return useMutation(
-    (params: { workspaceId: string; accountId: string; tokenId?: string }) =>
+  return useMutation({
+    mutationFn: (params: {
+      workspaceId: string;
+      accountId: string;
+      tokenId?: string;
+    }) =>
       revokeAgentToken(
         params.workspaceId,
         params.accountId,
         params.tokenId ? { tokenId: params.tokenId } : {},
       ),
-    {
-      onMutate: () => onMutate && onMutate(),
-      onError: (
-        e: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          response?: { data?: { error?: string } };
-        } & Error,
-      ) => onError && onError(errorText(e)),
-      onSuccess: (data, params) => {
-        queryClient.invalidateQueries({
-          queryKey: ['agents', params.workspaceId],
-        });
-        onSuccess && onSuccess(data);
-      },
+    onMutate: () => onMutate && onMutate(),
+    onError: (
+      e: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        response?: { data?: { error?: string } };
+      } & Error,
+    ) => onError && onError(errorText(e)),
+    onSuccess: (data, params) => {
+      queryClient.invalidateQueries({
+        queryKey: ['agents', params.workspaceId],
+      });
+      onSuccess && onSuccess(data);
     },
-  );
+  });
 }
 
 export function useDeleteAgentMutation({
@@ -195,23 +191,19 @@ export function useDeleteAgentMutation({
 }) {
   const queryClient = useQueryClient();
 
-  return useMutation(
-    (params: { workspaceId: string; accountId: string }) =>
+  return useMutation({
+    mutationFn: (params: { workspaceId: string; accountId: string }) =>
       deleteAgent(params.workspaceId, params.accountId),
-    {
-      onMutate: () => onMutate && onMutate(),
-      onError: (
-        e: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          response?: { data?: { error?: string } };
-        } & Error,
-      ) => onError && onError(errorText(e)),
-      onSuccess: (data) => {
-        // The DELETE sync record updates the member list live; refresh the
-        // users lookup so the removed agent drops out of pickers.
-        queryClient.invalidateQueries({ queryKey: [GetUserQuery] });
-        onSuccess && onSuccess(data);
-      },
+    onMutate: () => onMutate && onMutate(),
+    onError: (
+      e: {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        response?: { data?: { error?: string } };
+      } & Error,
+    ) => onError && onError(errorText(e)),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [GetUserQuery] });
+      onSuccess && onSuccess(data);
     },
-  );
+  });
 }

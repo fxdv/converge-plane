@@ -42,7 +42,7 @@ export function useUpdateWorkspaceMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(updateWorkspace, {
+  return useMutation({ mutationFn: updateWorkspace,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

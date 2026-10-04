@@ -58,7 +58,7 @@ export function useCreateProjectMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createProject, {
+  return useMutation({ mutationFn: createProject,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

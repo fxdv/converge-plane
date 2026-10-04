@@ -73,7 +73,7 @@ export function AgentTokensDialog({
   const { toast } = useToast();
   const { teamsStore } = useContextStore();
   const workspace = useCurrentWorkspace();
-  const { data, isLoading } = useGetAgentsQuery(
+  const { data, isLoading: isPending } = useGetAgentsQuery(
     workspace?.id,
     open && !!workspace?.id,
   );
@@ -86,7 +86,7 @@ export function AgentTokensDialog({
   const teamName = (id: string) =>
     teamsStore.teams.find((team: TeamType) => team.id === id)?.name ?? id;
 
-  const { mutate: rotate, isLoading: rotating } = useRotateAgentTokenMutation({
+  const { mutate: rotate, isPending: rotating } = useRotateAgentTokenMutation({
     onSuccess: (rotation) => {
       setConfirming(null);
       setShown({
@@ -112,7 +112,7 @@ export function AgentTokensDialog({
   });
 
   const [issuing, setIssuing] = React.useState(false);
-  const { mutate: issue, isLoading: issuingToken } = useIssueAgentTokenMutation(
+  const { mutate: issue, isPending: issuingToken } = useIssueAgentTokenMutation(
     {
       onSuccess: (issued) => {
         setIssuing(false);
@@ -139,7 +139,7 @@ export function AgentTokensDialog({
     },
   );
 
-  const { mutate: revoke, isLoading: revoking } = useRevokeAgentTokenMutation({
+  const { mutate: revoke, isPending: revoking } = useRevokeAgentTokenMutation({
     onSuccess: () => {
       setConfirming(null);
       toast({ title: 'Token revoked' });
@@ -317,7 +317,7 @@ export function AgentTokensDialog({
         />
       );
     }
-    if (isLoading) {
+    if (isPending) {
       return <Loader />;
     }
     if (!agent) {
@@ -337,7 +337,7 @@ export function AgentTokensDialog({
         {issuing ? (
           <IssueTokenForm
             agent={agent}
-            isLoading={issuingToken}
+            isPending={issuingToken}
             onCancel={() => setIssuing(false)}
             onIssue={(request) =>
               issue({
@@ -389,12 +389,12 @@ export function AgentTokensDialog({
 
 function IssueTokenForm({
   agent,
-  isLoading,
+  isPending,
   onIssue,
   onCancel,
 }: {
   agent: AgentListEntry;
-  isLoading: boolean;
+  isPending: boolean;
   onIssue: (request: { name?: string } & AgentTokenSpec) => void;
   onCancel: () => void;
 }) {
@@ -518,7 +518,7 @@ function IssueTokenForm({
         <Button
           variant="secondary"
           size="sm"
-          isLoading={isLoading}
+          isLoading={isPending}
           disabled={!!problem}
           onClick={submit}
         >

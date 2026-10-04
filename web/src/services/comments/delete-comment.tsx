@@ -27,7 +27,7 @@ export function useDeleteCommentMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation(deleteIssueComment, {
+  return useMutation({ mutationFn: deleteIssueComment,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

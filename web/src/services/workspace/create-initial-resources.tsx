@@ -54,7 +54,7 @@ export function useCreateInitialResourcesMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createInitialResources, {
+  return useMutation({ mutationFn: createInitialResources,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

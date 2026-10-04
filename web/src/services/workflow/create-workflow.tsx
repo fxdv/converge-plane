@@ -29,7 +29,7 @@ export function useCreateWorkflowMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createWorkflow, {
+  return useMutation({ mutationFn: createWorkflow,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

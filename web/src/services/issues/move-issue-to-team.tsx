@@ -44,7 +44,7 @@ export function useMoveIssueToTeamMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(moveIssueToTeam, {
+  return useMutation({ mutationFn: moveIssueToTeam,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

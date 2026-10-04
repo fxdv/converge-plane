@@ -16,9 +16,11 @@ export function getUser() {
 }
 
 export function useGetUserQuery(): UseQueryResult<User, XHRErrorResponse> {
-  return useQuery([GetUserQuery], () => getUser(), {
+  return useQuery({
+    queryKey: [GetUserQuery],
+    queryFn: () => getUser(),
     retry: 1,
     staleTime: Infinity,
-    refetchOnWindowFocus: false, // Frequency of Change would be Low
+    refetchOnWindowFocus: false,
   });
 }

@@ -25,14 +25,12 @@ export function useGetUsersQuery(): UseQueryResult<User[], XHRErrorResponse> {
 
   const usersOnWorkspace = workspaceStore.usersOnWorkspaces;
 
-  return useQuery(
-    [GetUsersQuery, usersOnWorkspace],
-    () =>
+  return useQuery({
+    queryKey: [GetUsersQuery, usersOnWorkspace],
+    queryFn: () =>
       getUsers(usersOnWorkspace.map((uOW: UsersOnWorkspaceType) => uOW.userId)),
-    {
-      retry: 1,
-      staleTime: 1000000,
-      refetchOnWindowFocus: false, // Frequency of Change would be Low
-    },
-  );
+    retry: 1,
+    staleTime: 1000000,
+    refetchOnWindowFocus: false,
+  });
 }

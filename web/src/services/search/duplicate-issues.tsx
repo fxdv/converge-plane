@@ -31,14 +31,12 @@ export function useGetDuplicateIssuesQuery(
   data: DuplicateIssuesParams,
   enabled = false,
 ): UseQueryResult<IssueType[], XHRErrorResponse> {
-  return useQuery(
-    [DuplicateIssuesQuery, data.query],
-    () => duplicateIssues(data),
-    {
-      retry: 1,
-      staleTime: 1,
-      refetchOnWindowFocus: false, // Frequency of Change would be Low
-      enabled,
-    },
-  );
+  return useQuery({
+    queryKey: [DuplicateIssuesQuery, data.query],
+    queryFn: () => duplicateIssues(data),
+    retry: 1,
+    staleTime: 1,
+    refetchOnWindowFocus: false,
+    enabled,
+  });
 }

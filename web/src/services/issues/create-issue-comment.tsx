@@ -47,7 +47,7 @@ export function useCreateIssueCommentMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation(createIssueComment, {
+  return useMutation({ mutationFn: createIssueComment,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

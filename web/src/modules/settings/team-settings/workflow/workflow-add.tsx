@@ -17,7 +17,7 @@ export function WorkflowAdd({ category, onCancel }: WorkflowAddProps) {
   const team = useCurrentTeam();
   const { workflowsStore } = useContextStore();
 
-  const { mutate: createWorkflow, isLoading } = useCreateWorkflowMutation({
+  const { mutate: createWorkflow, isPending } = useCreateWorkflowMutation({
     onSuccess: () => {
       onCancel();
     },
@@ -39,7 +39,7 @@ export function WorkflowAdd({ category, onCancel }: WorkflowAddProps) {
       submit={onSubmit}
       category={category}
       onCancel={onCancel}
-      isLoading={isLoading}
+      isLoading={isPending}
     />
   );
 }

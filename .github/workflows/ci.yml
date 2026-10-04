@@ -106,6 +106,14 @@ jobs:
         run: node web/scripts/a11y-static.mjs
       - name: Board profile smoke (10k)
         run: pnpm --filter=web test:board-profile
+      - name: Issue panel smoke (WB-2)
+        run: pnpm --filter=web test:issue-panel
+      - name: Dexie policy smoke (R-9)
+        run: pnpm --filter=web test:dexie-policy
+      - name: Editor smoke (converge-editor)
+        run: pnpm --filter=web test:editor
+      - name: Playwright WB-2 layout
+        run: pnpm --filter=web exec playwright install chromium && pnpm --filter=web test:e2e
 
   images:
     runs-on: ubuntu-latest

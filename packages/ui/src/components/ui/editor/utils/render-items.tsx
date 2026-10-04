@@ -21,6 +21,17 @@ export const EditorCommandTunnelContext = React.createContext(
   {} as ReturnType<typeof tunnel>,
 );
 
+/** Shared keyboard guard when the slash menu portal is open (modal + inline). */
+export function handleCommandNavigation(event: KeyboardEvent): true | undefined {
+  if (['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
+    const slashCommand = document.querySelector('#slash-command');
+    if (slashCommand) {
+      return true;
+    }
+  }
+  return undefined;
+}
+
 interface EditorRootProps {
   readonly children: React.ReactNode;
 }
