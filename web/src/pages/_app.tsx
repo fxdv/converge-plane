@@ -71,7 +71,9 @@ export const MyApp: NextComponentType<
   );
 };
 
-// CSP nonces are per-request; opt out of static export for all pages.
+// CSP (middleware + strict-dynamic) requires a per-request nonce on every
+// <script>. Static export skips that, so /auth hangs on the loader. See
+// docs/spec/28-frontend-follow-ups.md (Phase 2) and web/scripts/csp-nonce-smoke.mjs.
 MyApp.getInitialProps = async (): Promise<AppInitialProps> => ({
   pageProps: {},
 });

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bash scripts/wire-contract.sh",
     "test:a11y": "node scripts/a11y-static.mjs",
-    "test:board-profile": "node scripts/board-profile.mjs 10000"
+    "test:board-profile": "node scripts/board-profile.mjs 10000",
+    "test:csp-nonce": "node scripts/csp-nonce-smoke.mjs"
   },
   "dependencies": {
     "@converge/services": "workspace:*",
