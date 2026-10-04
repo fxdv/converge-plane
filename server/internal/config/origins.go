@@ -17,6 +17,11 @@ func TrustedRequestOrigins(c Config) []string {
 	out = append(out, loopbackNameAliases(pub)...)
 	if c.DevMode {
 		out = append(out, devLoopbackPortOrigins(web)...)
+		// Compose publishes web on :3000 and API on :3001 even when
+		// CONVERGE_WEB_ORIGIN names another loopback port (Bravo tunnel).
+		for _, port := range []string{"3000", "3001"} {
+			out = append(out, loopbackHostVariants("http", port)...)
+		}
 	}
 	return out
 }

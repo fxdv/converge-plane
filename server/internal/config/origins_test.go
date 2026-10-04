@@ -16,6 +16,7 @@ func TestTrustedRequestOriginsDevLoopback(t *testing.T) {
 		"http://localhost:3000",
 		"http://127.0.0.1:3000",
 		"http://[::1]:3000",
+		"http://127.0.0.1:3001",
 	} {
 		if !seen[want] {
 			t.Fatalf("missing %q in %v", want, list)
