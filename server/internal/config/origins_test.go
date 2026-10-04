@@ -4,9 +4,10 @@ import "testing"
 
 func TestTrustedRequestOriginsDevLoopback(t *testing.T) {
 	list := TrustedRequestOrigins(Config{
-		DevMode:   true,
-		WebOrigin: "http://176.123.167.143:3000",
-		PublicURL: "http://176.123.167.143:3001",
+		DevMode:        true,
+		WebOrigin:      "http://176.123.167.143:3000",
+		PublicURL:      "http://176.123.167.143:3001",
+		WebOriginExtra: parseOriginList(DefaultComposeWebOriginExtra),
 	})
 	seen := map[string]bool{}
 	for _, o := range list {

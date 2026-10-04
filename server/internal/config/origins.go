@@ -15,16 +15,19 @@ func TrustedRequestOrigins(c Config) []string {
 	out := []string{web, pub}
 	out = append(out, loopbackNameAliases(web)...)
 	out = append(out, loopbackNameAliases(pub)...)
+	for _, extra := range c.WebOriginExtra {
+		out = append(out, extra)
+		out = append(out, loopbackNameAliases(extra)...)
+	}
 	if c.DevMode {
 		out = append(out, devLoopbackPortOrigins(web)...)
-		// Compose publishes web on :3000 and API on :3001 even when
-		// CONVERGE_WEB_ORIGIN names another loopback port (Bravo tunnel).
-		for _, port := range []string{"3000", "3001"} {
-			out = append(out, loopbackHostVariants("http", port)...)
-		}
 	}
 	return out
 }
+
+// DefaultComposeWebOriginExtra is the docker-compose default for
+// CONVERGE_WEB_ORIGIN_EXTRA: browser origins on published :3000 / :3001.
+const DefaultComposeWebOriginExtra = "http://localhost:3000,http://127.0.0.1:3000,http://[::1]:3000,http://localhost:3001,http://127.0.0.1:3001,http://[::1]:3001"
 
 // loopbackNameAliases adds localhost, 127.0.0.1, and [::1] variants for
 // the same scheme and port when the URL is already loopback.
