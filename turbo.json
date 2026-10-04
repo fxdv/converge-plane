@@ -5,7 +5,8 @@
     "CONVERGE_*",
     "NEXT_PUBLIC_*",
     "NODE_ENV",
-    "VERSION"
+    "VERSION",
+    "CSP_SMOKE_PORT"
   ],
   "tasks": {
     "build": {
