@@ -95,10 +95,9 @@ export function useMutation<
     'mutationFn'
   >,
 ): CompatMutationResult<TData, TError, TVariables, TContext> {
-  if (typeof mutationFnOrOptions === 'function') {
-    return withLoadingAlias(
-      useTanstackMutation({ mutationFn: mutationFnOrOptions, ...options }),
-    );
-  }
-  return withLoadingAlias(useTanstackMutation(mutationFnOrOptions));
+  const config =
+    typeof mutationFnOrOptions === 'function'
+      ? { mutationFn: mutationFnOrOptions, ...options }
+      : mutationFnOrOptions;
+  return withLoadingAlias(useTanstackMutation(config));
 }
