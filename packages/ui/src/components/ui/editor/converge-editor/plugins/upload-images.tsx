@@ -29,8 +29,9 @@ export const UploadImagesPlugin = ({ imageClass }: { imageClass: string }) =>
           });
           set = set.add(tr.doc, [deco]);
         } else if (action?.remove) {
-          // biome-ignore lint/suspicious/noDoubleEquals: <explanation>
-          set = set.remove(set.find(undefined, undefined, (spec) => spec.id == action.remove.id));
+          set = set.remove(
+            set.find(undefined, undefined, (spec) => spec.id === action.remove.id),
+          );
         }
         return set;
       },
@@ -45,8 +46,7 @@ export const UploadImagesPlugin = ({ imageClass }: { imageClass: string }) =>
 // biome-ignore lint/complexity/noBannedTypes: <explanation>
 function findPlaceholder(state: EditorState, id: {}) {
   const decos = uploadKey.getState(state) as DecorationSet;
-  // biome-ignore lint/suspicious/noDoubleEquals: <explanation>
-  const found = decos.find(undefined, undefined, (spec) => spec.id == id);
+  const found = decos.find(undefined, undefined, (spec) => spec.id === id);
   return found.length ? found[0]?.from : null;
 }
 
@@ -89,7 +89,7 @@ export const createImageUpload =
 
       // If the content around the placeholder has been deleted, drop
       // the image
-      if (pos == null) return;
+      if (pos === null) return;
 
       // Otherwise, insert it at the placeholder's position, and remove
       // the placeholder
