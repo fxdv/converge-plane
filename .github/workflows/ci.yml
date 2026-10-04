@@ -100,6 +100,8 @@ jobs:
           NEXT_PUBLIC_BASE_HOST: http://localhost:3000
       - name: Wire contract (client MST models)
         run: pnpm --filter=web test
+      - name: CSP nonce smoke (/auth)
+        run: pnpm --filter=web test:csp-nonce
       - name: A11y static smoke
         run: node web/scripts/a11y-static.mjs
       - name: Board profile smoke (10k)

@@ -18,8 +18,10 @@ Phases 2–5 are complete (`docs/spec/27-frontend-phases-2-5.md`). This log trac
 
 | Item | Status |
 | --- | --- |
-| CI: production `web` build + `/auth` HTML has `nonce=` on scripts | Pending |
-| Document `App.getInitialProps` requirement for Pages CSP | Pending |
+| CI: production `web` build + `/auth` HTML has `nonce=` on scripts | Done — `web/scripts/csp-nonce-smoke.mjs`, `pnpm --filter=web test:csp-nonce` |
+| Document `App.getInitialProps` requirement for Pages CSP | Done — comment in `web/src/pages/_app.tsx`, this section |
+
+**How it works.** `src/middleware.ts` sets `Content-Security-Policy` and forwards the same policy on the request as `x-nonce` for SSR. Next injects that nonce only when pages are rendered per request, not at static export time. `MyApp.getInitialProps` disables automatic static optimization for the Pages router so `/auth` (and other routes) get nonced scripts. The smoke test runs after `next build`, starts `next start`, and fails if `/auth` is `nextExport` or scripts lack `nonce=`.
 
 ## Phase 3 — OD-15 performance CI
 
