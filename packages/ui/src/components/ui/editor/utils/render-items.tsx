@@ -2,17 +2,18 @@
 // as the slash command is not working when used inside a modal
 import type { Editor } from '@tiptap/core';
 
-import {
-  Command,
-  CommandInput,
-  CommandList,
-} from '@converge/ui/components/command';
 import { ReactRenderer } from '@tiptap/react';
 import { Provider } from 'jotai';
 import { useSetAtom, useAtom } from 'jotai';
 import React from 'react';
 import tippy from 'tippy.js';
 import tunnel from 'tunnel-rat';
+
+import {
+  Command,
+  CommandInput,
+  CommandList,
+} from '@converge/ui/components/command';
 
 import { queryAtom, rangeAtom } from './atoms';
 import { novelStore } from './store';
@@ -22,7 +23,9 @@ export const EditorCommandTunnelContext = React.createContext(
 );
 
 /** Shared keyboard guard when the slash menu portal is open (modal + inline). */
-export function handleCommandNavigation(event: KeyboardEvent): true | undefined {
+export function handleCommandNavigation(
+  event: KeyboardEvent,
+): true | undefined {
   if (['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
     const slashCommand = document.querySelector('#slash-command');
     if (slashCommand) {
@@ -42,7 +45,7 @@ interface EditorCommandOutProps {
 }
 
 export const EditorRoot: React.FC<EditorRootProps> = ({ children }) => {
-  const tunnelInstance = React.useRef(tunnel()).current;
+  const [tunnelInstance] = React.useState(() => tunnel());
 
   return (
     <Provider store={novelStore}>
