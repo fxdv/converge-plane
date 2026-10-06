@@ -1,11 +1,10 @@
 import { useState } from 'react';
+
 import { useMutation } from 'common/lib/react-query';
 
-export function useAIContinueWritingMutation({
-  baseHost,
-}: {
-  baseHost: string;
-}) {
+import { AI_CONTINUE_WRITING_API } from './ai-continue-writing-path';
+
+export function useAIContinueWritingMutation() {
   const [responses, setResponses] = useState('');
   const [streaming, setStreaming] = useState(false);
   const { mutate, isPending: apiloading } = useMutation({
@@ -20,17 +19,18 @@ export function useAIContinueWritingMutation({
     }) => {
       setResponses('');
 
-      const response = await fetch(
-        `${baseHost}/v1/issues/ai/stream/description`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({ description, workspaceId, userInput }),
+      const response = await fetch(AI_CONTINUE_WRITING_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+        credentials: 'include',
+        body: JSON.stringify({ description, workspaceId, userInput }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI continue-writing failed (${response.status})`);
+      }
 
       if (!response.body) {
         throw new Error('ReadableStream not supported in this browser.');
@@ -47,7 +47,6 @@ export function useAIContinueWritingMutation({
 
   async function readStream(reader: ReadableStreamDefaultReader) {
     async function read() {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
         if (done) {

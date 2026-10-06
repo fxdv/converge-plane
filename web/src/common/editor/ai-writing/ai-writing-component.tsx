@@ -16,21 +16,21 @@ import { useAIContinueWritingMutation } from 'services/issues';
 export const AIWritingComponent = (props: any) => {
   const { editor } = useEditor();
   const [prompt, setPrompt] = React.useState('Continue writing');
-  const { responses, mutate, isPending: isLoading } = useAIContinueWritingMutation({
-    baseHost: process.env.NEXT_PUBLIC_BACKEND_HOST,
-  });
+  const { responses, mutate, isPending: isLoading } =
+    useAIContinueWritingMutation();
   const workspace = useCurrentWorkspace();
+  const initialDescription = props.node.attrs.content as string | undefined;
 
   React.useEffect(() => {
-    if (props.node.attrs.content) {
-      mutate({
-        description: props.node.attrs.content,
-        workspaceId: workspace.id,
-        userInput: prompt,
-      });
+    if (!initialDescription || !workspace?.id) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    mutate({
+      description: initialDescription,
+      workspaceId: workspace.id,
+      userInput: 'Continue writing',
+    });
+  }, [initialDescription, workspace?.id, mutate]);
 
   return (
     <NodeViewWrapper className="ai-writing-component">
