@@ -125,7 +125,8 @@ func (a *API) handleApproveDone(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		update issues set done_approved_at = now(), done_approved_by = $2, updated_at = now()
+		update issues set done_approved_at = now(), done_approved_by = $2,
+		       version = version + 1, updated_at = now()
 		where id = $1`, id, p.AccountID); err != nil {
 		a.internalError(w, err)
 		return
@@ -136,11 +137,26 @@ func (a *API) handleApproveDone(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	issueRec, err := a.emitChange(ctx, tx, workspaceID, "Issue", id, "UPDATE", nil)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	fresh, err := a.issueByIDTx(ctx, tx, id)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	if err := a.refreshOutboxTx(ctx, tx, workspaceID, &issueRec, a.issueData(fresh)); err != nil {
+		a.internalError(w, err)
+		return
+	}
 	if err := tx.Commit(ctx); err != nil {
 		a.internalError(w, err)
 		return
 	}
 	a.broadcastRecord(rec)
+	a.broadcastRecord(issueRec)
 	writeJSON(w, http.StatusOK, map[string]any{"issueId": id, "approved": true})
 }
 

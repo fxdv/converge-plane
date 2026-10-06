@@ -10,9 +10,8 @@
 //	X-Converge-Signature: sha256=<hex HMAC-SHA256 of timestamp + "." + body>
 //
 // The secret is returned once, at creation or rotation, and is never
-// logged. Redirects are not followed. The URL is checked again at
-// delivery time, so a name that later points at a private address is
-// not fetched.
+// logged. Redirects are not followed. Delivery dials the addresses that
+// passed the allowlist, so a later DNS answer cannot move the POST.
 package api
 
 import (
@@ -317,30 +316,65 @@ func newWebhookSecret() (string, error) {
 }
 
 func webhookURLAllowed(ctx context.Context, raw string, dev bool) error {
+	_, _, err := resolveWebhook(ctx, raw, dev)
+	return err
+}
+
+// resolveWebhook parses and resolves a webhook URL, returning only
+// addresses that passed the allowlist. Delivery dials those addresses
+// and does not resolve the name again.
+func resolveWebhook(ctx context.Context, raw string, dev bool) (*url.URL, []netip.Addr, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || u.User != nil {
-		return errors.New("webhook url must be an https URL without credentials")
+		return nil, nil, errors.New("webhook url must be an https URL without credentials")
 	}
 	if u.Scheme != "https" && !(dev && u.Scheme == "http") {
-		return errors.New("webhook url must be https")
+		return nil, nil, errors.New("webhook url must be https")
 	}
 	host := u.Hostname()
 	if ip, err := netip.ParseAddr(host); err == nil {
 		if !webhookIPAllowed(ip, dev) {
-			return errors.New("webhook url must not point at a private address")
+			return nil, nil, errors.New("webhook url must not point at a private address")
 		}
-		return nil
+		return u, []netip.Addr{ip}, nil
 	}
 	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	if err != nil || len(ips) == 0 {
-		return errors.New("webhook url host did not resolve")
+		return nil, nil, errors.New("webhook url host did not resolve")
 	}
 	for _, ip := range ips {
 		if !webhookIPAllowed(ip, dev) {
-			return errors.New("webhook url must not point at a private address")
+			return nil, nil, errors.New("webhook url must not point at a private address")
 		}
 	}
-	return nil
+	return u, ips, nil
+}
+
+// dialWebhookPinned connects to one of the addresses resolveWebhook
+// already allowed. It ignores the hostname in addr so a later DNS
+// answer cannot redirect the POST.
+func dialWebhookPinned(ctx context.Context, network, addr string, allowed []netip.Addr, dev bool) (net.Conn, error) {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	var d net.Dialer
+	var last error
+	for _, ip := range allowed {
+		if !webhookIPAllowed(ip, dev) {
+			last = errors.New("webhook address not allowed")
+			continue
+		}
+		conn, err := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		last = err
+	}
+	if last == nil {
+		last = errors.New("webhook address not allowed")
+	}
+	return nil, last
 }
 
 func webhookIPAllowed(ip netip.Addr, dev bool) bool {
@@ -359,17 +393,11 @@ func signWebhook(secret string, ts int64, body []byte) string {
 }
 
 type webhookDispatcher struct {
-	a      *API
-	client *http.Client
+	a *API
 }
 
 func newWebhookDispatcher(a *API) *webhookDispatcher {
-	return &webhookDispatcher{a: a, client: &http.Client{
-		Timeout: webhookTimeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}}
+	return &webhookDispatcher{a: a}
 }
 
 func (d *webhookDispatcher) run(ctx context.Context, done <-chan struct{}) {
@@ -455,12 +483,13 @@ func (d *webhookDispatcher) deliverOne(ctx context.Context, eventID, workspaceID
 	failed := false
 	var last string
 	for _, e := range eps {
-		if err := webhookURLAllowed(ctx, e.url, d.a.cfg.DevMode); err != nil {
+		target, ips, err := resolveWebhook(ctx, e.url, d.a.cfg.DevMode)
+		if err != nil {
 			failed, last = true, "url rejected"
 			continue
 		}
 		ts := time.Now().Unix()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.url, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.String(), bytes.NewReader(body))
 		if err != nil {
 			failed, last = true, "request"
 			continue
@@ -470,7 +499,18 @@ func (d *webhookDispatcher) deliverOne(ctx context.Context, eventID, workspaceID
 		req.Header.Set("X-Converge-Event", event)
 		req.Header.Set("X-Converge-Timestamp", strconv.FormatInt(ts, 10))
 		req.Header.Set("X-Converge-Signature", signWebhook(e.secret, ts, body))
-		res, err := d.client.Do(req)
+		client := &http.Client{
+			Timeout: webhookTimeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return dialWebhookPinned(ctx, network, addr, ips, d.a.cfg.DevMode)
+				},
+			},
+		}
+		res, err := client.Do(req)
 		if err != nil {
 			failed, last = true, "delivery failed"
 			continue

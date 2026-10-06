@@ -843,6 +843,7 @@ func (f *fakeTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.Comm
 	return pgconn.CommandTag{}, nil
 }
 func (f *fakeTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
+	f.rows = append(f.rows, fakeExecCall{sql: sql, args: args})
 	return &fakeRows{values: f.ruleFor(sql).rows}, nil
 }
 func (f *fakeTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {

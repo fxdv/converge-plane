@@ -15,6 +15,7 @@ import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
 
+import { initialSyncMode } from './initial-sync-mode';
 import {
   pruneStaleLocalRecords,
   saveLiveSocketData,
@@ -92,7 +93,6 @@ export function BootstrapWrapper({ children }: Props) {
   // on account change, before any snapshot or record is applied.
   React.useEffect(() => {
     notificationsStore.setRecipient(user.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id, notificationsStore]);
 
   React.useEffect(() => {
@@ -123,36 +123,40 @@ export function BootstrapWrapper({ children }: Props) {
     workspaceId: workspace?.id,
     userId: user.id,
     onSuccess: async (data: BootstrapResponse) => {
-      await saveSocketData(data.syncActions, MODEL_STORE_MAP);
+      try {
+        await saveSocketData(data.syncActions, MODEL_STORE_MAP);
 
-      // The snapshot subsumes every record up to its watermark (its own
-      // per-record sequences are a local counter — never the watermark),
-      // so the tab cursor advances to the watermark in one step.
-      seedTabHighWater(`${data.lastSequenceId}`);
+        // The snapshot subsumes every record up to its watermark (its own
+        // per-record sequences are a local counter — never the watermark),
+        // so the tab cursor advances to the watermark in one step.
+        seedTabHighWater(`${data.lastSequenceId}`);
 
-      // The snapshot is the server's full tenant set, but the upsert-only
-      // apply above can never remove rows: anything deleted server-side
-      // without a DELETE record reaching this client (an operator's SQL
-      // fix, a dropped stream record) would resurrect on every load.
-      // Reconcile the residue away before the UI wakes. Never throws.
-      await pruneStaleLocalRecords(
-        data.syncActions,
-        workspace?.id ?? '',
-        MODEL_STORE_MAP,
-        user?.id ?? '',
-      );
-      localStorage.setItem(schemaKey, SYNC_SCHEMA);
-
-      // Max-only (SWR-51): another tab may have advanced the shared key
-      // past this snapshot's watermark — never write it backwards.
-      const stored = Number(
-        localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
-      );
-      if (Number(data.lastSequenceId) > stored) {
-        localStorage.setItem(
-          `lastSequenceId_${hash(hashKey)}`,
-          `${data.lastSequenceId}`,
+        // The snapshot is the server's full tenant set, but the upsert-only
+        // apply above can never remove rows: anything deleted server-side
+        // without a DELETE record reaching this client (an operator's SQL
+        // fix, a dropped stream record) would resurrect on every load.
+        // Reconcile the residue away before the UI wakes. Never throws.
+        await pruneStaleLocalRecords(
+          data.syncActions,
+          workspace?.id ?? '',
+          MODEL_STORE_MAP,
+          user?.id ?? '',
         );
+        localStorage.setItem(schemaKey, SYNC_SCHEMA);
+
+        // Max-only (SWR-51): another tab may have advanced the shared key
+        // past this snapshot's watermark — never write it backwards.
+        const stored = Number(
+          localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
+        );
+        if (Number(data.lastSequenceId) > stored) {
+          localStorage.setItem(
+            `lastSequenceId_${hash(hashKey)}`,
+            `${data.lastSequenceId}`,
+          );
+        }
+      } finally {
+        setLoading(false);
       }
     },
   });
@@ -172,10 +176,14 @@ export function BootstrapWrapper({ children }: Props) {
         // (which re-seeds the tab cursor from the new watermark).
         localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
         setLoading(true);
-        await bootstrapRecords();
+        const snap = await bootstrapRecords();
+        if (snap.isError) {
+          setLoading(false);
+        }
         return;
       }
       seedTabHighWater(`${data.lastSequenceId}`);
+      setLoading(false);
       // Max-only, as in the bootstrap handler above.
       const stored = Number(
         localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
@@ -193,12 +201,27 @@ export function BootstrapWrapper({ children }: Props) {
     const storeWorkspace = await convergeDatabase.workspaces.get({
       id: workspace.id,
     });
+    // Issues and workflows are memory-only. An empty MST cannot be
+    // rebuilt from a delta, even when Dexie still has the workspace
+    // and localStorage still has a watermark.
+    const memoryHydrated =
+      issuesStore.issuesMap.size > 0 || workflowsStore.workflows.size > 0;
+    const mode = initialSyncMode({
+      memoryHydrated,
+      hasCachedWorkspace: Boolean(storeWorkspace?.id),
+      lastSequenceId,
+    });
 
-    if (storeWorkspace?.id && lastSequenceId) {
+    if (mode === 'delta') {
       setLoading(false);
-      await syncRecords();
-    } else {
-      await bootstrapRecords();
+      const delta = await syncRecords();
+      if (delta.isError) {
+        setLoading(false);
+      }
+      return;
+    }
+    const snap = await bootstrapRecords();
+    if (snap.isError) {
       setLoading(false);
     }
   };
