@@ -6,11 +6,14 @@ package api
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"converge/internal/auth"
 )
@@ -57,8 +60,34 @@ func TestDoneNeedsEvidence(t *testing.T) {
 	if err := patch(agent, f.todo); err != nil {
 		t.Fatal(err)
 	}
+	var versionBefore int
+	if err := f.pool.QueryRow(ctx, `select version from issues where id = $1`, issue).Scan(&versionBefore); err != nil {
+		t.Fatal(err)
+	}
+	var updatesBefore int
+	if err := f.pool.QueryRow(ctx, `
+		select count(*) from sync_outbox
+		where model_name = 'Issue' and model_id = $1 and action = 'UPDATE'`, issue).Scan(&updatesBefore); err != nil {
+		t.Fatal(err)
+	}
 	rec := f.call(human, (*API).handleApproveDone, "POST", "/api/v1/issues/"+issue+"/done-approval", "", "id", issue)
 	checkStatus(t, rec, http.StatusOK)
+	var versionAfter int
+	if err := f.pool.QueryRow(ctx, `select version from issues where id = $1`, issue).Scan(&versionAfter); err != nil {
+		t.Fatal(err)
+	}
+	if versionAfter != versionBefore+1 {
+		t.Fatalf("version %d -> %d, approval must bump it", versionBefore, versionAfter)
+	}
+	var updatesAfter int
+	if err := f.pool.QueryRow(ctx, `
+		select count(*) from sync_outbox
+		where model_name = 'Issue' and model_id = $1 and action = 'UPDATE'`, issue).Scan(&updatesAfter); err != nil {
+		t.Fatal(err)
+	}
+	if updatesAfter != updatesBefore+1 {
+		t.Fatalf("issue sync rows %d -> %d, approval must emit an update", updatesBefore, updatesAfter)
+	}
 	if err := patch(agent, f.done); err != nil {
 		t.Fatalf("human approval should be proof: %v", err)
 	}
@@ -143,6 +172,42 @@ func TestWebhookURLRejectsPrivateAddresses(t *testing.T) {
 	}
 	if err := webhookURLAllowed(ctx, "http://127.0.0.1/hook", true); err != nil {
 		t.Fatalf("dev loopback: %v", err)
+	}
+}
+
+func TestWebhookDialUsesPinnedAddress(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	accepted := make(chan struct{}, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err == nil {
+			conn.Close()
+			accepted <- struct{}{}
+		}
+	}()
+
+	ctx := context.Background()
+	ip := netip.MustParseAddr("127.0.0.1")
+	conn, err := dialWebhookPinned(ctx, "tcp", ln.Addr().String(), []netip.Addr{ip}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+	select {
+	case <-accepted:
+	case <-time.After(time.Second):
+		t.Fatal("pinned dial did not reach the listener")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	other := netip.MustParseAddr("203.0.113.5")
+	if _, err := dialWebhookPinned(ctx, "tcp", ln.Addr().String(), []netip.Addr{other}, true); err == nil {
+		t.Fatal("dial reached the listener using the URL host instead of the pinned address")
 	}
 }
 

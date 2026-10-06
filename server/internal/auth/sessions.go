@@ -142,6 +142,17 @@ func (s *Service) revokeSession(ctx context.Context, c tokenClaims, reason strin
 	return err
 }
 
+// RevokeCachedSessions drops access tokens for these sessions on this
+// process and tells the others. The caller has already set revoked_at.
+func (s *Service) RevokeCachedSessions(ctx context.Context, sessionIDs []string) {
+	if s == nil {
+		return
+	}
+	for _, id := range sessionIDs {
+		s.announceRevoked(ctx, id)
+	}
+}
+
 func (s *Service) announceRevoked(ctx context.Context, sessionID string) {
 	s.NoteRevoked(sessionID)
 	if s.pool == nil {

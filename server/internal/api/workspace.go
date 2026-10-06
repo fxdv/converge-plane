@@ -572,6 +572,10 @@ func (a *API) handleInviteAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, a.inviteData(inv, p.Fullname))
 		return
 	}
+	if inv.ExpiresAt == nil || !inv.ExpiresAt.After(time.Now()) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
 	if !*req.Accept {
 		a.declineInvite(w, r, p, &inv)
 		return
@@ -760,12 +764,31 @@ func (a *API) handleSuspendMember(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
+	var revokedSessions []string
 	if suspending {
 		// Spec: suspension revokes sessions so the member's next
-		// request is rejected at the session middleware.
-		if _, err := tx.Exec(ctx, `
+		// request is rejected at the session middleware. RETURNING
+		// the ids lets this process drop them from the access-token
+		// cache; pg_notify covers the other processes.
+		rows, err := tx.Query(ctx, `
 			update sessions set revoked_at = now()
-			where account_id = $1 and revoked_at is null`, req.UserID); err != nil {
+			where account_id = $1 and revoked_at is null
+			returning id`, req.UserID)
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				a.internalError(w, err)
+				return
+			}
+			revokedSessions = append(revokedSessions, id)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
 			a.internalError(w, err)
 			return
 		}
@@ -801,6 +824,9 @@ func (a *API) handleSuspendMember(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(ctx); err != nil {
 		a.internalError(w, err)
 		return
+	}
+	if a.auth != nil && len(revokedSessions) > 0 {
+		a.auth.RevokeCachedSessions(ctx, revokedSessions)
 	}
 	a.broadcastRecord(rec)
 	writeJSON(w, http.StatusOK, a.memberData(fresh))

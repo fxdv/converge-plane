@@ -15,16 +15,6 @@ type OptionsWithOnSuccess<
   onSuccess?: (data: TData) => void;
 };
 
-function syncWatermark(data: unknown): string | undefined {
-  if (data && typeof data === 'object' && 'lastSequenceId' in data) {
-    const id = (data as { lastSequenceId: unknown }).lastSequenceId;
-    if (id !== undefined && id !== null) {
-      return String(id);
-    }
-  }
-  return undefined;
-}
-
 /** TanStack Query v5 removed `onSuccess`; used by bootstrap/delta sync hooks only. */
 export function useQueryWithOnSuccess<
   TQueryFnData,
@@ -36,20 +26,16 @@ export function useQueryWithOnSuccess<
 ): UseQueryResult<TData, TError> {
   const { onSuccess, ...queryOptions } = options;
   const result = useQuery(queryOptions);
-  const lastWatermark = React.useRef<string | undefined>(undefined);
   const lastDataRef = React.useRef<TData | undefined>(undefined);
 
   React.useEffect(() => {
     if (!onSuccess || !result.isSuccess || result.data === undefined) {
       return;
     }
-    const watermark = syncWatermark(result.data);
-    if (watermark !== undefined) {
-      if (lastWatermark.current === watermark) {
-        return;
-      }
-      lastWatermark.current = watermark;
-    } else if (lastDataRef.current === result.data) {
+    // Identity, not the watermark string: a later snapshot can share
+    // lastSequenceId with the stale delta that triggered it and must
+    // still be applied.
+    if (lastDataRef.current === result.data) {
       return;
     }
     lastDataRef.current = result.data as TData;

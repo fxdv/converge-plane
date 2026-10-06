@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -407,6 +408,24 @@ func TestRevokedSessionRejectsAccessTokens(t *testing.T) {
 	}
 	if _, ok := s.revoked.until["sid-old"]; ok {
 		t.Fatal("expired revocation not swept")
+	}
+}
+
+func TestRevokeCachedSessionsCutsWarmAccess(t *testing.T) {
+	s := testService()
+	s.revoked = newRevocations()
+	s.live = newRevocations()
+	m := s.issueSession("acct-1", "sid-warm")
+	// A hit inside the live window used to skip the database. The
+	// revocation set is checked first, so announcing the id still
+	// refuses the token.
+	s.live.add("sid-warm", time.Now().Add(2*time.Second))
+	if _, ok := s.ValidateAccess(m.AccessToken); !ok {
+		t.Fatal("token should pass before the cached revoke")
+	}
+	s.RevokeCachedSessions(context.Background(), []string{"sid-warm"})
+	if _, ok := s.ValidateAccess(m.AccessToken); ok {
+		t.Fatal("warm access token still accepted after cached revoke")
 	}
 }
 

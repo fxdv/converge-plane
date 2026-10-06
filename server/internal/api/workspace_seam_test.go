@@ -33,13 +33,14 @@ func memberRowVals(id, role, status, accountID, workspaceID string, teamIDs ...s
 // fake's way of binding SQL NULL.
 func inviteRowVals(id, workspaceID, email, role string, teamIDs []string, consumed, revoked *time.Time) []any {
 	now := time.Now()
+	expires := now.Add(30 * 24 * time.Hour)
 	conv := func(v *time.Time) any {
 		if v == nil {
 			return nil
 		}
 		return *v
 	}
-	return []any{id, workspaceID, email, role, teamIDs, now, conv(consumed), conv(revoked), now}
+	return []any{id, workspaceID, email, role, teamIDs, expires, conv(consumed), conv(revoked), now}
 }
 
 // ---------------------------------------------------------------------
@@ -409,6 +410,7 @@ func TestSuspendMemberContract(t *testing.T) {
 		return &fakeTx{t: t, rules: []fakeRule{
 			{frag: "from workspace_members wm where", rowVals: reloaded},
 			{frag: "insert into sync_sequences", rowVals: []any{int64(32)}},
+			{frag: "update sessions set revoked_at", rows: [][]any{{"sess-1"}}},
 		}}
 	}
 
@@ -510,6 +512,19 @@ func TestInviteActionContract(t *testing.T) {
 		}
 		if pool.begins != 0 {
 			t.Fatal("a processed invite must not open a transaction")
+		}
+	})
+	t.Run("an expired invite does not join", func(t *testing.T) {
+		row := inviteRowVals(inviteID, "ws1", email, "member", []string{"t1"}, nil, nil)
+		row[5] = time.Now().Add(-time.Hour)
+		pool := &fakePool{t: t, rules: []fakeRule{
+			{frag: "from invitations i where", rowVals: row},
+		}}
+		a := apiForTests(t, pool)
+		wantError(t, record(t, a, requestFor(t, p, "POST", "http://x/api/v1/workspaces/invite_action", body), a.handleInviteAction),
+			404, "not found")
+		if pool.begins != 0 {
+			t.Fatal("an expired invite must not open a transaction")
 		}
 	})
 	t.Run("accepting materializes the membership", func(t *testing.T) {
