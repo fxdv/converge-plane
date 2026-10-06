@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 /**
  * Phase 2: production /auth must SSR with CSP nonces on script tags.
- * Requires `next build` first. Starts `next start` briefly on a test port.
+ * Requires `next build` first. Prefers standalone server.js (Docker layout).
  */
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const port = process.env.CSP_SMOKE_PORT ?? '3098';
 const base = `http://127.0.0.1:${port}`;
+const standaloneDir = join(root, '.next/standalone/web');
+const standaloneServer = join(standaloneDir, 'server.js');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -26,14 +29,30 @@ async function waitForAuth(maxMs = 90_000) {
     }
     await sleep(500);
   }
-  throw new Error('next start did not serve /auth in time');
+  throw new Error('web server did not serve /auth in time');
 }
 
-const child = spawn('pnpm', ['exec', 'next', 'start', '-p', port], {
-  cwd: root,
-  stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, NODE_ENV: 'production' },
-});
+function startServer() {
+  if (existsSync(standaloneServer)) {
+    return spawn('node', ['server.js'], {
+      cwd: standaloneDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        PORT: port,
+        HOSTNAME: '127.0.0.1',
+      },
+    });
+  }
+  return spawn('pnpm', ['exec', 'next', 'start', '-p', port], {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NODE_ENV: 'production' },
+  });
+}
+
+const child = startServer();
 
 child.stdout?.on('data', (chunk) => process.stdout.write(chunk));
 child.stderr?.on('data', (chunk) => process.stderr.write(chunk));

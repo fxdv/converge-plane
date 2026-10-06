@@ -260,8 +260,10 @@ What operators and integrators notice (wire details in
 - **Writes from a browser need your Origin.** A state-changing request whose
   `Origin` (else `Referer`) names any other site gets `403 CROSS_ORIGIN`,
   signed in or not; so does one with session cookies and neither header.
-  Only `CONVERGE_WEB_ORIGIN` and `CONVERGE_PUBLIC_URL` are allowed, so open
-  the app at exactly that origin (`127.0.0.1` is not `localhost`). Scripts
+  Allowed origins are `CONVERGE_WEB_ORIGIN`, `CONVERGE_PUBLIC_URL`, each
+  entry in `CONVERGE_WEB_ORIGIN_EXTRA`, and (for loopback URLs) localhost /
+  `127.0.0.1` / `[::1]` on the same port. Open the app at an allowed origin
+  (`127.0.0.1` is not `localhost` unless listed). Scripts
   that reuse browser cookies must send `Origin`; Bearer-token clients
   (agents) and clients that send no `Origin` without cookies are unaffected.
 - **API responses** are `nosniff` and `Cache-Control: no-store`; a
