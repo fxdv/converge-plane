@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -160,17 +161,6 @@ func (a *API) handleApproveDone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"issueId": id, "approved": true})
 }
 
-// teamSpendBudget reads the team's hard cap in millionths of a dollar.
-// Zero means the team has no cap.
-func (a *API) teamSpendBudget(ctx context.Context, teamID string) (int64, error) {
-	var raw []byte
-	err := a.pool.QueryRow(ctx, `select preferences from teams where id = $1`, teamID).Scan(&raw)
-	if err != nil {
-		return 0, err
-	}
-	return budgetFromPrefs(raw), nil
-}
-
 func budgetFromPrefs(raw []byte) int64 {
 	if len(raw) == 0 {
 		return 0
@@ -193,56 +183,124 @@ func budgetFromPrefs(raw []byte) int64 {
 	return 0
 }
 
-// teamSpendTx is the cost already recorded for the team in the window,
-// excluding one run so a report can replace that run's own total.
-func (a *API) teamSpendTx(ctx context.Context, tx pgx.Tx, teamID, exceptRunID string) (int64, error) {
+// errSpendBudget is the sentinel a spend stop unwraps to. The text an
+// agent sees is spendStop.Error, which names the team and the remainder.
+var errSpendBudget = errors.New("spend budget")
+
+const (
+	auditBudgetRefused       = "economy.budget_refused"
+	auditDoneEvidenceRefused = "economy.done_evidence_refused"
+)
+
+// spendStop is a cap refusal. Remaining is the room left before this
+// report or claim, never a negative number.
+type spendStop struct {
+	teamName      string
+	spent, budget int64
+}
+
+func (e *spendStop) Error() string {
+	remaining := e.budget - e.spent
+	if remaining < 0 {
+		remaining = 0
+	}
+	return fmt.Sprintf("%s spend budget: %d of %d micro-USD used in the last 24 hours, %d remaining",
+		e.teamName, e.spent, e.budget, remaining)
+}
+
+func (e *spendStop) Unwrap() error { return errSpendBudget }
+
+type queryRower interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func teamSpendLabel(name, identifier string) string {
+	if identifier != "" && identifier != name {
+		return identifier + " (" + name + ")"
+	}
+	if name != "" {
+		return name
+	}
+	return identifier
+}
+
+// spendStopFor reports a stop when a claim (claim is true) finds the
+// window already at the cap, or when a report's new total would pass it.
+// exceptRun is omitted from the sum so a report can replace its own total.
+// A team with no positive cap never stops.
+func (a *API) spendStopFor(ctx context.Context, q queryRower, teamID, exceptRun string, next int64, claim bool) (*spendStop, error) {
+	var name, identifier string
+	var raw []byte
+	if err := q.QueryRow(ctx, `select name, identifier, preferences from teams where id = $1`, teamID).Scan(&name, &identifier, &raw); err != nil {
+		return nil, err
+	}
+	budget := budgetFromPrefs(raw)
+	if budget <= 0 {
+		return nil, nil
+	}
 	var spent int64
-	err := tx.QueryRow(ctx, `
-		select coalesce(sum(r.cost_micros), 0)
-		from agent_runs r
-		join issues i on i.id = r.issue_id
-		where i.team_id = $1 and r.id <> $2::uuid
-		  and r.updated_at > now() - interval '24 hours'`, teamID, exceptRunID).Scan(&spent)
-	return spent, err
+	var err error
+	if exceptRun == "" {
+		err = q.QueryRow(ctx, `
+			select coalesce(sum(r.cost_micros), 0)
+			from agent_runs r
+			join issues i on i.id = r.issue_id
+			where i.team_id = $1 and r.updated_at > now() - interval '24 hours'`, teamID).Scan(&spent)
+	} else {
+		err = q.QueryRow(ctx, `
+			select coalesce(sum(r.cost_micros), 0)
+			from agent_runs r
+			join issues i on i.id = r.issue_id
+			where i.team_id = $1 and r.id <> $2::uuid
+			  and r.updated_at > now() - interval '24 hours'`, teamID, exceptRun).Scan(&spent)
+	}
+	if err != nil {
+		return nil, err
+	}
+	over := spent >= budget
+	if !claim {
+		over = spent+next > budget
+	}
+	if !over {
+		return nil, nil
+	}
+	return &spendStop{teamName: teamSpendLabel(name, identifier), spent: spent, budget: budget}, nil
 }
 
 // spendAllowsTx reports whether recording next as the run's cost total
 // stays inside the team's 24 hour cap. No cap always allows it.
 func (a *API) spendAllowsTx(ctx context.Context, tx pgx.Tx, teamID, runID string, next int64) error {
-	var raw []byte
-	if err := tx.QueryRow(ctx, `select preferences from teams where id = $1`, teamID).Scan(&raw); err != nil {
+	stop, err := a.spendStopFor(ctx, tx, teamID, runID, next, false)
+	if err != nil || stop == nil {
 		return err
 	}
-	budget := budgetFromPrefs(raw)
-	if budget <= 0 {
-		return nil
-	}
-	spent, err := a.teamSpendTx(ctx, tx, teamID, runID)
-	if err != nil {
-		return err
-	}
-	if spent+next > budget {
-		return errSpendBudget
-	}
-	return nil
+	return stop
 }
 
-var errSpendBudget = errors.New("the team's spend budget for the last 24 hours is spent")
+// teamOverBudget reports a stop when a new claim would open on a team
+// that has already spent its cap. The check uses the pool, before the
+// claim transaction opens.
+func (a *API) teamOverBudget(ctx context.Context, teamID string) (*spendStop, error) {
+	return a.spendStopFor(ctx, a.pool, teamID, "", 0, true)
+}
 
-// teamOverBudget reports whether a new claim would spend past the cap.
-// The check uses the pool, before the claim transaction opens.
-func (a *API) teamOverBudget(ctx context.Context, teamID string) (bool, error) {
-	budget, err := a.teamSpendBudget(ctx, teamID)
-	if err != nil || budget <= 0 {
-		return false, err
+// noteEconomyRefusal records a cap or Done-evidence refusal outside the
+// caller's transaction, so the row survives the rollback of the refused
+// write. A failure to record does not change the refusal.
+func (a *API) noteEconomyRefusal(ctx context.Context, workspaceID, actorID, teamID, action string) {
+	if a == nil || a.pool == nil || !isUUID(workspaceID) || !isUUID(teamID) {
+		return
 	}
-	var spent int64
-	err = a.pool.QueryRow(ctx, `
-		select coalesce(sum(r.cost_micros), 0)
-		from agent_runs r
-		join issues i on i.id = r.issue_id
-		where i.team_id = $1 and r.updated_at > now() - interval '24 hours'`, teamID).Scan(&spent)
-	return spent >= budget, err
+	var actor any
+	if isUUID(actorID) {
+		actor = actorID
+	}
+	if _, err := a.pool.Exec(ctx, `
+		insert into audit_events (workspace_id, team_id, actor_id, action, object_type, object_id)
+		values ($1, $2, $3, $4, 'Team', $2)`,
+		workspaceID, teamID, actor, action); err != nil && a.log != nil {
+		a.log.Warn("economy refusal not recorded", "action", action, "err", err)
+	}
 }
 
 type governanceView struct {
@@ -342,6 +400,134 @@ func (a *API) governanceStats(ctx context.Context, workspaceID string) (governan
 		out.FalseDoneRate = float64(falseDones) / float64(agentDones)
 	}
 	return out, nil
+}
+
+// economyView is the 24-hour spend desk on GET /workspaces/{id}/swarm.
+// Cost is the agent-reported micro-USD already stored on agent_runs.
+// Teams lists only teams with a positive spendBudgetMicros cap.
+type economyView struct {
+	WindowHours          int            `json:"windowHours"`
+	Teams                []economyTeam  `json:"teams"`
+	Agents               []economyAgent `json:"agents"`
+	BudgetRefusals       int            `json:"budgetRefusals"`
+	DoneEvidenceRefusals int            `json:"doneEvidenceRefusals"`
+}
+
+type economyTeam struct {
+	TeamID          string `json:"teamId"`
+	Name            string `json:"name"`
+	Identifier      string `json:"identifier"`
+	BudgetMicros    int64  `json:"budgetMicros"`
+	SpentMicros     int64  `json:"spentMicros"`
+	RemainingMicros int64  `json:"remainingMicros"`
+}
+
+type economyAgent struct {
+	AgentID    string `json:"agentId"`
+	Name       string `json:"name"`
+	CostMicros int64  `json:"costMicros"`
+	Tokens     int64  `json:"tokens"`
+	Runs       int    `json:"runs"`
+	Issues     int    `json:"issues"`
+}
+
+func (a *API) economyDesk(ctx context.Context, workspaceID string) (economyView, error) {
+	out := economyView{
+		WindowHours: 24,
+		Teams:       []economyTeam{},
+		Agents:      []economyAgent{},
+	}
+	rows, err := a.pool.Query(ctx, `
+		select t.id, t.name, t.identifier, t.preferences,
+		       coalesce(sum(r.cost_micros), 0)
+		from teams t
+		left join issues i on i.team_id = t.id
+		left join agent_runs r on r.issue_id = i.id
+		  and r.updated_at > now() - interval '24 hours'
+		where t.workspace_id = $1 and t.status = 'active'
+		group by t.id, t.name, t.identifier, t.preferences
+		order by t.name`, workspaceID)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var team economyTeam
+		var raw []byte
+		var spent int64
+		if err := rows.Scan(&team.TeamID, &team.Name, &team.Identifier, &raw, &spent); err != nil {
+			return out, err
+		}
+		budget := budgetFromPrefs(raw)
+		if budget <= 0 {
+			continue
+		}
+		team.BudgetMicros = budget
+		team.SpentMicros = spent
+		team.RemainingMicros = budget - spent
+		if team.RemainingMicros < 0 {
+			team.RemainingMicros = 0
+		}
+		out.Teams = append(out.Teams, team)
+	}
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	rows.Close()
+
+	arows, err := a.pool.Query(ctx, `
+		select r.agent_id, a.name,
+		       coalesce(sum(r.cost_micros), 0),
+		       coalesce(sum(r.input_tokens), 0) + coalesce(sum(r.output_tokens), 0),
+		       count(*),
+		       count(distinct r.issue_id)
+		from agent_runs r
+		join issues i on i.id = r.issue_id
+		join teams t on t.id = i.team_id
+		join accounts a on a.id = r.agent_id
+		where t.workspace_id = $1 and r.updated_at > now() - interval '24 hours'
+		group by r.agent_id, a.name
+		order by sum(r.cost_micros) desc, a.name`, workspaceID)
+	if err != nil {
+		return out, err
+	}
+	defer arows.Close()
+	for arows.Next() {
+		var agent economyAgent
+		if err := arows.Scan(&agent.AgentID, &agent.Name, &agent.CostMicros, &agent.Tokens, &agent.Runs, &agent.Issues); err != nil {
+			return out, err
+		}
+		out.Agents = append(out.Agents, agent)
+	}
+	if err := arows.Err(); err != nil {
+		return out, err
+	}
+
+	rrows, err := a.pool.Query(ctx, `
+		select action, count(*)
+		from audit_events
+		where workspace_id = $1
+		  and created_at > now() - interval '24 hours'
+		  and action in ($2, $3)
+		group by action`, workspaceID, auditBudgetRefused, auditDoneEvidenceRefused)
+	if err != nil {
+		return out, err
+	}
+	defer rrows.Close()
+	for rrows.Next() {
+		var action string
+		var n int
+		if err := rrows.Scan(&action, &n); err != nil {
+			return out, err
+		}
+		switch action {
+		case auditBudgetRefused:
+			out.BudgetRefusals = n
+		case auditDoneEvidenceRefused:
+			out.DoneEvidenceRefusals = n
+		}
+	}
+	return out, rrows.Err()
 }
 
 // handleTraceExport implements GET /api/v1/workspaces/{id}/trace.

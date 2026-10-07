@@ -514,6 +514,9 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 	if req.StateID != nil && strval(req.StateID) != strval(row.StatusID) {
 		if agentActor(p) {
 			if err := a.doneEvidenceTx(ctx, tx, row.ID, row.TeamID, *req.StateID); err != nil {
+				if errors.Is(err, errDoneNeedsEvidence) && p != nil {
+					a.noteEconomyRefusal(ctx, workspaceID, p.AccountID, row.TeamID, auditDoneEvidenceRefused)
+				}
 				return false, nil, err
 			}
 		}

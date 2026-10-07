@@ -101,10 +101,11 @@ func TestSwarmStatusWireContract(t *testing.T) {
 			ForemanAccountID: strvalptr("a1"),
 			ForemanName:      strvalptr("scout"),
 		},
+		Economy: economyView{WindowHours: 24, Teams: []economyTeam{}, Agents: []economyAgent{}},
 	}
 
 	equalStrings(t, swarmKeys(t, status),
-		[]string{"agents", "brain", "governance", "pausedIssues", "review", "settings"})
+		[]string{"agents", "brain", "economy", "governance", "pausedIssues", "review", "settings"})
 	equalStrings(t, swarmKeys(t, status.Brain),
 		[]string{"mode"}) // note/model/endpoints/lastDecisionAt are omitempty
 	equalStrings(t, swarmKeys(t, status.Agents[0]),
@@ -119,6 +120,8 @@ func TestSwarmStatusWireContract(t *testing.T) {
 			"reason", "stateId", "teamId", "title"})
 	equalStrings(t, swarmKeys(t, status.Settings),
 		[]string{"foremanAccountId", "foremanName", "topology"})
+	equalStrings(t, swarmKeys(t, status.Economy),
+		[]string{"agents", "budgetRefusals", "doneEvidenceRefusals", "teams", "windowHours"})
 
 	// The empty row must serialize its optionals as JSON null, and its
 	// arrays as [] — the client union admits null but not a missing key.
@@ -172,6 +175,19 @@ func TestAccountUsageWindow(t *testing.T) {
 	nilLimiter.recordUsage("a1")
 	if got := nilLimiter.usageCount("a1"); got != 0 {
 		t.Fatalf("nil limiter usageCount = %d, want 0", got)
+	}
+}
+
+func TestSpendStopMessage(t *testing.T) {
+	msg := (&spendStop{teamName: "ENG", spent: 800, budget: 1000}).Error()
+	if msg != "ENG spend budget: 800 of 1000 micro-USD used in the last 24 hours, 200 remaining" {
+		t.Fatal(msg)
+	}
+	if teamSpendLabel("Engineering", "ENG") != "ENG (Engineering)" {
+		t.Fatal(teamSpendLabel("Engineering", "ENG"))
+	}
+	if teamSpendLabel("ENG", "ENG") != "ENG" {
+		t.Fatal(teamSpendLabel("ENG", "ENG"))
 	}
 }
 

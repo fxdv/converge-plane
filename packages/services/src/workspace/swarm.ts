@@ -122,11 +122,40 @@ export interface SwarmGovernance {
   falseDoneRate: number;
 }
 
+// Phase 10 spend desk. Cost is agent-reported micro-USD. teams lists
+// only teams with a positive spend cap. Refusals are the last 24 hours.
+export interface SwarmEconomyTeam {
+  teamId: string;
+  name: string;
+  identifier: string;
+  budgetMicros: number;
+  spentMicros: number;
+  remainingMicros: number;
+}
+
+export interface SwarmEconomyAgent {
+  agentId: string;
+  name: string;
+  costMicros: number;
+  tokens: number;
+  runs: number;
+  issues: number;
+}
+
+export interface SwarmEconomy {
+  windowHours: number;
+  teams: SwarmEconomyTeam[];
+  agents: SwarmEconomyAgent[];
+  budgetRefusals: number;
+  doneEvidenceRefusals: number;
+}
+
 export interface SwarmStatus {
   // Fleet roster, busy agents first.
   agents: SwarmAgent[];
   pausedIssues: SwarmPausedIssue[];
   governance: SwarmGovernance;
+  economy: SwarmEconomy;
   // The swarm plane's fleet settings (D4): the Swarm page's save target.
   settings: SwarmSettings;
   // The decision-brain indicator: is the fleet thinking (llm) or

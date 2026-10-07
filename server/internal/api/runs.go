@@ -392,6 +392,7 @@ func (a *API) reportRunTx(ctx context.Context, tx pgx.Tx, runID, issueID, agentI
 		}
 		if err := a.spendAllowsTx(ctx, tx, teamID, runID, *cost); err != nil {
 			if errors.Is(err, errSpendBudget) {
+				a.noteEconomyRefusal(ctx, run.WorkspaceID, agentID, teamID, auditBudgetRefused)
 				return 0, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()}, nil, nil
 			}
 			return 0, 0, nil, nil, err

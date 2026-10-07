@@ -101,9 +101,38 @@ func TestSpendBudgetStopsReport(t *testing.T) {
 	issue := f.issue(f.t1, f.todo, f.ext1)
 	work := f.claim(f.ext1, issue, http.StatusOK)
 	f.report(f.ext1, issue, `{"claimId":"`+work.Claim.ID+`","totals":{"costMicros":1000}}`, http.StatusOK)
-	f.report(f.ext1, issue, `{"claimId":"`+work.Claim.ID+`","totals":{"costMicros":1001}}`, http.StatusUnprocessableEntity)
+	over := f.call(externalAgentPrincipal(f.ext1), (*API).handleClaimReport, "POST",
+		"/api/v1/issues/"+issue+"/claim/report",
+		`{"claimId":"`+work.Claim.ID+`","totals":{"costMicros":1001}}`, "id", issue)
+	checkStatus(t, over, http.StatusUnprocessableEntity)
+	if body := over.Body.String(); !strings.Contains(body, "ENG spend budget:") ||
+		!strings.Contains(body, "0 of 1000 micro-USD used in the last 24 hours, 1000 remaining") {
+		t.Fatalf("report refusal = %s", body)
+	}
 	other := f.issue(f.t1, f.todo, "")
-	f.claim(f.ext1, other, http.StatusUnprocessableEntity)
+	blocked := f.call(externalAgentPrincipal(f.ext1), (*API).handleClaimIssue, "POST",
+		"/api/v1/issues/"+other+"/claim", "", "id", other)
+	checkStatus(t, blocked, http.StatusUnprocessableEntity)
+	if body := blocked.Body.String(); !strings.Contains(body, "ENG spend budget:") ||
+		!strings.Contains(body, "1000 of 1000 micro-USD used in the last 24 hours, 0 remaining") {
+		t.Fatalf("claim refusal = %s", body)
+	}
+	human := &Principal{AccountID: f.owner, Kind: auth.AccountKindHuman, Fullname: "Owner"}
+	snap := f.call(human, (*API).handleSwarmStatus, "GET", "/api/v1/workspaces/"+f.ws+"/swarm", "", "id", f.ws)
+	checkStatus(t, snap, http.StatusOK)
+	var status swarmStatus
+	decodeBody(t, snap, &status)
+	if status.Economy.WindowHours != 24 || status.Economy.BudgetRefusals != 2 {
+		t.Fatalf("economy = %+v, want 24h and 2 budget refusals", status.Economy)
+	}
+	if len(status.Economy.Teams) != 1 || status.Economy.Teams[0].SpentMicros != 1000 ||
+		status.Economy.Teams[0].RemainingMicros != 0 || status.Economy.Teams[0].BudgetMicros != 1000 {
+		t.Fatalf("teams = %+v", status.Economy.Teams)
+	}
+	if len(status.Economy.Agents) != 1 || status.Economy.Agents[0].CostMicros != 1000 ||
+		status.Economy.Agents[0].AgentID != f.ext1 {
+		t.Fatalf("agents = %+v", status.Economy.Agents)
+	}
 }
 
 func TestSignedWebhookDelivery(t *testing.T) {

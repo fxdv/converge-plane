@@ -262,8 +262,9 @@ func (a *API) handleClaimIssue(w http.ResponseWriter, r *http.Request) {
 	if over, err := a.teamOverBudget(ctx, row.TeamID); err != nil {
 		a.internalError(w, err)
 		return
-	} else if over {
-		writeError(w, http.StatusUnprocessableEntity, errSpendBudget.Error())
+	} else if over != nil {
+		a.noteEconomyRefusal(ctx, workspaceID, p.AccountID, row.TeamID, auditBudgetRefused)
+		writeError(w, http.StatusUnprocessableEntity, over.Error())
 		return
 	}
 
