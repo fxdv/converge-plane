@@ -135,6 +135,46 @@ export const SwarmPage = withApplicationStore(
             </div>
           </section>
 
+          {data?.economy && (
+            <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 p-4">
+              <h3 className="text-sm font-semibold">
+                Last {data.economy.windowHours} hours
+              </h3>
+              {data.economy.teams.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No team has a spend cap.
+                </p>
+              ) : (
+                <ul className="mt-2 flex flex-col gap-1 text-sm">
+                  {data.economy.teams.map((team) => (
+                    <li key={team.teamId} className="text-muted-foreground">
+                      <span className="text-foreground">
+                        {team.identifier || team.name}
+                      </span>{' '}
+                      {formatCost(team.spentMicros)} of {formatCost(team.budgetMicros)}{' '}
+                      · {formatCost(team.remainingMicros)} left
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {data.economy.agents.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1 text-sm">
+                  {data.economy.agents.map((agent) => (
+                    <li key={agent.agentId} className="text-muted-foreground">
+                      <span className="text-foreground">{agent.name}</span>{' '}
+                      {formatCost(agent.costMicros)} · {agent.tokens} tokens ·{' '}
+                      {agent.runs} runs · {agent.issues} issues
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-3 text-sm text-muted-foreground">
+                {data.economy.budgetRefusals} budget stops ·{' '}
+                {data.economy.doneEvidenceRefusals} Done refusals
+              </p>
+            </section>
+          )}
+
           {data?.governance && (
             <section className="border border-grayAlpha-100 dark:border-grayAlpha-300 p-4">
               <h3 className="text-sm font-semibold">

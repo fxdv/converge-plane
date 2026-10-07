@@ -1365,6 +1365,9 @@ var rtRouteCases = []routeCase{
 			{frag: "from swarm_settings where workspace_id = $1", rowErr: pgx.ErrNoRows},
 			{frag: "ws.category = 'COMPLETED'", rowVals: []any{0, int64(0)}},
 			{frag: "h.field = 'status'", rows: [][]any{}},
+			{frag: "group by t.id, t.name, t.identifier, t.preferences", rows: [][]any{}},
+			{frag: "order by sum(r.cost_micros) desc", rows: [][]any{}},
+			{frag: "from audit_events", rows: [][]any{}},
 		}},
 		code: 200,
 		check: func(t *testing.T, rec *httptest.ResponseRecorder, pool *fakePool) {
@@ -1374,10 +1377,17 @@ var rtRouteCases = []routeCase{
 				Settings     struct {
 					Topology string `json:"topology"`
 				} `json:"settings"`
+				Economy struct {
+					Teams  []json.RawMessage `json:"teams"`
+					Agents []json.RawMessage `json:"agents"`
+				} `json:"economy"`
 			}
 			decodeBody(t, rec, &v)
 			if v.Agents == nil || len(v.Agents) != 0 || v.PausedIssues == nil || len(v.PausedIssues) != 0 {
 				t.Fatalf("panel = %d agents, %d paused, want empty arrays, never null", len(v.Agents), len(v.PausedIssues))
+			}
+			if v.Economy.Teams == nil || v.Economy.Agents == nil {
+				t.Fatal("economy teams and agents must be arrays, never null")
 			}
 			if v.Settings.Topology != "" {
 				t.Fatalf("topology = %q, want the deploy default (empty without a saved row)", v.Settings.Topology)

@@ -154,6 +154,7 @@ type swarmStatus struct {
 	Brain        swarmBrain         `json:"brain"`
 	Review       swarmReview        `json:"review"`
 	Governance   governanceView     `json:"governance"`
+	Economy      economyView        `json:"economy"`
 }
 
 // handleSwarmStatus implements GET /api/v1/workspaces/{id}/swarm.
@@ -199,7 +200,15 @@ func (a *API) handleSwarmStatus(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	status := swarmStatus{Agents: agents, PausedIssues: paused, Settings: settings, Governance: gov}
+	economy, err := a.economyDesk(ctx, workspaceID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	status := swarmStatus{
+		Agents: agents, PausedIssues: paused, Settings: settings,
+		Governance: gov, Economy: economy,
+	}
 	if a.runtime != nil {
 		status.Brain = a.runtime.brainView()
 		status.Brain.Model = a.cfg.LLMModel
