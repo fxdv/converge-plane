@@ -1,7 +1,5 @@
 import type { SelectorItem } from './node-selector';
 
-import { EditorBubbleItem, useEditor } from '../converge-editor';
-
 import {
   BoldLine,
   CodingLine,
@@ -12,6 +10,7 @@ import {
 
 import { cn } from '../../../../lib/utils';
 import { Button } from '../../button';
+import { EditorBubbleItem, useEditor } from '../converge-editor';
 
 export const TextButtons = () => {
   const { editor } = useEditor();

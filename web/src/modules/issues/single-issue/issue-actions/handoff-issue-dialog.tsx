@@ -22,9 +22,9 @@ import React from 'react';
 import type { User } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
-import { useTeamWorkflows } from 'hooks/workflows';
-import { useUsersData } from 'hooks/users';
 import { useCurrentTeam } from 'hooks/teams';
+import { useUsersData } from 'hooks/users';
+import { useTeamWorkflows } from 'hooks/workflows';
 
 import { useHandoffIssueMutation } from 'services/issues';
 
@@ -83,7 +83,6 @@ export const HandoffIssueDialog = observer(
         setSummary('');
         setTouched(false);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, issue?.id]);
 
     const { mutate: handoff, isPending } = useHandoffIssueMutation({
@@ -115,7 +114,8 @@ export const HandoffIssueDialog = observer(
       if (summary.length > SUMMARY_MAX) {
         toast({
           title: 'Summary too long',
-          description: 'Keep it under 4 KB — it becomes the next agent’s context',
+          description:
+            'Keep it under 4 KB — it becomes the next agent’s context',
         });
         return;
       }
@@ -131,10 +131,12 @@ export const HandoffIssueDialog = observer(
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[520px] p-6">
           <DialogHeader className="pb-2">
-            <DialogTitle>Hand off {team?.identifier}-{issue.number}</DialogTitle>
+            <DialogTitle>
+              Hand off {team?.identifier}-{issue.number}
+            </DialogTitle>
             <DialogDescription>
-              Move this issue to another agent with a short handoff note.
-              The note and the move appear on the issue timeline.
+              Move this issue to another agent with a short handoff note. The
+              note and the move appear on the issue timeline.
             </DialogDescription>
           </DialogHeader>
 
@@ -160,9 +162,7 @@ export const HandoffIssueDialog = observer(
                   </SelectContent>
                 </Select>
                 {touched && !agentId && (
-                  <span className="text-xs text-destructive">
-                    Required
-                  </span>
+                  <span className="text-xs text-destructive">Required</span>
                 )}
               </div>
             )}
@@ -195,12 +195,11 @@ export const HandoffIssueDialog = observer(
                   </span>
                 </span>
                 <span
-                  className={
-                    'text-xs ' +
-                    (summary.length > SUMMARY_MAX
+                  className={`text-xs ${
+                    summary.length > SUMMARY_MAX
                       ? 'text-destructive'
-                      : 'text-muted-foreground')
-                  }
+                      : 'text-muted-foreground'
+                  }`}
                 >
                   {summary.length}/{SUMMARY_MAX}
                 </span>
@@ -214,8 +213,8 @@ export const HandoffIssueDialog = observer(
               />
               {touched && !summary.trim() && (
                 <span className="text-xs text-destructive">
-                  A note is required — it is the context the next agent
-                  starts with.
+                  A note is required — it is the context the next agent starts
+                  with.
                 </span>
               )}
             </div>

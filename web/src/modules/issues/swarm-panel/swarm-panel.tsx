@@ -1,10 +1,10 @@
-import { AI, Warning } from '@converge/ui/icons';
 import type { SwarmPausedIssue } from '@converge/services';
+
+import { AI, Warning } from '@converge/ui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { observer } from 'mobx-react-lite';
-import * as React from 'react';
-
 import { useRouter } from 'next/router';
+import * as React from 'react';
 
 import { IssueViewContext } from 'components/side-issue-view';
 import { useCurrentWorkspace } from 'hooks/workspace';
@@ -89,11 +89,12 @@ export const SwarmPanel = observer(() => {
           </h3>
           {data && data.agents.length === 0 ? (
             <div className="p-4 text-sm text-grayAlpha-500 dark:text-grayAlpha-400">
-              No agents in this workspace yet. Create one in Settings →
-              Members.
+              No agents in this workspace yet. Create one in Settings → Members.
             </div>
           ) : (
-            data?.agents.map((agent) => <SwarmAgentRow key={agent.id} agent={agent} />)
+            data?.agents.map((agent) => (
+              <SwarmAgentRow key={agent.id} agent={agent} />
+            ))
           )}
         </section>
       </div>
@@ -125,7 +126,8 @@ export const PausedIssueRow = ({
       {issue.reason || 'quiet guard tripped'}
     </div>
     <div className="mt-0.5 text-xs text-amber-600/80 dark:text-amber-400/80">
-      paused {formatDistanceToNow(new Date(issue.pausedAt), { addSuffix: true })}
+      paused{' '}
+      {formatDistanceToNow(new Date(issue.pausedAt), { addSuffix: true })}
     </div>
   </button>
 );

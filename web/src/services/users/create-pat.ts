@@ -1,6 +1,7 @@
 import type { Pat } from '@converge/types';
 
 import { createPat } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -29,7 +30,8 @@ export function useCreatePatMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createPat,
+  return useMutation({
+    mutationFn: createPat,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

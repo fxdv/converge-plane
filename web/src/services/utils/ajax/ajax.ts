@@ -11,7 +11,7 @@ import { isServer } from '../common';
  * @param config - Ajax Configuration Object.
  * @returns An Extended Promise object.
  */
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-constraint
+
 export const ajax = <D, T, E extends unknown>(
   config: AjaxBaseConfig<D, T, E>,
 ): ExtendedPromise<T> => {

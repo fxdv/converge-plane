@@ -13,6 +13,7 @@ import {
   IssueStatusDropdown,
   IssueStatusDropdownVariant,
 } from 'modules/issues/components';
+
 import { useIssueData } from 'hooks/issues';
 import { useTeamWithId } from 'hooks/teams';
 

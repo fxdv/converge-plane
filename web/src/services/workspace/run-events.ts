@@ -18,8 +18,7 @@ export function useRunEventsQuery(
     number
   >({
     queryKey: ['runEvents', runId, eventCount],
-    queryFn: ({ pageParam }) =>
-      getRunEvents(issueId, runId, pageParam),
+    queryFn: ({ pageParam }) => getRunEvents(issueId, runId, pageParam),
     initialPageParam: 0,
     enabled: enabled && eventCount > 0,
     getNextPageParam: (last) => last.nextAfter ?? undefined,

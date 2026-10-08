@@ -1,9 +1,8 @@
 import { observer } from 'mobx-react-lite';
 
 import { groupBy } from 'common/lib/common';
-import { type IssueType } from 'common/types';
-
 import { safePriorityIndex } from 'common/priority';
+import { type IssueType } from 'common/types';
 
 import { usePriorities } from 'hooks/priorities';
 

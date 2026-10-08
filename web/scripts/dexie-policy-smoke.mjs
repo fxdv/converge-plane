@@ -9,10 +9,11 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const storeRoot = join(root, 'src/store');
 
-const policySrc = readFileSync(join(storeRoot, 'client-cache-policy.ts'), 'utf8');
-const memoryModels = [
-  ...policySrc.matchAll(/MODELS\.(\w+)/g),
-]
+const policySrc = readFileSync(
+  join(storeRoot, 'client-cache-policy.ts'),
+  'utf8',
+);
+const memoryModels = [...policySrc.matchAll(/MODELS\.(\w+)/g)]
   .map((m) => m[1])
   .filter((name, idx, arr) => arr.indexOf(name) === idx);
 

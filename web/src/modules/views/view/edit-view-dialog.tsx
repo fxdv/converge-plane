@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@converge/ui/components/button';
 import {
   Dialog,
@@ -16,6 +15,7 @@ import {
 } from '@converge/ui/components/form';
 import { Input } from '@converge/ui/components/input';
 import { useToast } from '@converge/ui/components/use-toast';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 

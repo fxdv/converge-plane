@@ -11,6 +11,5 @@ export class CreateLinkedIssueCommentDto {
   commentId: string;
 
   @IsOptional()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sourceData: any;
 }

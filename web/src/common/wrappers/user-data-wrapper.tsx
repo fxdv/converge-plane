@@ -3,8 +3,8 @@ import { Logo } from '@converge/ui/components/dynamic-logo';
 import { Loader } from '@converge/ui/components/loader';
 import { useRouter } from 'next/router';
 import * as React from 'react';
-import { signOut } from 'common/auth';
 
+import { signOut } from 'common/auth';
 import { deleteCookies } from 'common/common-utils';
 
 import { useGetUserQuery } from 'services/users';

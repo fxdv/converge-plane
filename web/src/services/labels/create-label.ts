@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { LabelType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -46,7 +45,8 @@ export function useCreateLabelMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createLabel,
+  return useMutation({
+    mutationFn: createLabel,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

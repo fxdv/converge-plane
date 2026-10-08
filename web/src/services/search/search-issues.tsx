@@ -1,5 +1,8 @@
-import { keepPreviousData, type UseQueryResult, useQuery } from 'common/lib/react-query';
-
+import {
+  keepPreviousData,
+  type UseQueryResult,
+  useQuery,
+} from 'common/lib/react-query';
 import type { IssueType } from 'common/types';
 
 import { type XHRErrorResponse, ajaxGet } from 'services/utils';

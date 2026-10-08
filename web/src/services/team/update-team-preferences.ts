@@ -1,6 +1,6 @@
 import { updateTeamPreferences } from '@converge/services';
-import { useMutation } from 'common/lib/react-query';
 
+import { useMutation } from 'common/lib/react-query';
 import type { TeamType } from 'common/types';
 
 interface MutationParams {
@@ -29,7 +29,8 @@ export function useUpdateTeamPreferencesMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation({ mutationFn: updateTeamPreferences,
+  return useMutation({
+    mutationFn: updateTeamPreferences,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -13,16 +13,16 @@ import {
   Warning,
 } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { observer } from 'mobx-react-lite';
+import * as React from 'react';
+
 import type {
   IssueCommentType,
   IssueHistoryType,
   User,
   UsersOnWorkspaceType,
 } from 'common/types';
-import { formatDistanceToNow } from 'date-fns';
-import { observer } from 'mobx-react-lite';
-import * as React from 'react';
-
 import { SYSTEM_ACTOR_NAME } from 'common/user-util';
 
 import { IssueViewContext } from 'components/side-issue-view';
@@ -192,9 +192,7 @@ export const ActivityFeed = observer(() => {
       }
 
       const stateName = (stateId?: string | null): string =>
-        stateId
-          ? (workflowsStore.getWorkflowWithId(stateId)?.name ?? '')
-          : '';
+        stateId ? (workflowsStore.getWorkflowWithId(stateId)?.name ?? '') : '';
       const assigneeName = (id?: string | null): string =>
         id ? actorName(id).name : '';
 
@@ -232,9 +230,7 @@ export const ActivityFeed = observer(() => {
         entry.text = row.toAssigneeId
           ? `assigned to ${assigneeName(row.toAssigneeId)}`
           : 'unassigned the issue';
-      } else if (
-        (row.fromPriority ?? null) !== (row.toPriority ?? null)
-      ) {
+      } else if ((row.fromPriority ?? null) !== (row.toPriority ?? null)) {
         entry.kind = 'priority';
         entry.text = 'changed the priority';
       } else if (
@@ -304,8 +300,7 @@ export const ActivityFeed = observer(() => {
   });
 
   entries.sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const visible = entries
     .filter((entry) =>

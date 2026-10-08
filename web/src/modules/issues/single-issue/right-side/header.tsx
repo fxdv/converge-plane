@@ -1,6 +1,6 @@
-import { RiClipboardLine, RiGitBranchLine } from '@remixicon/react';
 import { Button } from '@converge/ui/components/button';
 import { useToast } from '@converge/ui/components/use-toast';
+import { RiClipboardLine, RiGitBranchLine } from '@remixicon/react';
 import copy from 'copy-to-clipboard';
 import { useRouter } from 'next/router';
 import React from 'react';

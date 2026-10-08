@@ -2,8 +2,10 @@ import { getRunEvents } from '@converge/services';
 import { ChevronDown, CodingLine, LinkLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
-import { useQuery } from 'common/lib/react-query';
 
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
+
+import { useQuery } from 'common/lib/react-query';
 import {
   formatCost,
   formatTokens,
@@ -12,7 +14,6 @@ import {
 import type { AgentRunType, User } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
-import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 import { useUsersData } from 'hooks/users';
 
 import { useRunEventsQuery } from 'services/workspace';

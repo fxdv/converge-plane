@@ -1,11 +1,10 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { ProjectType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
 
-import { useContextStore } from 'store/global-context-provider';
 import { convergeDatabase } from 'store/database';
+import { useContextStore } from 'store/global-context-provider';
 
 export interface DeleteProjectParams {
   projectId: string;
@@ -57,7 +56,8 @@ export function useDeleteProjectMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: deleteProject,
+  return useMutation({
+    mutationFn: deleteProject,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -1,5 +1,5 @@
-import { RiDiscordFill, RiGithubFill, RiMailFill } from '@remixicon/react';
 import { Actions, SlackIcon, StackLine, Whatsapp } from '@converge/ui/icons';
+import { RiDiscordFill, RiGithubFill, RiMailFill } from '@remixicon/react';
 
 export const ICON_MAPPING = {
   slack: SlackIcon,

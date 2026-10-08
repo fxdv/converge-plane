@@ -28,7 +28,8 @@ const chatBubbleVariant = cva(
 );
 
 interface ChatBubbleProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof chatBubbleVariant> {}
 
 const ChatBubble = React.forwardRef<HTMLDivElement, ChatBubbleProps>(
@@ -92,7 +93,8 @@ const chatBubbleMessageVariants = cva('p-4', {
 });
 
 interface ChatBubbleMessageProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof chatBubbleMessageVariants> {
   isLoading?: boolean;
 }
@@ -126,8 +128,7 @@ const ChatBubbleMessage = React.forwardRef<
 ChatBubbleMessage.displayName = 'ChatBubbleMessage';
 
 // ChatBubbleTimestamp
-interface ChatBubbleTimestampProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+interface ChatBubbleTimestampProps extends React.HTMLAttributes<HTMLDivElement> {
   timestamp: string;
 }
 
@@ -165,8 +166,7 @@ const ChatBubbleAction: React.FC<ChatBubbleActionProps> = ({
   </Button>
 );
 
-interface ChatBubbleActionWrapperProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+interface ChatBubbleActionWrapperProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'sent' | 'received';
   className?: string;
 }

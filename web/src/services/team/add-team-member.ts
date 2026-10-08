@@ -1,4 +1,5 @@
 import { addTeamMember } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -27,7 +28,8 @@ export function useAddTeamMemberMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: addTeamMember,
+  return useMutation({
+    mutationFn: addTeamMember,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

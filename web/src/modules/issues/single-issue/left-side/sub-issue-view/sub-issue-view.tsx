@@ -27,52 +27,56 @@ export function SubIssueView({ childIssues, issueId }: SubIssueViewProps) {
   return (
     <>
       <IssueDetailSection className="w-full py-2 px-0">
-        <Collapsible open={isOpen} onOpenChange={setOpen} className="w-full py-2">
-        <div className="flex justify-between px-6">
-          <div>
-            <CollapsibleTrigger asChild>
-              <div className="flex items-center">
-                <Button variant="link" className="px-0 text-md">
-                  Sub-issues
-                  {isOpen ? (
-                    <ChevronDown size={16} className="ml-1" />
-                  ) : (
-                    <ChevronRight size={16} className="ml-1" />
+        <Collapsible
+          open={isOpen}
+          onOpenChange={setOpen}
+          className="w-full py-2"
+        >
+          <div className="flex justify-between px-6">
+            <div>
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center">
+                  <Button variant="link" className="px-0 text-md">
+                    Sub-issues
+                    {isOpen ? (
+                      <ChevronDown size={16} className="ml-1" />
+                    ) : (
+                      <ChevronRight size={16} className="ml-1" />
+                    )}
+                  </Button>
+
+                  {!isOpen && (
+                    <div className="px-2 ml-1 rounded-sm bg-grayAlpha-100 text-foreground">
+                      {issues.length}
+                    </div>
                   )}
-                </Button>
+                </div>
+              </CollapsibleTrigger>
+            </div>
 
-                {!isOpen && (
-                  <div className="px-2 ml-1 rounded-sm bg-grayAlpha-100 text-foreground">
-                    {issues.length}
-                  </div>
-                )}
-              </div>
-            </CollapsibleTrigger>
+            <div>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setNewIssueDialog(true)}
+                disabled={newIssueDialog}
+              >
+                <AddLine size={16} />
+              </Button>
+            </div>
           </div>
-
-          <div>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => setNewIssueDialog(true)}
-              disabled={newIssueDialog}
-            >
-              <AddLine size={16} />
-            </Button>
-          </div>
-        </div>
-        <CollapsibleContent>
-          <div className="pt-1 px-3">
-            {issues.map((issue: IssueType) => (
-              <IssueListItem
-                issueId={issue.id}
-                subIssueView
-                key={issue.id}
-                noBorder={false}
-              />
-            ))}
-          </div>
-        </CollapsibleContent>
+          <CollapsibleContent>
+            <div className="pt-1 px-3">
+              {issues.map((issue: IssueType) => (
+                <IssueListItem
+                  issueId={issue.id}
+                  subIssueView
+                  key={issue.id}
+                  noBorder={false}
+                />
+              ))}
+            </div>
+          </CollapsibleContent>
         </Collapsible>
       </IssueDetailSection>
       <NewIssueDialog

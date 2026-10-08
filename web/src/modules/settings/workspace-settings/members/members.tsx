@@ -16,9 +16,9 @@ import { useGetAgentsQuery } from 'services/workspace';
 import { useContextStore } from 'store/global-context-provider';
 import { UserContext } from 'store/user-context';
 
-import { agentTokensAtAGlance } from './agent-access';
 import { AddAgentDialog } from './add-agent-dialog';
 import { AddMemberDialog } from './add-member-dialog';
+import { agentTokensAtAGlance } from './agent-access';
 import { AgentsBriefingDialog } from './agents-briefing-dialog';
 import { MemberItem } from './member-item';
 
@@ -32,7 +32,10 @@ export const Members = observer(() => {
   const currentUser = React.useContext(UserContext);
   const userRole = workspaceStore.getUserData(currentUser.id)?.role;
   const workspace = useCurrentWorkspace();
-  const { data: agentRoster } = useGetAgentsQuery(workspace?.id, !!workspace?.id);
+  const { data: agentRoster } = useGetAgentsQuery(
+    workspace?.id,
+    !!workspace?.id,
+  );
   const teamName = (teamId: string) =>
     teamsStore.getTeamWithId(teamId)?.name ?? teamId;
 
@@ -76,7 +79,10 @@ export const Members = observer(() => {
             <div className="flex flex-col">
               <div className="flex justify-between items-center">
                 <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => setBriefingDialog(true)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setBriefingDialog(true)}
+                  >
                     How agents work
                   </Button>
                   <Button
@@ -146,9 +152,7 @@ export const Members = observer(() => {
       {newMemberDialog && (
         <AddMemberDialog setDialogOpen={setNewMemberDialog} />
       )}
-      {newAgentDialog && (
-        <AddAgentDialog setDialogOpen={setNewAgentDialog} />
-      )}
+      {newAgentDialog && <AddAgentDialog setDialogOpen={setNewAgentDialog} />}
       {briefingDialog && (
         <AgentsBriefingDialog
           open={briefingDialog}

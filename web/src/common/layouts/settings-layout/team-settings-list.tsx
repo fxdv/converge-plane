@@ -1,4 +1,3 @@
-import { RiAddLine } from '@remixicon/react';
 import {
   Accordion,
   AccordionContent,
@@ -14,6 +13,7 @@ import {
 } from '@converge/ui/components/tooltip';
 import { ChevronRight, TeamLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
+import { RiAddLine } from '@remixicon/react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/router';

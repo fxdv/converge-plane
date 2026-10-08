@@ -1,7 +1,8 @@
-import { EditorProvider } from '@tiptap/react';
 import type { EditorProviderProps, JSONContent } from '@tiptap/react';
-import { forwardRef } from 'react';
 import type { ReactNode } from 'react';
+
+import { EditorProvider } from '@tiptap/react';
+import { forwardRef } from 'react';
 
 export type EditorContentProps = Omit<EditorProviderProps, 'content'> & {
   readonly children?: ReactNode;

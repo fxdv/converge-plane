@@ -1,8 +1,7 @@
-import { SessionAuth } from 'common/auth';
-
 import { IssueConflictProvider } from 'modules/issues/issue-conflict';
 import { NewIssueProvider } from 'modules/issues/new-issue';
 
+import { SessionAuth } from 'common/auth';
 import { deleteCookies } from 'common/common-utils';
 import { UserDataWrapper } from 'common/wrappers/user-data-wrapper';
 

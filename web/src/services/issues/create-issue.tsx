@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMutation } from 'common/lib/react-query';
-
 import type { IssueType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -59,7 +58,6 @@ export function useCreateIssueMutation({
     onMutate && onMutate();
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMutationError = (errorResponse: any) => {
     const errorText = errorResponse?.errors?.message || 'Error occured';
 
@@ -70,7 +68,8 @@ export function useCreateIssueMutation({
     onSuccess && onSuccess(data, variables, context);
   };
 
-  return useMutation({ mutationFn: createIssue,
+  return useMutation({
+    mutationFn: createIssue,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

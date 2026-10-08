@@ -111,7 +111,6 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
         }
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const MODEL_STORE_MAP = {
         [MODELS.Label]: labelsStore,
         [MODELS.Project]: projectsStore,

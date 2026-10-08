@@ -1,6 +1,7 @@
 import type { Pat } from '@converge/types';
 
 import { deletePat } from '@converge/services';
+
 import { useMutation, useQueryClient } from 'common/lib/react-query';
 
 import { GetPats } from './get-pats';
@@ -34,7 +35,8 @@ export function useDeletePatMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: deletePat,
+  return useMutation({
+    mutationFn: deletePat,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -1,4 +1,5 @@
 import { deleteIssueComment } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -27,7 +28,8 @@ export function useDeleteCommentMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: deleteIssueComment,
+  return useMutation({
+    mutationFn: deleteIssueComment,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

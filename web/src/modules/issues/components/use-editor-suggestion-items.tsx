@@ -27,7 +27,6 @@ export const useEditorSuggestionItems = () => {
       },
       ...suggestionItems,
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { suggestionItems: appendedSuggestionItems };

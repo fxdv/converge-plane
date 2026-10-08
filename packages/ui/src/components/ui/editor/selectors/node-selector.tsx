@@ -1,5 +1,4 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { EditorBubbleItem, useEditor } from '../converge-editor';
 import React from 'react';
 
 import {
@@ -13,6 +12,7 @@ import {
 
 import { Button } from '../../button';
 import { PopoverContent, PopoverTrigger, Popover } from '../../popover';
+import { EditorBubbleItem, useEditor } from '../converge-editor';
 
 export interface SelectorItem {
   name: string;

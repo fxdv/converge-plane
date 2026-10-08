@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { User } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -45,7 +44,8 @@ export function useChangePasswordMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: updateUser,
+  return useMutation({
+    mutationFn: updateUser,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

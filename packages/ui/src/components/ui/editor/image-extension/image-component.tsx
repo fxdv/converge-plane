@@ -16,7 +16,6 @@ import { Progress } from '../../progress';
 import { useEditor } from '../editor';
 import { useSrc } from '../file-extension/use-src';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ImageComponent = (props: any) => {
   const { editor } = useEditor();
   const { src } = useSrc(props.node.attrs.src, props.node.attrs.attachmentId);

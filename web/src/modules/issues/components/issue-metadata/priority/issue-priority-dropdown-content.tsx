@@ -1,4 +1,3 @@
-import { RiCheckLine } from '@remixicon/react';
 import { Checkbox } from '@converge/ui/components/checkbox';
 import { CommandGroup } from '@converge/ui/components/command';
 import {
@@ -8,6 +7,7 @@ import {
   PriorityMedium,
   UrgentFill,
 } from '@converge/ui/icons';
+import { RiCheckLine } from '@remixicon/react';
 
 import { useScope } from 'hooks';
 

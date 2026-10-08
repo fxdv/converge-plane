@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { ViewType, FiltersModelType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -48,7 +47,8 @@ export function useCreateViewMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createView,
+  return useMutation({
+    mutationFn: createView,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

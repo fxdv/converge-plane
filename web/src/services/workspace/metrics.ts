@@ -1,7 +1,4 @@
-import {
-  getWorkspaceMetrics,
-  type WorkspaceMetrics,
-} from '@converge/services';
+import { getWorkspaceMetrics, type WorkspaceMetrics } from '@converge/services';
 
 import { useQuery } from 'common/lib/react-query';
 

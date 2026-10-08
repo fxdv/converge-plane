@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { Invite } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -45,7 +44,8 @@ export function useInviteActionMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: inviteAction,
+  return useMutation({
+    mutationFn: inviteAction,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

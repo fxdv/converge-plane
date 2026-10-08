@@ -104,7 +104,8 @@ export const BreadcrumbItem = React.forwardRef<
 BreadcrumbItem.displayName = 'BreadcrumbItem';
 
 export interface BreadcrumbLinkProps
-  extends React.ComponentPropsWithoutRef<'a'>,
+  extends
+    React.ComponentPropsWithoutRef<'a'>,
     Pick<BreadcrumbItemProps, 'isCurrentPage'> {
   as?: React.ElementType;
 }

@@ -1,9 +1,9 @@
 import { useToast } from '@converge/ui/components/use-toast';
 import React from 'react';
-import { useMutation } from 'common/lib/react-query';
 
 import { useIssueConflict } from 'modules/issues/issue-conflict';
 
+import { useMutation } from 'common/lib/react-query';
 import type { IssueType, IssueRelationEnum } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -94,8 +94,10 @@ export function useUpdateIssueMutation({
     rollbackRef.current = snapshot ? { ...snapshot } : undefined;
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onMutationError = (errorResponse: any, variables: UpdateIssueParams) => {
+  const onMutationError = (
+    errorResponse: any,
+    variables: UpdateIssueParams,
+  ) => {
     const snapshot = rollbackRef.current;
     rollbackRef.current = undefined;
     if (snapshot && snapshot.id === variables.id) {
@@ -104,8 +106,7 @@ export function useUpdateIssueMutation({
 
     if (errorResponse?.resStatus === 412) {
       const body = errorResponse?.errors as
-        | { version?: number; error?: string }
-        | undefined;
+        { version?: number; error?: string } | undefined;
       if (typeof body?.version === 'number') {
         issuesStore.updateIssue({ version: body.version }, variables.id);
       }
@@ -138,7 +139,8 @@ export function useUpdateIssueMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: update,
+  return useMutation({
+    mutationFn: update,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { WorkspaceType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -42,7 +41,8 @@ export function useUpdateWorkspaceMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: updateWorkspace,
+  return useMutation({
+    mutationFn: updateWorkspace,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

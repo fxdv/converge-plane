@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { IssueType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -44,7 +43,8 @@ export function useMoveIssueToTeamMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: moveIssueToTeam,
+  return useMutation({
+    mutationFn: moveIssueToTeam,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -9,6 +9,7 @@ import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
 import { useScope } from 'hooks';
+
 import { FilterTypeEnum } from 'store/application';
 import { useContextStore } from 'store/global-context-provider';
 
@@ -131,7 +132,7 @@ export const Filters = observer(({ onClose }: FiltersProps) => {
         <AppliedFiltersView />
         <Command
           className="border-none shadow-none relative overflow-visible h-fit w-auto"
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
           onBlur={(e) => {
             if (e.target.localName === 'button' && e.relatedTarget === null) {
               setShowOptions(false);

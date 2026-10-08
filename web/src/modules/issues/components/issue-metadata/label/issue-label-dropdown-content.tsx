@@ -1,9 +1,9 @@
-import { RiAddLine } from '@remixicon/react';
 import { BadgeColor } from '@converge/ui/components/badge';
 import { Checkbox } from '@converge/ui/components/checkbox';
 import { CommandGroup, CommandItem } from '@converge/ui/components/command';
 import { ScrollArea } from '@converge/ui/components/scroll-area';
 import { Separator } from '@converge/ui/components/separator';
+import { RiAddLine } from '@remixicon/react';
 import React from 'react';
 
 import { generateOklchColor } from 'common/color-utils';

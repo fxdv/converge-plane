@@ -7,13 +7,13 @@ import {
 } from '@converge/ui/components/dialog';
 import * as React from 'react';
 
-type ConflictState = {
+interface ConflictState {
   issueLabel: string;
-};
+}
 
-type IssueConflictContextValue = {
+interface IssueConflictContextValue {
   openConflict: (state: ConflictState) => void;
-};
+}
 
 const IssueConflictContext =
   React.createContext<IssueConflictContextValue | null>(null);
@@ -35,12 +35,17 @@ export function IssueConflictProvider({
   return (
     <IssueConflictContext.Provider value={value}>
       {children}
-      <Dialog open={state !== null} onOpenChange={(open) => !open && setState(null)}>
+      <Dialog
+        open={state !== null}
+        onOpenChange={(open) => !open && setState(null)}
+      >
         <DialogContent className="sm:max-w-[420px]" closeIcon>
           <div className="p-6">
             <DialogHeader>
               <DialogTitle className="text-md font-normal">
-                {state ? `${state.issueLabel} changed elsewhere` : 'Issue changed'}
+                {state
+                  ? `${state.issueLabel} changed elsewhere`
+                  : 'Issue changed'}
               </DialogTitle>
             </DialogHeader>
             <p className="mt-3 text-sm text-muted-foreground">

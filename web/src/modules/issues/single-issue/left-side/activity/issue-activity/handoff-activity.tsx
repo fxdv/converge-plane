@@ -28,7 +28,7 @@ export const HandoffActivity = observer(
               (user: User) => user.id === issueHistory.toAssigneeId,
             ) ?? undefined)
           : undefined,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+
       [issueHistory.toAssigneeId, users],
     );
 

@@ -1,7 +1,7 @@
-import { type EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
-import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
+import { type EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 
-const uploadKey = new PluginKey("upload-image");
+const uploadKey = new PluginKey('upload-image');
 
 export const UploadImagesPlugin = ({ imageClass }: { imageClass: string }) =>
   new Plugin({
@@ -13,15 +13,15 @@ export const UploadImagesPlugin = ({ imageClass }: { imageClass: string }) =>
       apply(tr, set) {
         set = set.map(tr.mapping, tr.doc);
         // See if the transaction adds or removes any placeholders
-        //@ts-expect-error - not yet sure what the type I need here
+        // @ts-expect-error - not yet sure what the type I need here
         const action = tr.getMeta(this);
         if (action?.add) {
           const { id, pos, src } = action.add;
 
-          const placeholder = document.createElement("div");
-          placeholder.setAttribute("class", "img-placeholder");
-          const image = document.createElement("img");
-          image.setAttribute("class", imageClass);
+          const placeholder = document.createElement('div');
+          placeholder.setAttribute('class', 'img-placeholder');
+          const image = document.createElement('img');
+          image.setAttribute('class', imageClass);
           image.src = src;
           placeholder.appendChild(image);
           const deco = Decoration.widget(pos + 1, placeholder, {
@@ -30,7 +30,11 @@ export const UploadImagesPlugin = ({ imageClass }: { imageClass: string }) =>
           set = set.add(tr.doc, [deco]);
         } else if (action?.remove) {
           set = set.remove(
-            set.find(undefined, undefined, (spec) => spec.id === action.remove.id),
+            set.find(
+              undefined,
+              undefined,
+              (spec) => spec.id === action.remove.id,
+            ),
           );
         }
         return set;
@@ -67,7 +71,9 @@ export const createImageUpload =
 
     // Replace the selection with a placeholder
     const tr = view.state.tr;
-    if (!tr.selection.empty) tr.deleteSelection();
+    if (!tr.selection.empty) {
+      tr.deleteSelection();
+    }
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -82,51 +88,71 @@ export const createImageUpload =
       view.dispatch(tr);
     };
 
-    onUpload(file).then((src) => {
-      const { schema } = view.state;
+    onUpload(file).then(
+      (src) => {
+        const { schema } = view.state;
 
-      const pos = findPlaceholder(view.state, id);
+        const pos = findPlaceholder(view.state, id);
 
-      // If the content around the placeholder has been deleted, drop
-      // the image
-      if (pos === null) return;
+        // If the content around the placeholder has been deleted, drop
+        // the image
+        if (pos === null) {
+          return;
+        }
 
-      // Otherwise, insert it at the placeholder's position, and remove
-      // the placeholder
+        // Otherwise, insert it at the placeholder's position, and remove
+        // the placeholder
 
-      // When BLOB_READ_WRITE_TOKEN is not valid or unavailable, read
-      // the image locally
-      const imageSrc = typeof src === "object" ? reader.result : src;
+        // When BLOB_READ_WRITE_TOKEN is not valid or unavailable, read
+        // the image locally
+        const imageSrc = typeof src === 'object' ? reader.result : src;
 
-      const node = schema.nodes.image?.create({ src: imageSrc });
-      if (!node) return;
+        const node = schema.nodes.image?.create({ src: imageSrc });
+        if (!node) {
+          return;
+        }
 
-      const transaction = view.state.tr.replaceWith(pos, pos, node).setMeta(uploadKey, { remove: { id } });
-      view.dispatch(transaction);
-    }, () => {
-      // Deletes the image placeholder on error
-      const transaction = view.state.tr
-        .delete(pos, pos)
-        .setMeta(uploadKey, { remove: { id } });
-      view.dispatch(transaction);
-    });
+        const transaction = view.state.tr
+          .replaceWith(pos, pos, node)
+          .setMeta(uploadKey, { remove: { id } });
+        view.dispatch(transaction);
+      },
+      () => {
+        // Deletes the image placeholder on error
+        const transaction = view.state.tr
+          .delete(pos, pos)
+          .setMeta(uploadKey, { remove: { id } });
+        view.dispatch(transaction);
+      },
+    );
   };
 
 export type UploadFn = (file: File, view: EditorView, pos: number) => void;
 
-export const handleImagePaste = (view: EditorView, event: ClipboardEvent, uploadFn: UploadFn) => {
+export const handleImagePaste = (
+  view: EditorView,
+  event: ClipboardEvent,
+  uploadFn: UploadFn,
+) => {
   if (event.clipboardData?.files.length) {
     event.preventDefault();
     const [file] = Array.from(event.clipboardData.files);
     const pos = view.state.selection.from;
 
-    if (file) uploadFn(file, view, pos);
+    if (file) {
+      uploadFn(file, view, pos);
+    }
     return true;
   }
   return false;
 };
 
-export const handleImageDrop = (view: EditorView, event: DragEvent, moved: boolean, uploadFn: UploadFn) => {
+export const handleImageDrop = (
+  view: EditorView,
+  event: DragEvent,
+  moved: boolean,
+  uploadFn: UploadFn,
+) => {
   if (!moved && event.dataTransfer?.files.length) {
     event.preventDefault();
     const [file] = Array.from(event.dataTransfer.files);
@@ -135,7 +161,9 @@ export const handleImageDrop = (view: EditorView, event: DragEvent, moved: boole
       top: event.clientY,
     });
     // here we deduct 1 from the pos or else the image will create an extra node
-    if (file) uploadFn(file, view, coordinates?.pos ?? 0 - 1);
+    if (file) {
+      uploadFn(file, view, coordinates?.pos ?? 0 - 1);
+    }
     return true;
   }
   return false;

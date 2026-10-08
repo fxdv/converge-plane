@@ -6,6 +6,7 @@ import { observer } from 'mobx-react-lite';
 import { DueDate } from 'modules/issues/components';
 
 import { useIssueData } from 'hooks/issues';
+
 import { useUpdateIssueMutation } from 'services/issues';
 
 export const EngineeringProperties = observer(() => {

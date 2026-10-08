@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@converge/ui/components/button';
 import {
   Form,
@@ -11,6 +10,7 @@ import {
 import { Input } from '@converge/ui/components/input';
 import { Separator } from '@converge/ui/components/separator';
 import { useToast } from '@converge/ui/components/use-toast';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import * as React from 'react';

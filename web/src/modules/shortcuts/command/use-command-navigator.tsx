@@ -1,4 +1,3 @@
-import { RiAddLine, RiSearch2Line } from '@remixicon/react';
 import {
   IssuesLine,
   LabelLine,
@@ -6,6 +5,7 @@ import {
   TeamLine,
   TriageLine,
 } from '@converge/ui/icons';
+import { RiAddLine, RiSearch2Line } from '@remixicon/react';
 import { useParams } from 'next/navigation';
 import { useRouter } from 'next/router';
 import React from 'react';
@@ -113,7 +113,6 @@ export function useCommandNavigator({
     }
 
     return options;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [issues]);
 
   const onSelect = (id: string) => {

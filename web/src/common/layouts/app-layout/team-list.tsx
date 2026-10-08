@@ -49,7 +49,7 @@ export const TeamList = observer(() => {
         className="w-full flex flex-col gap-2"
       >
         {teams.map((team: TeamType) => {
-          let links: Link[] = [
+          const links: Link[] = [
             {
               title: 'Issues',
               icon: IssuesLine,

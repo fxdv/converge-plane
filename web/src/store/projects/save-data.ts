@@ -29,14 +29,16 @@ export async function saveProjectData(
         case 'I': {
           await convergeDatabase.projects.put(project);
           return (
-            projectsStore && (await projectsStore.update(project, record.data.id))
+            projectsStore &&
+            (await projectsStore.update(project, record.data.id))
           );
         }
 
         case 'U': {
           await convergeDatabase.projects.put(project);
           return (
-            projectsStore && (await projectsStore.update(project, record.data.id))
+            projectsStore &&
+            (await projectsStore.update(project, record.data.id))
           );
         }
 

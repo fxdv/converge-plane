@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 
 import axios from 'axios';
+
 import { type ImageUploadOptions } from './converge-editor';
 
 interface ImageUploadOptionsExtend extends ImageUploadOptions {

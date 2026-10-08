@@ -3,22 +3,21 @@ import * as React from 'react';
 
 export type SyncFeedStatus = 'live' | 'catching-up' | 'stale';
 
-type SyncFeedContextValue = {
+interface SyncFeedContextValue {
   status: SyncFeedStatus;
   setStatus: (status: SyncFeedStatus) => void;
-};
+}
 
 const SyncFeedContext = React.createContext<SyncFeedContextValue | null>(null);
 
 export function SyncFeedProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<SyncFeedStatus>('live');
-  const value = React.useMemo(
-    () => ({ status, setStatus }),
-    [status],
-  );
+  const value = React.useMemo(() => ({ status, setStatus }), [status]);
 
   return (
-    <SyncFeedContext.Provider value={value}>{children}</SyncFeedContext.Provider>
+    <SyncFeedContext.Provider value={value}>
+      {children}
+    </SyncFeedContext.Provider>
   );
 }
 

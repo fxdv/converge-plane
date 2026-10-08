@@ -1,21 +1,27 @@
-import { Extension } from "@tiptap/core";
-import type { Editor, Range } from "@tiptap/core";
-import { ReactRenderer } from "@tiptap/react";
-import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
-import type { RefObject } from "react";
-import type { ReactNode } from "react";
-import tippy, { type GetReferenceClientRect, type Instance, type Props } from "tippy.js";
+import type { Editor, Range } from '@tiptap/core';
+import type { RefObject } from 'react';
+import type { ReactNode } from 'react';
+
+import { Extension } from '@tiptap/core';
+import { ReactRenderer } from '@tiptap/react';
+import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
+import tippy, {
+  type GetReferenceClientRect,
+  type Instance,
+  type Props,
+} from 'tippy.js';
+
 import {
   EditorCommandOut,
   handleCommandNavigation,
 } from '../../utils/render-items';
 
 const Command = Extension.create({
-  name: "slash-command",
+  name: 'slash-command',
   addOptions() {
     return {
       suggestion: {
-        char: "/",
+        char: '/',
         command: ({ editor, range, props }) => {
           props.command({ editor, range });
         },
@@ -34,7 +40,7 @@ const Command = Extension.create({
 
 const renderItems = (elementRef?: RefObject<Element> | null) => {
   let component: ReactRenderer | null = null;
-  let popup: Instance<Props>[] | null = null;
+  let popup: Array<Instance<Props>> | null = null;
 
   return {
     onStart: (props: { editor: Editor; clientRect: DOMRect }) => {
@@ -48,23 +54,26 @@ const renderItems = (elementRef?: RefObject<Element> | null) => {
       const parentNode = selection.$from.node(selection.$from.depth);
       const blockType = parentNode.type.name;
 
-      if (blockType === "codeBlock") {
+      if (blockType === 'codeBlock') {
         return false;
       }
 
       // @ts-ignore
-      popup = tippy("body", {
+      popup = tippy('body', {
         getReferenceClientRect: props.clientRect,
         appendTo: () => (elementRef ? elementRef.current : document.body),
         content: component.element,
         showOnCreate: true,
         interactive: true,
-        trigger: "manual",
-        placement: "bottom-start",
+        trigger: 'manual',
+        placement: 'bottom-start',
       });
       return undefined;
     },
-    onUpdate: (props: { editor: Editor; clientRect: GetReferenceClientRect }) => {
+    onUpdate: (props: {
+      editor: Editor;
+      clientRect: GetReferenceClientRect;
+    }) => {
       component?.updateProps(props);
 
       popup?.[0]?.setProps({
@@ -73,7 +82,7 @@ const renderItems = (elementRef?: RefObject<Element> | null) => {
     },
 
     onKeyDown: (props: { event: KeyboardEvent }) => {
-      if (props.event.key === "Escape") {
+      if (props.event.key === 'Escape') {
         popup?.[0]?.hide();
 
         return true;

@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { IssueType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -71,7 +70,9 @@ export function useHandoffIssueMutation({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMutationError = (errorResponse: any) => {
     const errorText =
-      errorResponse?.errors?.message || errorResponse?.message || 'Error occurred';
+      errorResponse?.errors?.message ||
+      errorResponse?.message ||
+      'Error occurred';
     onError && onError(errorText);
   };
 
@@ -82,7 +83,8 @@ export function useHandoffIssueMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: update,
+  return useMutation({
+    mutationFn: update,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

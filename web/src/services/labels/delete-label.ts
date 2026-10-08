@@ -38,7 +38,8 @@ export function useDeleteLabelMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: deleteLabel,
+  return useMutation({
+    mutationFn: deleteLabel,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

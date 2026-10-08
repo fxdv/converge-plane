@@ -1,9 +1,4 @@
 import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from '@tanstack/react-table';
-import {
   Table,
   TableBody,
   TableCell,
@@ -11,6 +6,11 @@ import {
   TableHeader,
   TableRow,
 } from '@converge/ui/components/table';
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
 import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import React from 'react';

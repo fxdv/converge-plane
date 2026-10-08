@@ -65,7 +65,6 @@ export const AppliedFiltersView = observer(() => {
             filter={filters.isSubIssue}
             Component={() => <>sub-issue</>}
           />
-
         </div>
       )}
     </>

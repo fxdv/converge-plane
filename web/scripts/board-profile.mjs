@@ -12,9 +12,7 @@ const configSrc = readFileSync(
   join(root, 'src/modules/issues/all/list-view/board-virtual-config.ts'),
   'utf8',
 );
-const overscanMatch = configSrc.match(
-  /BOARD_OVERSCAN_ROW_COUNT\s*=\s*(\d+)/,
-);
+const overscanMatch = configSrc.match(/BOARD_OVERSCAN_ROW_COUNT\s*=\s*(\d+)/);
 const overscan = Number(overscanMatch?.[1]);
 if (!Number.isFinite(overscan)) {
   console.error('board-profile: could not read BOARD_OVERSCAN_ROW_COUNT');

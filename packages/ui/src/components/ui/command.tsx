@@ -27,8 +27,9 @@ interface CommandDialogProps extends DialogProps {
   commandProps?: React.ComponentPropsWithoutRef<typeof CommandPrimitive>;
 }
 
-interface CommandInputProps
-  extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> {
+interface CommandInputProps extends React.ComponentPropsWithoutRef<
+  typeof CommandPrimitive.Input
+> {
   icon?: boolean;
   containerClassName?: string;
 }

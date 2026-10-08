@@ -1,5 +1,4 @@
 import { ImageIcon } from 'lucide-react';
-import { createSuggestionItems, Command } from './converge-editor';
 
 import {
   BulletListLine,
@@ -11,6 +10,7 @@ import {
   TextLine,
 } from '@converge/ui/icons';
 
+import { createSuggestionItems, Command } from './converge-editor';
 import { uploadFileFn, uploadFn } from './utils';
 import { renderItems } from './utils/render-items';
 

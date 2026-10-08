@@ -1,7 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 
 import { useQueryWithOnSuccess } from 'common/lib/query-on-success';
-
 import type { BootstrapResponse } from 'common/types';
 
 import { type XHRErrorResponse, ajaxGet } from 'services/utils';

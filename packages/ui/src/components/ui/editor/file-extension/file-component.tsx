@@ -10,7 +10,6 @@ import { Button } from '../../button';
 import { Loader } from '../../loader';
 import { Progress } from '../../progress';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const FileComponent = (props: any) => {
   const type = props.node.attrs.type;
   const { src } = useSrc(props.node.attrs.src, props.node.attrs.attachmentId);
