@@ -14,10 +14,10 @@ import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
 import React from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { HydrationBoundary, QueryClientProvider } from 'common/lib/react-query';
 
 import { initSession } from 'common/init-config';
 import { DocumentTitle } from 'common/layouts/app-layout/document-title';
+import { HydrationBoundary, QueryClientProvider } from 'common/lib/react-query';
 import { useGetQueryClient } from 'common/lib/react-query-client';
 import { SCOPES } from 'common/scopes';
 

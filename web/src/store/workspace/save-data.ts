@@ -31,7 +31,10 @@ export async function saveWorkspaceData(
             // Update the store
             return (
               workspaceStore &&
-              (await workspaceStore.updateUsers(userOnWorkspace, record.data.id))
+              (await workspaceStore.updateUsers(
+                userOnWorkspace,
+                record.data.id,
+              ))
             );
           }
 
@@ -41,7 +44,10 @@ export async function saveWorkspaceData(
             // Update the store
             return (
               workspaceStore &&
-              (await workspaceStore.updateUsers(userOnWorkspace, record.data.id))
+              (await workspaceStore.updateUsers(
+                userOnWorkspace,
+                record.data.id,
+              ))
             );
           }
 

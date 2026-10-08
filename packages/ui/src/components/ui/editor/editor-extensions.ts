@@ -2,6 +2,7 @@ import { Extension, mergeAttributes } from '@tiptap/core';
 import CodeBlock from '@tiptap/extension-code-block';
 import Heading from '@tiptap/extension-heading';
 import { cx } from 'class-variance-authority';
+
 import {
   TiptapLink,
   TaskList,
@@ -13,7 +14,6 @@ import {
   AIHighlight,
   MarkdownExtension,
 } from './converge-editor';
-
 import { fileExtension } from './file-extension';
 import { imageExtension } from './image-extension';
 

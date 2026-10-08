@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+
+import { NextResponse } from 'next/server';
 
 // Phase 5 (H1): per-request CSP nonces for Next.js scripts.
 export function middleware(request: NextRequest) {

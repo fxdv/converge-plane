@@ -1,5 +1,4 @@
 import { type UseQueryResult, useQuery } from 'common/lib/react-query';
-
 import type { User, UsersOnWorkspaceType } from 'common/types';
 
 import { type XHRErrorResponse, ajaxGet } from 'services/utils';

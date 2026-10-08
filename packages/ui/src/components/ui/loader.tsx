@@ -21,7 +21,8 @@ const loaderVariants = cva(
 );
 
 export interface LoaderProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof loaderVariants> {
   height?: number;
   text?: string;

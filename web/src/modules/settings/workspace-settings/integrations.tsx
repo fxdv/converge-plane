@@ -1,8 +1,9 @@
 import { Button } from '@converge/ui/components/button';
 import React from 'react';
-import { useQuery, useQueryClient } from 'common/lib/react-query';
 
 import { SettingSection } from 'modules/settings/setting-section';
+
+import { useQuery, useQueryClient } from 'common/lib/react-query';
 
 import { useCurrentWorkspace } from 'hooks/workspace';
 

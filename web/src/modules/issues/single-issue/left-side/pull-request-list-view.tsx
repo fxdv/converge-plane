@@ -6,6 +6,8 @@ import { RiCloseLine } from '@remixicon/react';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
+
 import {
   PULL_REQUEST_LABEL,
   PULL_REQUEST_STYLE,
@@ -13,8 +15,6 @@ import {
   pullRequestHref,
 } from 'common/lib/pull-request-format';
 import type { IssuePullRequestType, IssueType, TeamType } from 'common/types';
-
-import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 
 import { useIssueData } from 'hooks/issues';
 

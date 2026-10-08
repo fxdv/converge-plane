@@ -1,6 +1,7 @@
 import type { Team } from '@converge/types';
 
 import { createTeam } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 export interface MutationParams {
@@ -29,7 +30,8 @@ export function useCreateTeamMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createTeam,
+  return useMutation({
+    mutationFn: createTeam,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

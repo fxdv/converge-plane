@@ -1,4 +1,5 @@
 import axios from 'axios';
+
 import { useMutation } from 'common/lib/react-query';
 
 // spec cs:agents:evidence — a human records that an agent may move this
@@ -15,7 +16,8 @@ export function useApproveDoneMutation({
   onSuccess?: () => void;
   onError?: (error: string) => void;
 }) {
-  return useMutation({ mutationFn: (issueId: string) => approveDone(issueId),
+  return useMutation({
+    mutationFn: (issueId: string) => approveDone(issueId),
     onSuccess: () => onSuccess && onSuccess(),
     onError: (errorResponse: { response?: { data?: { error?: string } } }) =>
       onError &&

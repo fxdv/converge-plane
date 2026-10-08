@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from 'common/lib/react-query';
-
 import type { WorkspaceType } from 'common/types';
 
 import { GetUserQuery } from 'services/users';
@@ -54,7 +53,8 @@ export function useCreateInitialResourcesMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createInitialResources,
+  return useMutation({
+    mutationFn: createInitialResources,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

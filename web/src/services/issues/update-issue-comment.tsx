@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { IssueCommentType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -47,7 +46,8 @@ export function useUpdateIssueCommentMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: updateIssueComment,
+  return useMutation({
+    mutationFn: updateIssueComment,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

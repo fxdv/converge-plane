@@ -1,10 +1,4 @@
 import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnSizingState,
-} from '@tanstack/react-table';
-import {
   Table,
   TableBody,
   TableCell,
@@ -12,6 +6,12 @@ import {
   TableHeader,
   TableRow,
 } from '@converge/ui/components/table';
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnSizingState,
+} from '@tanstack/react-table';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import React from 'react';

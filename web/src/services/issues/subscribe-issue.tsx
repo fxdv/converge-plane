@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { SubscribeType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -47,7 +46,8 @@ export function useUpdateIssueSubscribeMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: updateIssueSubscribe,
+  return useMutation({
+    mutationFn: updateIssueSubscribe,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

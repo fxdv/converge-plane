@@ -1,3 +1,5 @@
+import { AvatarText } from '@converge/ui/components/avatar';
+import { AssigneeLine } from '@converge/ui/icons';
 import {
   Draggable,
   Droppable,
@@ -6,8 +8,6 @@ import {
   type DroppableProvided,
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { AvatarText } from '@converge/ui/components/avatar';
-import { AssigneeLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import {
@@ -21,17 +21,18 @@ import {
 import { BoardIssueItem } from 'modules/issues/components/issue-board-item';
 
 import type { User } from 'common/types';
+
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import { useFilterIssues } from '../../../../issues-utils';
 import {
   BOARD_DEFAULT_ROW_HEIGHT,
   BOARD_OVERSCAN_ROW_COUNT,
   boardVirtualRowCount,
 } from '../../board-virtual-config';
-import { useFilterIssues } from '../../../../issues-utils';
 
 interface AssigneeBoardListProps {
   user: User;

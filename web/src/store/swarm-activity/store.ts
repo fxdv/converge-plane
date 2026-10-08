@@ -1,8 +1,4 @@
-import {
-  type IAnyStateTreeNode,
-  type Instance,
-  types,
-} from 'mobx-state-tree';
+import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
 
 import type { SwarmActivityType as WireSwarmActivity } from 'common/types';
 

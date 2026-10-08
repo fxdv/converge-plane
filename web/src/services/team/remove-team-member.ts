@@ -1,4 +1,5 @@
 import { removeTeamMember } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -35,7 +36,8 @@ export function useRemoveTeamMemberMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: removeTeamMember,
+  return useMutation({
+    mutationFn: removeTeamMember,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

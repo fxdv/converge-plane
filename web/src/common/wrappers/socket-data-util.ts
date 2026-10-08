@@ -2,8 +2,8 @@ import { runInAction } from 'mobx';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { saveAgentRunsData } from 'store/agent-runs';
+import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { saveCommentsData } from 'store/comments';
 import { convergeDatabase } from 'store/database';
 import { saveIssueArtifactsData } from 'store/issue-artifacts';
@@ -500,12 +500,12 @@ async function localRowsForModel(
         if (!store?.comments) {
           return [];
         }
-        const rows: { id: string }[] = [];
+        const rows: Array<{ id: string }> = [];
         for (const [issueId, comments] of store.comments.entries()) {
           if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
             continue;
           }
-          for (const comment of comments as { id: string }[]) {
+          for (const comment of comments as Array<{ id: string }>) {
             rows.push({ id: comment.id });
           }
         }
@@ -524,12 +524,12 @@ async function localRowsForModel(
         if (!store?.issueHistories) {
           return [];
         }
-        const rows: { id: string }[] = [];
+        const rows: Array<{ id: string }> = [];
         for (const [issueId, histories] of store.issueHistories.entries()) {
           if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
             continue;
           }
-          for (const row of histories as { id: string }[]) {
+          for (const row of histories as Array<{ id: string }>) {
             rows.push({ id: row.id });
           }
         }
@@ -548,12 +548,12 @@ async function localRowsForModel(
         if (!store?.issueArtifacts) {
           return [];
         }
-        const rows: { id: string }[] = [];
+        const rows: Array<{ id: string }> = [];
         for (const [issueId, artifacts] of store.issueArtifacts.entries()) {
           if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
             continue;
           }
-          for (const row of artifacts as { id: string }[]) {
+          for (const row of artifacts as Array<{ id: string }>) {
             rows.push({ id: row.id });
           }
         }
@@ -615,7 +615,9 @@ async function localRowsForModel(
         if (!store?.notifications) {
           return [];
         }
-        return (store.notifications as { id: string; workspaceId: string }[])
+        return (
+          store.notifications as Array<{ id: string; workspaceId: string }>
+        )
           .filter((n) => n.workspaceId === domain.workspaceId)
           .map((n) => ({ id: n.id }));
       }

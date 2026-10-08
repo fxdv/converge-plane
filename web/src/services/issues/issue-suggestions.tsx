@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { LabelType, User } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -52,7 +51,8 @@ export function useSuggestionIssueMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: suggestionIssue,
+  return useMutation({
+    mutationFn: suggestionIssue,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

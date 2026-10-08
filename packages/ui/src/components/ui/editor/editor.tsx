@@ -1,5 +1,8 @@
 import type { Editor as EditorT, Extension, Mark, Node } from '@tiptap/core';
 
+import * as React from 'react';
+import { useDebouncedCallback } from 'use-debounce';
+
 import {
   EditorContent,
   EditorBubble,
@@ -9,9 +12,6 @@ import {
   type EditorInstance,
   type SuggestionItem,
 } from './converge-editor';
-import * as React from 'react';
-import { useDebouncedCallback } from 'use-debounce';
-
 import { defaultExtensions, getPlaceholder } from './editor-extensions';
 import { LinkSelector, NodeSelector, TextButtons } from './selectors';
 import { slashCommand } from './slash-command';

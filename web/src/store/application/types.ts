@@ -11,8 +11,7 @@ export interface DisplaySettingsModelType {
   showEmptyGroups: boolean;
 }
 
-export interface UpdateDisplaySettingsBody
-  extends Partial<DisplaySettingsModelType> {}
+export interface UpdateDisplaySettingsBody extends Partial<DisplaySettingsModelType> {}
 
 export enum FilterTypeEnum {
   IS = 'IS',

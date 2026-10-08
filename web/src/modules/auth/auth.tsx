@@ -1,6 +1,4 @@
 /* eslint-disable react/no-unescaped-entities */
-import { zodResolver } from '@hookform/resolvers/zod';
-import { RiMailFill } from '@remixicon/react';
 import { Button } from '@converge/ui/components/button';
 import {
   Form,
@@ -12,11 +10,13 @@ import {
 import { Input } from '@converge/ui/components/input';
 import { useToast } from '@converge/ui/components/use-toast';
 import { ArrowLeft, Inbox } from '@converge/ui/icons';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { RiMailFill } from '@remixicon/react';
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { createCode } from 'common/auth';
 import { z } from 'zod';
 
+import { createCode } from 'common/auth';
 import { AuthLayout } from 'common/layouts/auth-layout';
 import { AuthGuard } from 'common/wrappers/auth-guard';
 

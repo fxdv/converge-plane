@@ -9,11 +9,11 @@ import * as React from 'react';
 
 import { KEYBOARD_SHORTCUT_SECTIONS } from './keyboard-shortcuts';
 
-type ShortcutsDialogContextValue = {
+interface ShortcutsDialogContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   openDialog: () => void;
-};
+}
 
 const ShortcutsDialogContext =
   React.createContext<ShortcutsDialogContextValue | null>(null);

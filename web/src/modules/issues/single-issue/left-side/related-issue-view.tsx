@@ -10,6 +10,8 @@ import { observer } from 'mobx-react-lite';
 import { useRouter } from 'next/router';
 import * as React from 'react';
 
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
+
 import {
   IssueRelationEnum,
   type IssueRelationType,
@@ -17,7 +19,6 @@ import {
 } from 'common/types';
 
 import { useTeamWithId } from 'hooks/teams';
-import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 
 import { useDeleteIssueRelationMutation } from 'services/issues';
 

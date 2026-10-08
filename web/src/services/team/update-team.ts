@@ -1,6 +1,6 @@
 import { updateTeam, type UpdateTeamDtoWithTeamId } from '@converge/services';
-import { useMutation } from 'common/lib/react-query';
 
+import { useMutation } from 'common/lib/react-query';
 import type { TeamType } from 'common/types';
 
 import { useContextStore } from 'store/global-context-provider';
@@ -47,7 +47,8 @@ export function useUpdateTeamMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation({ mutationFn: update,
+  return useMutation({
+    mutationFn: update,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

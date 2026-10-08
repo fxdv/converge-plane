@@ -1,11 +1,10 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { ProjectType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
 
-import { useContextStore } from 'store/global-context-provider';
 import { convergeDatabase } from 'store/database';
+import { useContextStore } from 'store/global-context-provider';
 
 export interface CreateProjectParams {
   name: string;
@@ -58,7 +57,8 @@ export function useCreateProjectMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createProject,
+  return useMutation({
+    mutationFn: createProject,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

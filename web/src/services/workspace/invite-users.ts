@@ -56,7 +56,8 @@ export function useInviteUsersMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: inviteUsers,
+  return useMutation({
+    mutationFn: inviteUsers,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

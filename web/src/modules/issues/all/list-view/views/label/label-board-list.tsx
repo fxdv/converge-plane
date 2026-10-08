@@ -1,3 +1,4 @@
+import { BadgeColor } from '@converge/ui/components/badge';
 import {
   Draggable,
   Droppable,
@@ -6,7 +7,6 @@ import {
   type DroppableProvided,
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { BadgeColor } from '@converge/ui/components/badge';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import {
@@ -18,18 +18,19 @@ import {
 } from 'react-virtualized';
 
 import type { LabelType } from 'common/types';
+
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
 
 import { BoardIssueItem } from '../../../../components/issue-board-item/issue-board-item';
+import { useFilterIssues } from '../../../../issues-utils';
 import {
   BOARD_DEFAULT_ROW_HEIGHT,
   BOARD_OVERSCAN_ROW_COUNT,
   boardVirtualRowCount,
 } from '../../board-virtual-config';
-import { useFilterIssues } from '../../../../issues-utils';
 
 interface LabelBoardItemProps {
   label: LabelType;

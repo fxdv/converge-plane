@@ -1,6 +1,6 @@
-import type { SyncActionRecord, SwarmActivityType } from 'common/types';
-
 import type { SwarmActivityStoreType } from './store';
+
+import type { SyncActionRecord, SwarmActivityType } from 'common/types';
 
 // SwarmActivity records are in-memory only (no IndexedDB cache): the
 // signal is ephemeral, the bootstrap replays the runtime's live state,

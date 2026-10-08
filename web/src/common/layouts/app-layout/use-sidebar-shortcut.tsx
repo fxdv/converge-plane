@@ -10,7 +10,7 @@ export const useSidebarShortcut = () => {
 
   useHotkeys(
     [`${Key.Meta}+b`],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     () => {
       applicationStore.updateSideBar(!applicationStore.sidebarCollapsed);
     },

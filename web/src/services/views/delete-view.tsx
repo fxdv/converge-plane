@@ -38,7 +38,8 @@ export function useDeleteViewMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: deleteView,
+  return useMutation({
+    mutationFn: deleteView,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

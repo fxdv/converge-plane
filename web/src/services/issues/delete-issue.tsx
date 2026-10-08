@@ -39,7 +39,8 @@ export function useDeleteIssueMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: deleteIssue,
+  return useMutation({
+    mutationFn: deleteIssue,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

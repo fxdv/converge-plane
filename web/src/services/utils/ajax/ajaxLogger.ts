@@ -53,7 +53,6 @@ interface WithLoggerOptions {
  * @param options Customisation Options for Logger.
  */
 export const withLogger = (
-  // eslint-disable-next-line no-console
   logger: AjaxLogger = console.debug,
   { outgoing = false }: WithLoggerOptions = {},
 ): Plugin => {

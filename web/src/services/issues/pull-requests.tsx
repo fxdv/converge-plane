@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { useMutation } from 'common/lib/react-query';
 
+import { useMutation } from 'common/lib/react-query';
 import type { IssuePullRequestType } from 'common/types';
 
 import { useContextStore } from 'store/global-context-provider';

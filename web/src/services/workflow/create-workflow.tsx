@@ -1,6 +1,7 @@
 import type { Workflow } from '@converge/types';
 
 import { createWorkflow } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -29,7 +30,8 @@ export function useCreateWorkflowMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: createWorkflow,
+  return useMutation({
+    mutationFn: createWorkflow,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

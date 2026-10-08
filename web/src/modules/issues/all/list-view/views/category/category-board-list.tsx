@@ -24,12 +24,12 @@ import { getWorkflowIcon } from 'common/workflow-icons';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import { useFilterIssues } from '../../../../issues-utils';
 import {
   BOARD_DEFAULT_ROW_HEIGHT,
   BOARD_OVERSCAN_ROW_COUNT,
   boardVirtualRowCount,
 } from '../../board-virtual-config';
-import { useFilterIssues } from '../../../../issues-utils';
 
 interface CategoryBoardItemProps {
   workflow: WorkflowType;
@@ -41,8 +41,7 @@ export const CategoryBoardList = observer(
     const CategoryIcon = getWorkflowIcon(workflow);
     const { issuesStore, applicationStore } = useContextStore();
 
-    const issues = issuesStore.getIssuesForState(workflow.ids, {
-    });
+    const issues = issuesStore.getIssuesForState(workflow.ids, {});
 
     const computedIssues = useFilterIssues(issues, workflows);
 

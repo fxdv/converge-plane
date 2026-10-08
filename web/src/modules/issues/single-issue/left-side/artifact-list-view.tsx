@@ -2,10 +2,11 @@ import { ChevronDown, DocumentLine } from '@converge/ui/icons';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
+import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
+
 import type { IssueArtifactType, User } from 'common/types';
 
 import { useIssueData } from 'hooks/issues';
-import { IssueDetailSection } from 'modules/issues/components/issue-detail-section';
 import { useUsersData } from 'hooks/users';
 
 import { useContextStore } from 'store/global-context-provider';

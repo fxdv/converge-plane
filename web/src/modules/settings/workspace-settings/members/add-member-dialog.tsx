@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { RoleEnum } from '@converge/types';
 import { Button } from '@converge/ui/components/button';
 import {
@@ -26,6 +25,7 @@ import {
 } from '@converge/ui/components/select';
 import { Textarea } from '@converge/ui/components/textarea';
 import { useToast } from '@converge/ui/components/use-toast';
+import { zodResolver } from '@hookform/resolvers/zod';
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -33,9 +33,9 @@ import { z } from 'zod';
 import { capitalizeFirstLetter } from 'common/lib/common';
 import type { TeamType } from 'common/types';
 
-import { useInviteUsersMutation } from 'services/workspace';
-
 import { useCurrentWorkspace } from 'hooks/workspace/use-current-workspace';
+
+import { useInviteUsersMutation } from 'services/workspace';
 
 import { useContextStore } from 'store/global-context-provider';
 

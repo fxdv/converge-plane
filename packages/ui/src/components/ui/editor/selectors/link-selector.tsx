@@ -1,3 +1,6 @@
+import { Check, Trash } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+
 import { Button } from '@converge/ui/components/button';
 import { Input } from '@converge/ui/components/input';
 import {
@@ -5,11 +8,9 @@ import {
   Popover,
   PopoverTrigger,
 } from '@converge/ui/components/popover';
-import { Check, Trash } from 'lucide-react';
-import { useEditor } from '../converge-editor';
-import { useEffect, useRef } from 'react';
-
 import { LinkLine } from '@converge/ui/icons';
+
+import { useEditor } from '../converge-editor';
 
 export function isValidUrl(url: string) {
   try {

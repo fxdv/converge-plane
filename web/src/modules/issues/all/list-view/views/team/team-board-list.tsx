@@ -1,3 +1,4 @@
+import { TeamIcon } from '@converge/ui/components/team-icon';
 import {
   Draggable,
   Droppable,
@@ -6,7 +7,6 @@ import {
   type DroppableProvided,
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
-import { TeamIcon } from '@converge/ui/components/team-icon';
 import { observer } from 'mobx-react-lite';
 import React from 'react';
 import {
@@ -20,16 +20,17 @@ import {
 import { BoardIssueItem } from 'modules/issues/components/issue-board-item';
 
 import type { TeamType } from 'common/types';
+
 import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import { useFilterIssues } from '../../../../issues-utils';
 import {
   BOARD_DEFAULT_ROW_HEIGHT,
   BOARD_OVERSCAN_ROW_COUNT,
   boardVirtualRowCount,
 } from '../../board-virtual-config';
-import { useFilterIssues } from '../../../../issues-utils';
 
 interface TeamBoardListProps {
   team: TeamType;

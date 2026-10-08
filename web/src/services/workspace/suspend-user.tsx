@@ -1,6 +1,6 @@
 import { suspendUser } from '@converge/services';
-import { useMutation, useQueryClient } from 'common/lib/react-query';
 
+import { useMutation, useQueryClient } from 'common/lib/react-query';
 import type { WorkspaceType } from 'common/types';
 
 import { GetUserQuery } from 'services/users';
@@ -35,7 +35,8 @@ export function useSuspendUserMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation({ mutationFn: suspendUser,
+  return useMutation({
+    mutationFn: suspendUser,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

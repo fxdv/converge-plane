@@ -1,14 +1,14 @@
 /** Canonical in-app keyboard map (Phase 0). Keep in sync with hotkey handlers. */
 
-export type KeyboardShortcutRow = {
+export interface KeyboardShortcutRow {
   keys: string;
   label: string;
-};
+}
 
-export type KeyboardShortcutSection = {
+export interface KeyboardShortcutSection {
   title: string;
   rows: KeyboardShortcutRow[];
-};
+}
 
 export const KEYBOARD_SHORTCUT_SECTIONS: KeyboardShortcutSection[] = [
   {

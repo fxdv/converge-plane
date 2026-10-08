@@ -11,6 +11,7 @@ import {
   type AgentTokenRotation,
   type AgentTokenSpec,
 } from '@converge/services';
+
 import { useMutation, useQuery, useQueryClient } from 'common/lib/react-query';
 
 import { GetUserQuery } from 'services/users';
@@ -49,7 +50,6 @@ export function useCreateAgentMutation({
     onMutate: () => onMutate && onMutate(),
     onError: (
       e: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         response?: { data?: { error?: string } };
       } & Error,
     ) => onError && onError(errorText(e)),
@@ -133,7 +133,6 @@ export function useRotateAgentTokenMutation({
     onMutate: () => onMutate && onMutate(),
     onError: (
       e: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         response?: { data?: { error?: string } };
       } & Error,
     ) => onError && onError(errorText(e)),
@@ -169,7 +168,6 @@ export function useRevokeAgentTokenMutation({
     onMutate: () => onMutate && onMutate(),
     onError: (
       e: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         response?: { data?: { error?: string } };
       } & Error,
     ) => onError && onError(errorText(e)),
@@ -197,7 +195,6 @@ export function useDeleteAgentMutation({
     onMutate: () => onMutate && onMutate(),
     onError: (
       e: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         response?: { data?: { error?: string } };
       } & Error,
     ) => onError && onError(errorText(e)),

@@ -1,5 +1,4 @@
 import { useMutation } from 'common/lib/react-query';
-
 import type { IssueType } from 'common/types';
 
 import { ajaxPost } from 'services/utils';
@@ -43,7 +42,8 @@ export function useAIFilterIssuesMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: aiFilterIssues,
+  return useMutation({
+    mutationFn: aiFilterIssues,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

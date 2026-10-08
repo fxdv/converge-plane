@@ -19,10 +19,7 @@ describe('board virtualization (OD-15 / Phase 3 CI)', () => {
 
   it('caps mounted rows per column on the 10k fixture', () => {
     const perColumn = Math.ceil(FIXTURE_ISSUE_COUNT / TYPICAL_COLUMN_COUNT);
-    const mountedApprox = Math.min(
-      perColumn,
-      BOARD_OVERSCAN_ROW_COUNT * 2 + 1,
-    );
+    const mountedApprox = Math.min(perColumn, BOARD_OVERSCAN_ROW_COUNT * 2 + 1);
     assert.equal(mountedApprox, 11);
     assert.ok(mountedApprox < perColumn);
   });

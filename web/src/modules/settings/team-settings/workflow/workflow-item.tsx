@@ -1,5 +1,5 @@
-import type { DraggableProvided } from '@hello-pangea/dnd';
 import type { WorkflowCategoryEnum } from '@converge/types';
+import type { DraggableProvided } from '@hello-pangea/dnd';
 
 import { Button } from '@converge/ui/components/button';
 import { EditLine } from '@converge/ui/icons';

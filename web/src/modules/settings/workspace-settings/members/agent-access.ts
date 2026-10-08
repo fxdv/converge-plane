@@ -129,9 +129,7 @@ export function agentTokensAtAGlance(
     teamName,
   );
   const count =
-    entry.tokens.length === 1
-      ? '1 token'
-      : `${entry.tokens.length} tokens`;
+    entry.tokens.length === 1 ? '1 token' : `${entry.tokens.length} tokens`;
   return `${driver} · ${count} · ${grant.scopes} · ${expiryLabel(primary.expiresAt, now)}`;
 }
 

@@ -1,4 +1,3 @@
-import { RiBookmarkFill, RiBookmarkLine } from '@remixicon/react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -12,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@converge/ui/components/dropdown-menu';
 import { DeleteLine, EditLine, MoreLine, StackLine } from '@converge/ui/icons';
+import { RiBookmarkFill, RiBookmarkLine } from '@remixicon/react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/router';

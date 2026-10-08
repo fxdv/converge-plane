@@ -1,6 +1,7 @@
 import type { Workflow } from '@converge/types';
 
 import { updateWorkflow, type UpdateWorkflowInput } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 import { useContextStore } from 'store/global-context-provider';
@@ -49,7 +50,8 @@ export function useUpdateWorkflowMutation({
     onSuccess && onSuccess(data);
   };
 
-  return useMutation({ mutationFn: update,
+  return useMutation({
+    mutationFn: update,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -1,9 +1,8 @@
-import { useMutation } from 'common/lib/react-query';
+import type { IssueRelation } from '@converge/types';
 
 import { deleteIssueRelation } from '@converge/services';
 
-import type { IssueRelation } from '@converge/types';
-
+import { useMutation } from 'common/lib/react-query';
 import type { IssueRelationType } from 'common/types';
 
 import { useContextStore } from 'store/global-context-provider';
@@ -39,8 +38,7 @@ export function useDeleteIssueRelationMutation({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMutationError = (errorResponse: any) => {
-    const errorText =
-      errorResponse?.response?.data?.error || 'Error occurred';
+    const errorText = errorResponse?.response?.data?.error || 'Error occurred';
     onError && onError(errorText);
   };
 
@@ -59,7 +57,8 @@ export function useDeleteIssueRelationMutation({
     return deleteIssueRelation({ issueRelationId: relationId });
   };
 
-  return useMutation({ mutationFn: deleteRelation,
+  return useMutation({
+    mutationFn: deleteRelation,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

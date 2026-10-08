@@ -12,9 +12,7 @@ const configPath = join(
   'src/modules/issues/all/list-view/board-virtual-config.ts',
 );
 const configSrc = readFileSync(configPath, 'utf8');
-const overscanMatch = configSrc.match(
-  /BOARD_OVERSCAN_ROW_COUNT\s*=\s*(\d+)/,
-);
+const overscanMatch = configSrc.match(/BOARD_OVERSCAN_ROW_COUNT\s*=\s*(\d+)/);
 const overscan = Number(overscanMatch?.[1] ?? 5);
 
 const count = Number(process.argv[2] ?? 10_000);
@@ -29,4 +27,6 @@ if (!Number.isFinite(count) || count < 1) {
 const perColumn = Math.ceil(count / columns);
 const mounted = Math.min(perColumn, overscan * 2 + 1);
 
-console.log(JSON.stringify({ count, columns, perColumn, overscan, mounted }, null, 2));
+console.log(
+  JSON.stringify({ count, columns, perColumn, overscan, mounted }, null, 2),
+);

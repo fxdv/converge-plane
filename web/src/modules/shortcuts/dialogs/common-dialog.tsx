@@ -1,4 +1,3 @@
-import { RiCheckLine } from '@remixicon/react';
 import {
   CommandEmpty,
   CommandInput,
@@ -8,6 +7,7 @@ import {
   CommandGroup,
 } from '@converge/ui/components/command';
 import { cn } from '@converge/ui/lib/utils';
+import { RiCheckLine } from '@remixicon/react';
 import React from 'react';
 
 import { useContextStore } from 'store/global-context-provider';

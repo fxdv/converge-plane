@@ -1,4 +1,5 @@
 import { updateSwarmSettings } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -21,8 +22,7 @@ export function useUpdateSwarmSettingsMutation({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onMutationError = (errorResponse: any) => {
-    const errorText =
-      errorResponse?.response?.data?.error || 'Error occurred';
+    const errorText = errorResponse?.response?.data?.error || 'Error occurred';
 
     onError && onError(errorText);
   };

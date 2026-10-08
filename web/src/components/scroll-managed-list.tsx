@@ -7,7 +7,6 @@ interface ScrollManagedListProps extends ListProps {
 
 export const ScrollManagedList = React.forwardRef<List, ScrollManagedListProps>(
   ({ listId, ...listProps }) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [scrollTop, setScrollTop] = React.useState(
       sessionStorage.getItem(`list-${listId}-scroll`),
     );

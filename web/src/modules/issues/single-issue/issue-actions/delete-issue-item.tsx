@@ -1,5 +1,5 @@
-import { RiDeleteBin7Line } from '@remixicon/react';
 import { DropdownMenuItem } from '@converge/ui/components/dropdown-menu';
+import { RiDeleteBin7Line } from '@remixicon/react';
 import React from 'react';
 
 import { DropdownItem } from './dropdown-item';

@@ -1,6 +1,6 @@
 import { updateWorkspacePreferences } from '@converge/services';
-import { useMutation, useQueryClient } from 'common/lib/react-query';
 
+import { useMutation, useQueryClient } from 'common/lib/react-query';
 import type { WorkspaceType } from 'common/types';
 
 import { GetUserQuery } from 'services/users';
@@ -35,7 +35,8 @@ export function useUpdateWorkspacePreferencesMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation({ mutationFn: updateWorkspacePreferences,
+  return useMutation({
+    mutationFn: updateWorkspacePreferences,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

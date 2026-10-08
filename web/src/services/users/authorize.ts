@@ -1,4 +1,5 @@
 import { authorizeCode } from '@converge/services';
+
 import { useMutation } from 'common/lib/react-query';
 
 interface MutationParams {
@@ -27,7 +28,8 @@ export function useAuthorizeMutation({
     onSuccess && onSuccess();
   };
 
-  return useMutation({ mutationFn: authorizeCode,
+  return useMutation({
+    mutationFn: authorizeCode,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

@@ -1,8 +1,8 @@
 import { Loader } from '@converge/ui/components/loader';
 import { useRouter } from 'next/router';
 import * as React from 'react';
-import { SessionAuth } from 'common/auth';
 
+import { SessionAuth } from 'common/auth';
 import { UserDataWrapper } from 'common/wrappers/user-data-wrapper';
 
 import { UserContext } from 'store/user-context';

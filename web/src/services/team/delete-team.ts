@@ -1,6 +1,6 @@
 import { deleteTeam } from '@converge/services';
-import { useMutation } from 'common/lib/react-query';
 
+import { useMutation } from 'common/lib/react-query';
 import type { TeamType } from 'common/types';
 
 interface MutationParams {
@@ -29,7 +29,8 @@ export function useDeleteTeamMutation({
     onSuccess && onSuccess(team);
   };
 
-  return useMutation({ mutationFn: deleteTeam,
+  return useMutation({
+    mutationFn: deleteTeam,
     onError: onMutationError,
     onMutate: onMutationTriggered,
     onSuccess: onMutationSuccess,

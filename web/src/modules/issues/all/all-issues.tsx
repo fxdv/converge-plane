@@ -34,9 +34,9 @@ import { IssuesViewOptions } from './issues-view-options';
 import { ListView } from './list-view';
 import { NoTeamContainer } from './no-team-container';
 import { ActivityFeed } from '../activity-feed';
+import { ProductPositioningLine } from '../components/product-positioning-line';
 import { FiltersView } from '../filters-view/filters-view';
 import { OverviewInsights } from '../overview-insights';
-import { ProductPositioningLine } from '../components/product-positioning-line';
 import { SwarmPanel } from '../swarm-panel';
 
 export const AllIssues = withApplicationStore(

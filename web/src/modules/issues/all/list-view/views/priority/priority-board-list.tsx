@@ -18,18 +18,19 @@ import {
 
 import { PriorityIcons } from 'modules/issues/components';
 import { BoardIssueItem } from 'modules/issues/components/issue-board-item';
+
 import { usePriorities } from 'hooks/priorities';
 import { useCurrentTeam } from 'hooks/teams';
 import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import { useFilterIssues } from '../../../../issues-utils';
 import {
   BOARD_DEFAULT_ROW_HEIGHT,
   BOARD_OVERSCAN_ROW_COUNT,
   boardVirtualRowCount,
 } from '../../board-virtual-config';
-import { useFilterIssues } from '../../../../issues-utils';
 
 interface PriorityBoardListProps {
   priority: number;
