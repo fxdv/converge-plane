@@ -22,7 +22,7 @@ const checks = [
   },
   {
     file: 'converge-editor/extensions/slash-command.tsx',
-    includes: ['EditorCommandOut', 'Suggestion', 'char: "/"'],
+    includes: ['EditorCommandOut', 'Suggestion', "char: '/'"],
   },
   {
     file: 'converge-editor/components/editor-bubble.tsx',
