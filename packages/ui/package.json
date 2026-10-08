@@ -85,7 +85,7 @@
     "tiptap-markdown": "^0.9.0",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "1.42.5",
-    "react-day-picker": "8.10.1",
+    "react-day-picker": "10.0.2",
     "react-hook-form": "7.88.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^1.0.9",
