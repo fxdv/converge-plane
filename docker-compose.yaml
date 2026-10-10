@@ -68,11 +68,12 @@ services:
       CONVERGE_HTTP_TIMEOUT: ${CONVERGE_HTTP_TIMEOUT:-30s}
       CONVERGE_DB_MIN_CONNS: ${CONVERGE_DB_MIN_CONNS:-2}
       CONVERGE_DB_MAX_CONNS: ${CONVERGE_DB_MAX_CONNS:-20}
-      # Whose X-Forwarded-For is believed. The default (loopback + private
-      # ranges) trusts the web container and a proxy on this network;
-      # narrow it if clients can reach :3001 directly. deploy/README.md →
-      # Client IP and trusted proxies.
-      CONVERGE_TRUSTED_PROXIES: ${CONVERGE_TRUSTED_PROXIES:-}
+      # Whose X-Forwarded-For is believed. The binary trusts loopback only;
+      # compose adds this project's pinned network (below), so the web
+      # container's /api proxy and a reverse proxy on the network are
+      # believed and a LAN client is not. deploy/README.md → Client IP and
+      # trusted proxies.
+      CONVERGE_TRUSTED_PROXIES: ${CONVERGE_TRUSTED_PROXIES:-127.0.0.0/8,::1,${CONVERGE_COMPOSE_SUBNET:-10.231.57.0/24}}
       # Prometheus listener, off when empty. ":9464" serves it on the
       # compose network; it is not published (deploy/README.md → Metrics).
       CONVERGE_METRICS_ADDR: ${CONVERGE_METRICS_ADDR:-}
@@ -96,8 +97,12 @@ services:
       CONVERGE_GITHUB_WEBHOOK_SECRET: ${CONVERGE_GITHUB_WEBHOOK_SECRET:-}
       CONVERGE_GITHUB_ISSUE_TEAM: ${CONVERGE_GITHUB_ISSUE_TEAM:-}
       CONVERGE_TRACE_SIGNING_KEY: ${CONVERGE_TRACE_SIGNING_KEY:-}
+    # Loopback only: dev mode (the default above) hands a sign-in link to
+    # anyone who can reach the API. To serve other machines, set
+    # CONVERGE_DEV_MODE=false and front the stack with a reverse proxy, or
+    # drop the 127.0.0.1: prefix (deploy/README.md → Exposing the stack).
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     healthcheck:
       # /readyz verifies the database connection, so `web` only starts
       # once the API is fully up.
@@ -125,9 +130,20 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # Loopback only, like the API; see the note on its ports.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     restart: unless-stopped
+
+# The subnet is pinned so CONVERGE_TRUSTED_PROXIES can name it exactly
+# instead of trusting every private range. Override
+# CONVERGE_COMPOSE_SUBNET if it collides with a local network (then
+# `docker compose down` so the network is recreated).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${CONVERGE_COMPOSE_SUBNET:-10.231.57.0/24}
 
 volumes:
   pgdata:

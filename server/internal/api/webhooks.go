@@ -33,6 +33,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"converge/internal/netx"
 )
 
 const (
@@ -377,11 +379,13 @@ func dialWebhookPinned(ctx context.Context, network, addr string, allowed []neti
 	return nil, last
 }
 
+// webhookIPAllowed admits public unicast addresses (netx.PublicUnicast),
+// plus loopback in dev mode so a local receiver can be tested.
 func webhookIPAllowed(ip netip.Addr, dev bool) bool {
-	if dev && ip.IsLoopback() {
+	if dev && ip.Unmap().IsLoopback() {
 		return true
 	}
-	return ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast()
+	return netx.PublicUnicast(ip)
 }
 
 func signWebhook(secret string, ts int64, body []byte) string {

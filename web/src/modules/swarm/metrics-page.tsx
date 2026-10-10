@@ -392,7 +392,6 @@ const ProxySection = ({ proxy }: { proxy: ProxyMetrics }) => {
 };
 
 const NodeRow = ({ node }: { node: FleetNodeStat }) => {
-  const url = node.url.replace(/^https?:\/\//, '').replace(/:\d+$/, '');
   const lastEvent = node.lastError
     ? { text: node.lastError.slice(0, 40), tone: 'red' as const }
     : node.lastSuccessAt
@@ -406,7 +405,8 @@ const NodeRow = ({ node }: { node: FleetNodeStat }) => {
   return (
     <tr>
       <Td className="font-mono tabular-nums text-xs">
-        #{node.node} <span className="text-muted-foreground">{url}</span>
+        {/* The server redacts endpoint URLs to "node-N"; the index is enough. */}
+        #{node.node}
       </Td>
       <Td right>{node.requests}</Td>
       <Td

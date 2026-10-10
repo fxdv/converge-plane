@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -54,7 +55,15 @@ type Dependencies struct {
 	// ClientIP resolves client addresses behind trusted proxies; nil
 	// selects netx's default trusted ranges.
 	ClientIP *netx.Resolver
+	// MaxBodyBytes caps every request body; <= 0 selects
+	// DefaultMaxBodyBytes. Handlers may cap lower, never higher.
+	MaxBodyBytes int64
 }
+
+// DefaultMaxBodyBytes is the request-body cap applied to every route. It
+// matches the largest per-handler cap (MCP, the GitHub webhook, the JSON
+// decode helpers); raise it here before adding a route that needs more.
+const DefaultMaxBodyBytes int64 = 1 << 20
 
 // Server is the configured HTTP server.
 type Server struct {
@@ -82,6 +91,8 @@ func New(d Dependencies) *Server {
 		Metrics(),
 		SecurityHeaders(),
 		CORS(d.TrustedOrigins),
+		// After CORS so a browser can read the 413.
+		MaxBody(d.MaxBodyBytes),
 	)
 
 	if d.MountApp != nil {
@@ -252,6 +263,87 @@ func SecurityHeaders() func(http.Handler) http.Handler {
 			}
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// MaxBody caps request bodies at limit bytes (DefaultMaxBodyBytes when
+// limit <= 0). A declared Content-Length over the cap is refused with 413
+// before the handler runs. An undeclared (chunked) body is cut off at the
+// cap: the handler's read fails, and the client error it answers with is
+// replaced by the same 413, so the status does not depend on framing.
+func MaxBody(limit int64) func(http.Handler) http.Handler {
+	if limit <= 0 {
+		limit = DefaultMaxBodyBytes
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.ContentLength > limit {
+				w.Header().Set("Connection", "close")
+				writeTooLarge(w)
+				return
+			}
+			if r.Body == nil || r.Body == http.NoBody {
+				next.ServeHTTP(w, r)
+				return
+			}
+			body := &cappedBody{ReadCloser: http.MaxBytesReader(w, r.Body, limit)}
+			r.Body = body
+			next.ServeHTTP(&tooLargeWriter{ResponseWriter: w, body: body}, r)
+		})
+	}
+}
+
+func writeTooLarge(w http.ResponseWriter) {
+	writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
+		"error": "request body too large",
+	})
+}
+
+// cappedBody records that the MaxBytesReader beneath it hit the cap.
+type cappedBody struct {
+	io.ReadCloser
+	tripped bool
+}
+
+func (b *cappedBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		b.tripped = true
+	}
+	return n, err
+}
+
+// tooLargeWriter turns a handler's 4xx into 413 once its body tripped the
+// cap; the handler's own error body is dropped.
+type tooLargeWriter struct {
+	http.ResponseWriter
+	body     *cappedBody
+	replaced bool
+}
+
+func (w *tooLargeWriter) WriteHeader(code int) {
+	if w.body.tripped && code >= 400 && code < 500 {
+		w.replaced = true
+		w.ResponseWriter.Header().Del("Content-Length")
+		writeTooLarge(w.ResponseWriter)
+		return
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *tooLargeWriter) Write(p []byte) (int, error) {
+	if w.replaced {
+		return len(p), nil
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *tooLargeWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w *tooLargeWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
 }
 

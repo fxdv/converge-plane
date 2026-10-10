@@ -10,6 +10,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -217,5 +218,43 @@ func TestGuardWindowPair(t *testing.T) {
 	}
 	if guardWindowLiteral != "interval '24 hours'" {
 		t.Fatalf("guardWindowLiteral = %q, want interval '24 hours'", guardWindowLiteral)
+	}
+}
+
+// TestFleetRowsRedactEndpoints pins that the fleet section never carries
+// an endpoint address: url keeps its key with the node's label, and an
+// error quoting the address (a dial error does) is rewritten too.
+func TestFleetRowsRedactEndpoints(t *testing.T) {
+	c := newLLMClient([]string{"http://10.0.0.5:8000", "http://gpu-b.internal:8001"}, "m", time.Second, 1, discardLogger())
+	c.record("http://10.0.0.5:8000", time.Second, false, 0,
+		errors.New(`Post "http://10.0.0.5:8000/v1/chat": dial tcp 10.0.0.5:8000: connection refused`))
+	rows := fleetRows(c.fleetView())
+	for i, n := range rows {
+		if want := "node-" + string(rune('1'+i)); n.URL != want {
+			t.Fatalf("row %d url = %q, want %q", i, n.URL, want)
+		}
+	}
+	if strings.Contains(rows[0].LastError, "10.0.0.5") || !strings.Contains(rows[0].LastError, "node-1") {
+		t.Fatalf("lastError leaks the endpoint: %q", rows[0].LastError)
+	}
+}
+
+// TestProxySectionFleetAdminOnly pins that the process-wide fleet rows
+// reach a workspace owner or admin only: a plain member's section has
+// an empty node list (the key stays, the client renders "no fleet").
+func TestProxySectionFleetAdminOnly(t *testing.T) {
+	a := apiForTests(t, &fakePool{t: t, rules: []fakeRule{{frag: "from accounts a"}}})
+	a.runtime = &AgentRuntime{llm: newLLMClient([]string{"http://10.0.0.5:8000"}, "m", time.Second, 1, discardLogger())}
+
+	var member proxyMetrics
+	a.proxySection(context.Background(), testUUID(), false, &member)
+	if member.Nodes == nil || len(member.Nodes) != 0 {
+		t.Fatalf("member nodes = %+v, want an empty list", member.Nodes)
+	}
+
+	var admin proxyMetrics
+	a.proxySection(context.Background(), testUUID(), true, &admin)
+	if len(admin.Nodes) != 1 || admin.Nodes[0].URL != "node-1" {
+		t.Fatalf("admin nodes = %+v, want one redacted row", admin.Nodes)
 	}
 }

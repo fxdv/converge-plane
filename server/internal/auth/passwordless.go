@@ -44,6 +44,7 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -79,7 +80,8 @@ const (
 // refresh_reuse means refresh tokens are being stolen and replayed.
 var authEvents = metrics.Default.NewCounterVec("converge_auth_events_total",
 	"Sign-in and session events: signin, refresh, refresh_race, refresh_reuse, signout, "+
-		"rate_limited_ip, rate_limited_email, cross_origin_refused.", "event")
+		"rate_limited_ip, rate_limited_email, cross_origin_refused, "+
+		"revocation_check_grace, revocation_check_refused.", "event")
 
 // Service owns session and magic-link code lifecycle.
 type Service struct {
@@ -93,8 +95,13 @@ type Service struct {
 	revoked    *revocations
 	// live remembers sessions this process just confirmed are not
 	// revoked, so the shared check is not a query on every request.
-	live    *revocations
-	origins map[string]bool
+	live *revocations
+	// verified remembers when the database last confirmed a session not
+	// revoked, so a failed check can honour it for revocationGrace.
+	verified *revocations
+	// revocationWarnAt rate-limits the failed-check warning (unix nanos).
+	revocationWarnAt atomic.Int64
+	origins          map[string]bool
 }
 
 // NewService builds the auth service. A nil mailer disables sign-in
@@ -109,6 +116,7 @@ func NewService(pool *pgxpool.Pool, cfg config.Config, log *slog.Logger, mailer 
 		emailLimit: netx.NewLimiter(authEmailRate, authEmailBurst),
 		revoked:    newRevocations(),
 		live:       newRevocations(),
+		verified:   newRevocations(),
 		origins:    TrustedOrigins(cfg),
 	}
 }

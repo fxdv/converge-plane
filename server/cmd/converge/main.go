@@ -100,6 +100,10 @@ func run() (err error) {
 	if cfg.DevMode {
 		logger.Warn("DEV MODE: sign-in responses include the magic link; never expose this process")
 	}
+	if cfg.DevModeExposed() {
+		logger.Warn("DEV MODE ON A NON-LOOPBACK LISTENER: anyone who reaches "+cfg.HTTPAddr+" can sign in as any user; publish the port on 127.0.0.1 only, or set CONVERGE_DEV_MODE=false",
+			"addr", cfg.HTTPAddr)
+	}
 
 	notifySvc := notify.New(notify.Config{
 		Host:      cfg.SMTPHost,

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Phase 2: production /auth must SSR with CSP nonces on script tags.
+ * Phase 2: production /auth must SSR with CSP nonces on script tags, and
+ * the policy's connect-src/img-src stay narrowed (no scheme-wide sources).
  * Requires `next build` first. Prefers standalone server.js (Docker layout).
  */
 import { spawn } from 'node:child_process';
@@ -66,6 +67,40 @@ try {
 
   if (!csp.includes('script-src')) {
     console.error('csp-nonce-smoke: missing Content-Security-Policy header');
+    exitCode = 1;
+  }
+
+  // connect-src/img-src are narrowed (common/lib/csp.ts): no scheme-wide
+  // sources, and the SSE backend the build was configured with.
+  const directive = (name) =>
+    (
+      csp
+        .split(';')
+        .map((d) => d.trim())
+        .find((d) => d.startsWith(`${name} `)) ?? ''
+    )
+      .split(/\s+/)
+      .slice(1);
+  for (const name of ['connect-src', 'img-src']) {
+    const sources = directive(name);
+    if (sources.length === 0) {
+      console.error(`csp-nonce-smoke: missing ${name}`);
+      exitCode = 1;
+    }
+    for (const scheme of ['https:', 'http:', 'ws:', 'wss:']) {
+      if (sources.includes(scheme)) {
+        console.error(`csp-nonce-smoke: ${name} allows all of ${scheme}`);
+        exitCode = 1;
+      }
+    }
+  }
+  const backend = new URL(
+    process.env.NEXT_PUBLIC_BACKEND_HOST ?? 'http://localhost:3001',
+  ).origin;
+  if (!directive('connect-src').includes(backend)) {
+    console.error(
+      `csp-nonce-smoke: connect-src does not allow the SSE backend ${backend}`,
+    );
     exitCode = 1;
   }
 

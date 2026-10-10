@@ -38,12 +38,15 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Cookie and header names of the Supertokens v16 session protocol.
@@ -178,8 +181,7 @@ func (s *Service) accessClaims(token string) (tokenClaims, bool) {
 	if !ok || s.revoked.has(c.Session) {
 		return tokenClaims{}, false
 	}
-	if s.pool != nil && (s.live == nil || !s.live.has(c.Session)) && s.sessionRevoked(c.Session) {
-		s.revoked.add(c.Session, time.Now().Add(s.cfg.AccessTokenTTL))
+	if s.pool != nil && (s.live == nil || !s.live.has(c.Session)) && !s.sessionUsable(c.Session) {
 		return tokenClaims{}, false
 	}
 	if s.pool != nil && s.live != nil {
@@ -201,15 +203,106 @@ func (s *Service) NoteRevoked(sessionID string) {
 	s.revoked.add(sessionID, until)
 }
 
-func (s *Service) sessionRevoked(id string) bool {
+// revocationGrace is how long a session the database confirmed not
+// revoked keeps passing when a later check fails. Past it, a failed
+// check refuses the token: a database outage must not reopen a session
+// signed out on another process.
+const revocationGrace = 30 * time.Second
+
+// revocationWarnEvery rate-limits the failed-check warning.
+const revocationWarnEvery = 10 * time.Second
+
+// sessionUsable runs the shared revocation check for an access token
+// the live cache did not cover. A revoked session is remembered for the
+// access token TTL; a failed check is honoured only inside the grace of
+// the last confirmation, and never cached either way.
+func (s *Service) sessionUsable(id string) bool {
+	revoked, err := s.sessionRevoked(id)
+	if err != nil {
+		if s.verified.has(id) {
+			authEvents.With("revocation_check_grace").Inc()
+			s.warnRevocationCheck(id, "allowed within grace", err)
+			return true
+		}
+		authEvents.With("revocation_check_refused").Inc()
+		s.warnRevocationCheck(id, "refused", err)
+		return false
+	}
+	if revoked {
+		s.revoked.add(id, time.Now().Add(s.cfg.AccessTokenTTL))
+		return false
+	}
+	s.verified.add(id, time.Now().Add(revocationGrace))
+	return true
+}
+
+func (s *Service) sessionRevoked(id string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	var revoked bool
 	err := s.pool.QueryRow(ctx, `select revoked_at is not null from sessions where id = $1`, id).Scan(&revoked)
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A session the database does not know was pruned or never
+		// existed: nothing to honour.
+		return true, nil
+	}
+	return revoked, err
+}
+
+// warnRevocationCheck logs a failed revocation check at most once per
+// revocationWarnEvery, so an outage does not log every request.
+func (s *Service) warnRevocationCheck(id, outcome string, err error) {
+	if s.log == nil {
+		return
+	}
+	now := time.Now().UnixNano()
+	last := s.revocationWarnAt.Load()
+	if now-last < int64(revocationWarnEvery) || !s.revocationWarnAt.CompareAndSwap(last, now) {
+		return
+	}
+	s.log.Warn("session revocation check failed", "session_id", id, "outcome", outcome, "error", err)
+}
+
+// SessionLive reports whether a web session is still usable: the row is
+// unrevoked and unexpired and its account active. For connections that
+// outlive the request that authenticated them; a failed read reports
+// false, so the client reconnects and is authenticated afresh.
+func (s *Service) SessionLive(ctx context.Context, id string) bool {
+	if id == "" || s.revoked.has(id) {
 		return false
 	}
-	return revoked
+	var live bool
+	if err := s.pool.QueryRow(ctx, `
+		select exists (
+			select 1 from sessions s
+			join accounts a on a.id = s.account_id and a.status = 'active'
+			where s.id = $1 and s.revoked_at is null and s.expires_at > now())`,
+		id).Scan(&live); err != nil {
+		return false
+	}
+	return live
+}
+
+// RequestSession returns the session id behind the web session access
+// token r carries, or "" for an API token or no valid session. Callers
+// run it after the session middleware accepted the request.
+func (s *Service) RequestSession(r *http.Request) string {
+	if t := bearerToken(r); t != "" {
+		if strings.HasPrefix(t, APITokenPrefix) {
+			return ""
+		}
+		if c, ok := s.parseToken("access", t); ok {
+			return c.Session
+		}
+	}
+	if c, err := r.Cookie(CookieAccessToken); err == nil {
+		if inner, err := innerFromEnvelope(c.Value); err == nil {
+			if claims, ok := s.parseToken("access", inner); ok {
+				return claims.Session
+			}
+		}
+	}
+	return ""
 }
 
 // ValidateAccess verifies an access token (Authorization: Bearer value or

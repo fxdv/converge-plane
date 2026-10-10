@@ -28,6 +28,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"runtime"
 	"sort"
 	"strconv"
@@ -219,7 +220,8 @@ func (a *API) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if _, ok := a.workspaceRole(ctx, p, workspaceID); !ok {
+	role, ok := a.workspaceRole(ctx, p, workspaceID)
+	if !ok {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -250,7 +252,7 @@ func (a *API) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		a.internalError(w, err)
 		return
 	}
-	a.proxySection(ctx, workspaceID, &out.Proxy)
+	a.proxySection(ctx, workspaceID, adminRole(role), &out.Proxy)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -685,7 +687,11 @@ func (a *API) swarmSection(ctx context.Context, ws string, m *swarmMetrics) erro
 // proxySection fills the LLM-fleet section from the in-memory registry.
 // It never fails the request: a missing runtime or fleet degrades to a
 // disabled row (a dashboard must show its own dead state, not 500).
-func (a *API) proxySection(ctx context.Context, ws string, m *proxyMetrics) {
+//
+// The fleet is process-wide: its rows count every workspace's traffic,
+// so only a workspace owner or admin sees them, and never with the
+// endpoint addresses (fleetRows).
+func (a *API) proxySection(ctx context.Context, ws string, admin bool, m *proxyMetrics) {
 	m.Nodes = []FleetNodeStat{}
 	m.AgentBurn = []agentBurnRow{}
 	m.RateRPS = a.cfg.RateLimitRPS
@@ -697,8 +703,8 @@ func (a *API) proxySection(ctx context.Context, ws string, m *proxyMetrics) {
 	m.Mode = a.runtime.brainView().Mode
 	m.Model = a.cfg.LLMModel
 	m.Timeout = a.cfg.LLMTimeout
-	if llm := a.runtime.llm; llm != nil {
-		m.Nodes = llm.fleetView()
+	if llm := a.runtime.llm; llm != nil && admin {
+		m.Nodes = fleetRows(llm.fleetView())
 	}
 	rows, err := a.pool.Query(ctx, `
 		select a.id, a.name, wm.status
@@ -721,4 +727,23 @@ func (a *API) proxySection(ctx context.Context, ws string, m *proxyMetrics) {
 		}
 		m.AgentBurn = append(m.AgentBurn, row)
 	}
+}
+
+// fleetRows strips the endpoint addresses from a fleet snapshot before
+// it leaves the process: url keeps its key but carries the node's label
+// ("node-1"), and a last error that quotes the address (a dial or URL
+// error does) gets the label in its place.
+func fleetRows(nodes []FleetNodeStat) []FleetNodeStat {
+	for i := range nodes {
+		n := &nodes[i]
+		label := "node-" + strconv.Itoa(n.Node)
+		if n.LastError != "" && n.URL != "" {
+			n.LastError = strings.ReplaceAll(n.LastError, n.URL, label)
+			if u, err := url.Parse(n.URL); err == nil && u.Host != "" {
+				n.LastError = strings.ReplaceAll(n.LastError, u.Host, label)
+			}
+		}
+		n.URL = label
+	}
+	return nodes
 }

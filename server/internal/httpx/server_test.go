@@ -408,3 +408,66 @@ func TestRequestIDFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestMaxBody(t *testing.T) {
+	// A handler shaped like the API's: decode, answer 400 on failure.
+	decode := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var v map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]int{"keys": len(v)})
+	})
+	h := MaxBody(64)(decode)
+	big := `{"a":"` + strings.Repeat("x", 100) + `"}`
+
+	cases := []struct {
+		name    string
+		body    string
+		chunked bool
+		want    int
+	}{
+		{"under the cap", `{"a":1}`, false, http.StatusOK},
+		{"declared length over the cap", big, false, http.StatusRequestEntityTooLarge},
+		{"chunked body over the cap", big, true, http.StatusRequestEntityTooLarge},
+		{"malformed body under the cap stays 400", `{`, true, http.StatusBadRequest},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/issues", strings.NewReader(c.body))
+		if c.chunked {
+			req.ContentLength = -1
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != c.want {
+			t.Errorf("%s: status %d, want %d (%s)", c.name, rec.Code, c.want, rec.Body.String())
+			continue
+		}
+		if c.want == http.StatusRequestEntityTooLarge {
+			var env map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil || env["error"] == "" {
+				t.Errorf("%s: want the error envelope, got %q", c.name, rec.Body.String())
+			}
+		}
+	}
+}
+
+func TestMaxBodyDefault(t *testing.T) {
+	h := MaxBody(0)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n, _ := io.Copy(io.Discard, r.Body)
+		writeJSON(w, http.StatusOK, map[string]int64{"n": n})
+	}))
+	ok := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(make([]byte, DefaultMaxBodyBytes)))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, ok)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("body at the default cap: status %d", rec.Code)
+	}
+	over := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(make([]byte, DefaultMaxBodyBytes+1)))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, over)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("body over the default cap: status %d", rec.Code)
+	}
+}

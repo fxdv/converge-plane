@@ -16,11 +16,18 @@ import {
 } from './converge-editor';
 import { fileExtension } from './file-extension';
 import { imageExtension } from './image-extension';
+import { isAllowedLinkUri } from './link-protocols';
 
+// Explicit protocol allowlist (http, https, mailto): Tiptap applies
+// isAllowedUri when parsing HTML, rendering, and in setLink/toggleLink, so
+// javascript:, data: and vbscript: hrefs never become a live link.
 const tiptapLink = TiptapLink.configure({
   HTMLAttributes: {
     class: cx('text-primary cursor-pointer'),
   },
+  isAllowedUri: (url, { defaultValidate }) =>
+    isAllowedLinkUri(url) && defaultValidate(url),
+  shouldAutoLink: (url) => isAllowedLinkUri(url),
 });
 
 const taskList = TaskList.configure({
@@ -63,6 +70,9 @@ const heading = Heading.extend({
 const starterKit = StarterKit.configure({
   heading: false,
   codeBlock: false,
+  // Tiptap 3's StarterKit bundles Link; the configured tiptapLink below is
+  // the only one, so its protocol allowlist cannot be bypassed by a twin.
+  link: false,
   bulletList: {
     HTMLAttributes: {
       class: cx('list-disc list-outside leading-3 pl-4'),
@@ -92,8 +102,12 @@ const starterKit = StarterKit.configure({
   gapcursor: false,
 });
 
+// html: false — markdown strings reach the editor only from agent/API
+// writes (plain-string descriptions); the app itself stores Tiptap JSON,
+// and clipboard HTML paste does not go through this parser. Raw HTML in
+// those strings renders as text instead of being parsed into nodes.
 const markdown = MarkdownExtension.configure({
-  html: true, // Allow HTML input/output
+  html: false,
   breaks: true,
 });
 

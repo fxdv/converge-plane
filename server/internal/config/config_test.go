@@ -427,3 +427,25 @@ func TestInt32FromEnv(t *testing.T) {
 		t.Fatal("junk accepted")
 	}
 }
+
+func TestDevModeExposed(t *testing.T) {
+	cases := []struct {
+		addr string
+		dev  bool
+		want bool
+	}{
+		{":3001", true, true},
+		{"0.0.0.0:3001", true, true},
+		{"[::]:3001", true, true},
+		{"192.168.1.5:3001", true, true},
+		{"127.0.0.1:3001", true, false},
+		{"[::1]:3001", true, false},
+		{"localhost:3001", true, false},
+		{":3001", false, false},
+	}
+	for _, c := range cases {
+		if got := (Config{DevMode: c.dev, HTTPAddr: c.addr}).DevModeExposed(); got != c.want {
+			t.Errorf("DevModeExposed(dev=%v, %q) = %v, want %v", c.dev, c.addr, got, c.want)
+		}
+	}
+}

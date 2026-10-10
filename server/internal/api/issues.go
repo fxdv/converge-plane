@@ -343,6 +343,10 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.ParentID != nil && *req.ParentID != "" {
+		if *req.ParentID == id {
+			writeError(w, http.StatusUnprocessableEntity, errParentCycle.Error())
+			return
+		}
 		ok := a.issueInWorkspace(ctx, *req.ParentID, workspaceID) && a.tokenReachesIssue(ctx, p, *req.ParentID)
 		if !ok {
 			writeError(w, http.StatusUnprocessableEntity, "parentId is not in this workspace")
@@ -417,7 +421,7 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	changed, historyRecs, err := a.applyIssuePatchTx(ctx, tx, p, workspaceID, row, req)
-	if errors.Is(err, errDoneNeedsEvidence) {
+	if errors.Is(err, errDoneNeedsEvidence) || errors.Is(err, errParentCycle) {
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
@@ -483,6 +487,36 @@ func (a *API) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	a.wakeIssueOwner(ctx, workspaceID, id)
 	w.Header().Set("ETag", issueETag(fresh.Version))
 	writeJSON(w, http.StatusOK, a.issueData(fresh))
+}
+
+// errParentCycle refuses a parentId that is the issue itself or one of
+// its descendants: the hierarchy must stay a forest.
+var errParentCycle = errors.New("parentId would make the issue its own ancestor")
+
+// parentCycleTx reports whether re-parenting issueID under parentID would
+// close a loop: it walks parentID's ancestor chain (bounded by
+// relationDepthCap) looking for issueID. The workspace-wide advisory lock
+// serializes re-parents, since the caller's team lock does not cover a
+// concurrent move in a sibling team that closes the same loop.
+func (a *API) parentCycleTx(ctx context.Context, tx pgx.Tx, workspaceID, issueID, parentID string) (bool, error) {
+	if issueID == parentID {
+		return true, nil
+	}
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1))`, "conv_parent_"+workspaceID); err != nil {
+		return false, err
+	}
+	var cyclic bool
+	err := tx.QueryRow(ctx, `
+		with recursive chain(id, depth) as (
+			select $2::uuid, 0
+			union all
+			select i.parent_id, c.depth + 1
+			from issues i join chain c on i.id = c.id
+			where i.parent_id is not null and c.depth < $3
+		)
+		select exists(select 1 from chain where id = $1::uuid)`,
+		issueID, parentID, relationDepthCap).Scan(&cyclic)
+	return cyclic, err
 }
 
 // applyIssuePatchTx applies the requested fields inside the caller's
@@ -574,6 +608,15 @@ func (a *API) applyIssuePatchTx(ctx context.Context, tx pgx.Tx, p *Principal, wo
 		changed = true
 	}
 	if req.ParentID != nil && strval(req.ParentID) != strval(row.ParentID) {
+		if *req.ParentID != "" {
+			cyclic, err := a.parentCycleTx(ctx, tx, workspaceID, row.ID, *req.ParentID)
+			if err != nil {
+				return false, nil, err
+			}
+			if cyclic {
+				return false, nil, errParentCycle
+			}
+		}
 		if _, err := tx.Exec(ctx, `update issues set parent_id = $2, version = version + 1, updated_at = now() where id = $1`, row.ID, nullForEmpty(req.ParentID)); err != nil {
 			return false, nil, err
 		}

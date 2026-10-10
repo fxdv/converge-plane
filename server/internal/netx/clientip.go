@@ -16,17 +16,15 @@ import (
 	"strings"
 )
 
-// DefaultTrustedProxies is loopback plus the private ranges (RFC 1918,
-// RFC 4193): the reverse proxy and the web container of a compose or
-// single-host deployment.
+// DefaultTrustedProxies is loopback only: a reverse proxy on the same
+// host. Private ranges are not trusted by default — on a shared LAN any
+// client would pick its own "client IP" and its own rate-limit bucket.
+// Deployments that proxy over a network list it explicitly
+// (CONVERGE_TRUSTED_PROXIES; docker-compose.yaml pins its subnet).
 func DefaultTrustedProxies() []netip.Prefix {
 	return []netip.Prefix{
 		netip.MustParsePrefix("127.0.0.0/8"),
 		netip.MustParsePrefix("::1/128"),
-		netip.MustParsePrefix("10.0.0.0/8"),
-		netip.MustParsePrefix("172.16.0.0/12"),
-		netip.MustParsePrefix("192.168.0.0/16"),
-		netip.MustParsePrefix("fc00::/7"),
 	}
 }
 

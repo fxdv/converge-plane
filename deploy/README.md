@@ -45,6 +45,15 @@ Containers:
 | `postgres` | Database; published on `127.0.0.1` only                     | 5432   |
 | `seed`     | One-shot demo-data seeder (the `seed` profile)             | —      |
 
+**Exposing the stack.** Compose publishes `web` and `api` on `127.0.0.1`
+only, because the default `.env` runs dev mode, which returns a sign-in link
+for any email to whoever asks. To serve other machines, set
+`CONVERGE_DEV_MODE=false` (with a session secret and SMTP), then either put
+a reverse proxy in front ([below](#tls-and-reverse-proxy)) or remove the
+`127.0.0.1:` prefix from the `ports:` entries. The API logs a warning at
+startup whenever dev mode runs on a non-loopback listener (always the case
+inside the container), so the published port is what keeps it private.
+
 **SSH tunnel (Bravo).** To use the remote stack at `http://localhost:3000` without
 running web locally, run `pnpm tunnel:bravo` from the repo root (or
 `scripts/bravo-tunnel.sh`). It forwards local `:3000` and `:3001` to the remote
@@ -86,7 +95,7 @@ configuration. Docker compose reads `.env` in the repository root.
 | `CONVERGE_REFRESH_TOKEN_TTL` | `720h`                            | Refresh-token lifetime (sign-in session length)      |
 | `CONVERGE_DEV_MODE`        | `true` (compose)                    | Magic link in sign-in response; localhost only — **off in prod** |
 | `CONVERGE_AUTO_MIGRATE`    | on                                | Apply schema migrations at startup (`false` disables) |
-| `CONVERGE_TRUSTED_PROXIES` | loopback + private ranges         | CIDRs/IPs whose `X-Forwarded-For` is believed; `none` trusts no proxy ([below](#client-ip-and-trusted-proxies)) |
+| `CONVERGE_TRUSTED_PROXIES` | loopback (binary); loopback + `CONVERGE_COMPOSE_SUBNET` (compose) | CIDRs/IPs whose `X-Forwarded-For` is believed; `none` trusts no proxy ([below](#client-ip-and-trusted-proxies)) |
 | `CONVERGE_METRICS_ADDR`    | `""` (off)                        | Prometheus listener, e.g. `127.0.0.1:9464` ([Metrics](#metrics)) |
 | `CONVERGE_MAIL_LOG_BODIES` | dev mode only                     | Log driver writes message bodies, **including sign-in links** |
 | `CONVERGE_SMTP_HOST`       | `""`                              | SMTP server for sign-in and invitation mail; unset = log driver |
@@ -128,6 +137,7 @@ defaults is the comment on `Load` in `server/internal/config/config.go`.
 | ------------------------------- | --------------------------------------------------- |
 | `POSTGRES_USER`/`PASSWORD`/`DB` | Postgres credentials and database name              |
 | `COMPOSE_PROFILES`              | `seed` runs the one-shot demo seeder                |
+| `CONVERGE_COMPOSE_SUBNET`       | Pinned subnet of the compose network (default `10.231.57.0/24`); trusted as a proxy range. Change it if it collides with a local network, then `docker compose down` so the network is recreated |
 
 `NEXT_PUBLIC_*` values are baked in at build time, so changing them requires
 rebuilding the web image. In the common single-domain layout (below) the
@@ -163,7 +173,9 @@ same-origin (proxied through `web`) and direct-`NEXT_PUBLIC_BACKEND_HOST`
 
 ### Pattern A — two origins (simplest, no proxy config)
 
-Publish both ports and point the web build at the API's public origin:
+Publish both ports (drop the `127.0.0.1:` prefix, or proxy to them from the
+host; dev mode off either way) and point the web build at the API's public
+origin:
 
 ```
 NEXT_PUBLIC_BACKEND_HOST=https://api.converge.example.com   # build arg
@@ -235,16 +247,22 @@ skipping hops in `CONVERGE_TRUSTED_PROXIES`; the first untrusted hop is the
 client. Without a trusted proxy in front, the TCP peer address is used and
 the header is ignored.
 
-- The default (loopback + private ranges) fits compose: the `web` proxy and
-  a reverse proxy on the Docker network or the host are trusted, and both
-  append their hop (`web` does so for `/api/*`).
+- The binary trusts only loopback by default: a reverse proxy on the same
+  host. Private ranges are not trusted, since on a shared LAN any client
+  could otherwise choose its own "client IP" and its own rate-limit bucket.
+- Compose pins its network (`CONVERGE_COMPOSE_SUBNET`, default
+  `10.231.57.0/24`) and trusts loopback plus that subnet, so the `web`
+  proxy (which appends its hop for `/api/*`) and a reverse proxy container
+  on the network are believed. Docker's gateway (`.1` of the subnet) is in
+  that range: host-local connections to the published ports arrive from it.
+  That is safe while the ports are bound to `127.0.0.1`; if you publish them
+  on all interfaces, set `CONVERGE_TRUSTED_PROXIES` to your proxies'
+  addresses (`docker network inspect converge_default` lists them).
 - Every proxy in front must append `X-Forwarded-For` (Caddy does by default;
   nginx needs the line shown above). Otherwise all users share the proxy's
   address and one auth rate-limit bucket.
-- If clients can reach the API port directly, narrow the list to your
-  proxies' addresses (or `none` with no proxy). With the default, a client
-  whose connection arrives from a private address — including Docker's
-  gateway in some port-publishing setups — chooses its own "client IP".
+- Outside compose, list every proxy hop between the client and the API, or
+  `none` with no proxy.
 
 ## Security behavior
 

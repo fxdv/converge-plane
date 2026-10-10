@@ -139,8 +139,8 @@ type Config struct {
 	MailLogBodies bool
 	// TrustedProxies are the proxy ranges whose X-Forwarded-For entries
 	// are believed when resolving a client IP (rate limits, session
-	// audit, logs). Nil selects loopback plus the private ranges; an
-	// empty non-nil slice ("none") trusts no proxy.
+	// audit, logs). Nil selects loopback only; an empty non-nil slice
+	// ("none") trusts no proxy.
 	TrustedProxies []netip.Prefix
 	// MetricsAddr is the listen address of the Prometheus endpoint
 	// (GET /metrics); empty disables it. It is a separate listener so the
@@ -212,7 +212,7 @@ type Config struct {
 //	CONVERGE_SMTP_TLS          starttls|off|implicit   (default "starttls")
 //	CONVERGE_MAIL_LOG_BODIES   true = log driver logs mail bodies incl. links (default: dev mode only)
 //	CONVERGE_TRUSTED_PROXIES   CIDRs/IPs whose X-Forwarded-For is believed, comma-separated,
-//	                           "none" trusts no proxy (default: loopback + private ranges)
+//	                           "none" trusts no proxy (default: loopback only)
 //	CONVERGE_METRICS_ADDR      Prometheus listen address, e.g. "127.0.0.1:9464" (default "": off)
 //	CONVERGE_GITHUB_REPOS      tracked repositories, "owner/name" or "owner/*", comma-separated (default "": off)
 //	CONVERGE_GITHUB_TOKEN      GitHub token with pull request read access (default "": public repos only)
@@ -534,6 +534,25 @@ func (c Config) ValidateServe() error {
 
 // isLoopbackURL reports whether raw is an http(s) URL whose host is
 // localhost, a *.localhost name, or a loopback IP.
+// DevModeExposed reports dev mode listening beyond loopback. ValidateServe
+// does not refuse it — inside a container the API must bind 0.0.0.0 and
+// the published port decides who reaches it — so startup warns instead:
+// anyone who reaches the listener can mint a sign-in link for any email.
+func (c Config) DevModeExposed() bool {
+	if !c.DevMode {
+		return false
+	}
+	host, _, err := net.SplitHostPort(c.HTTPAddr)
+	if err != nil {
+		return true
+	}
+	if host == "localhost" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip == nil || !ip.IsLoopback()
+}
+
 func isLoopbackURL(raw string) bool {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {

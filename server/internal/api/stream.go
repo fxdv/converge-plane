@@ -55,6 +55,13 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
+	// A web session is re-checked on every heartbeat (principalStillLive):
+	// remember which session authenticated the stream while its access
+	// token is still in date.
+	var sessionID string
+	if p.Token == nil {
+		sessionID = a.auth.RequestSession(r)
+	}
 	fl, ok := w.(http.Flusher)
 	if !ok {
 		a.internalError(w, fmt.Errorf("streaming unsupported by response writer"))
@@ -108,6 +115,16 @@ func (a *API) handleStream(w http.ResponseWriter, r *http.Request) {
 					"workspace", workspaceID, "account", p.AccountID)
 				return
 			}
+			if p.Token == nil && !a.sessionStillLive(r.Context(), sessionID) {
+				a.log.Info("realtime subscriber disconnected: session no longer live",
+					"workspace", workspaceID, "account", p.AccountID)
+				return
+			}
+			if !a.memberStillActive(r.Context(), p, workspaceID) {
+				a.log.Info("realtime subscriber disconnected: no longer an active member",
+					"workspace", workspaceID, "account", p.AccountID)
+				return
+			}
 			if _, err := fmt.Fprint(w, a.streamHeartbeat(r.Context(), workspaceID)); err != nil {
 				return
 			}
@@ -124,6 +141,26 @@ func (a *API) tokenStillLive(ctx context.Context, tokenID string) bool {
 	ctx, cancel := context.WithTimeout(ctx, headReadTimeout)
 	defer cancel()
 	return a.auth.APITokenLive(ctx, tokenID)
+}
+
+// sessionStillLive re-checks a web session on an open stream, so a
+// signed-out or revoked session (suspension revokes them) stops
+// receiving within one heartbeat. A failed read ends the stream: the
+// client reconnects and is authenticated afresh.
+func (a *API) sessionStillLive(ctx context.Context, sessionID string) bool {
+	ctx, cancel := context.WithTimeout(ctx, headReadTimeout)
+	defer cancel()
+	return a.auth.SessionLive(ctx, sessionID)
+}
+
+// memberStillActive re-checks the membership the stream was opened on,
+// so a suspended or removed member stops receiving the workspace feed
+// within one heartbeat. A failed read ends the stream, as above.
+func (a *API) memberStillActive(ctx context.Context, p *Principal, workspaceID string) bool {
+	ctx, cancel := context.WithTimeout(ctx, headReadTimeout)
+	defer cancel()
+	_, ok := a.workspaceRole(ctx, p, workspaceID)
+	return ok
 }
 
 // streamHeartbeat is the keep-alive frame: a `head` event with the
