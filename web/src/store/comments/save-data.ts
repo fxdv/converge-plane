@@ -2,10 +2,6 @@ import type { CommentsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { persistModelToDexie } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
-
 export async function saveCommentsData(
   data: SyncActionRecord[],
   commentsStore: CommentsStoreType,
@@ -24,13 +20,8 @@ export async function saveCommentsData(
         sourceMetadata: JSON.stringify(record.data.sourceMetadata),
       };
 
-      const persist = persistModelToDexie(MODELS.IssueComment);
-
       switch (record.action) {
         case 'I': {
-          if (persist) {
-            await convergeDatabase.comments.put(comment);
-          }
           return (
             commentsStore &&
             (await commentsStore.update(comment, record.data.id))
@@ -38,9 +29,6 @@ export async function saveCommentsData(
         }
 
         case 'U': {
-          if (persist) {
-            await convergeDatabase.comments.put(comment);
-          }
           return (
             commentsStore &&
             (await commentsStore.update(comment, record.data.id))
@@ -48,9 +36,6 @@ export async function saveCommentsData(
         }
 
         case 'D': {
-          if (persist) {
-            await convergeDatabase.comments.delete(record.data.id);
-          }
           return (
             commentsStore && (await commentsStore.deleteById(record.data.id))
           );

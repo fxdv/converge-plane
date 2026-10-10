@@ -10,7 +10,7 @@ import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { useBootstrapRecords, useDeltaRecords } from 'services/sync';
 
-import { convergeDatabase } from 'store/database';
+import { convergeDatabase, lastSequenceIdKey } from 'store/database';
 import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
@@ -41,7 +41,7 @@ export function BootstrapWrapper({ children }: Props) {
   const schemaKey = `syncSchema_${hash(hashKey)}`;
   const lastSequenceId =
     localStorage && localStorage.getItem(schemaKey) === SYNC_SCHEMA
-      ? localStorage.getItem(`lastSequenceId_${hash(hashKey)}`)
+      ? localStorage.getItem(lastSequenceIdKey(hash(hashKey)))
       : null;
 
   // This tab's applied high-water (SWR-51): the shared key seeds it at
@@ -147,11 +147,11 @@ export function BootstrapWrapper({ children }: Props) {
         // Max-only (SWR-51): another tab may have advanced the shared key
         // past this snapshot's watermark — never write it backwards.
         const stored = Number(
-          localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
+          localStorage.getItem(lastSequenceIdKey(hash(hashKey))) || '0',
         );
         if (Number(data.lastSequenceId) > stored) {
           localStorage.setItem(
-            `lastSequenceId_${hash(hashKey)}`,
+            lastSequenceIdKey(hash(hashKey)),
             `${data.lastSequenceId}`,
           );
         }
@@ -174,7 +174,7 @@ export function BootstrapWrapper({ children }: Props) {
         // The server's change feed was trimmed past our cursor: the delta
         // is incomplete, so forget the watermark and take a full snapshot
         // (which re-seeds the tab cursor from the new watermark).
-        localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
+        localStorage.removeItem(lastSequenceIdKey(hash(hashKey)));
         setLoading(true);
         const snap = await bootstrapRecords();
         if (snap.isError) {
@@ -186,11 +186,11 @@ export function BootstrapWrapper({ children }: Props) {
       setLoading(false);
       // Max-only, as in the bootstrap handler above.
       const stored = Number(
-        localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
+        localStorage.getItem(lastSequenceIdKey(hash(hashKey))) || '0',
       );
       if (Number(data.lastSequenceId) > stored) {
         localStorage.setItem(
-          `lastSequenceId_${hash(hashKey)}`,
+          lastSequenceIdKey(hash(hashKey)),
           `${data.lastSequenceId}`,
         );
       }

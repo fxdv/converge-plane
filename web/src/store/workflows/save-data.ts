@@ -2,10 +2,6 @@ import type { WorkflowsStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { persistModelToDexie } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
-
 export async function saveWorkflowData(
   data: SyncActionRecord[],
   workflowsStore: WorkflowsStoreType,
@@ -25,13 +21,8 @@ export async function saveWorkflowData(
         teamId: record.data.teamId,
       };
 
-      const persist = persistModelToDexie(MODELS.Workflow);
-
       switch (record.action) {
         case 'I': {
-          if (persist) {
-            await convergeDatabase.workflows.put(workflow);
-          }
           return (
             workflowsStore &&
             (await workflowsStore.update(workflow, record.data.id))
@@ -39,9 +30,6 @@ export async function saveWorkflowData(
         }
 
         case 'U': {
-          if (persist) {
-            await convergeDatabase.workflows.put(workflow);
-          }
           return (
             workflowsStore &&
             (await workflowsStore.update(workflow, record.data.id))
@@ -49,9 +37,6 @@ export async function saveWorkflowData(
         }
 
         case 'D': {
-          if (persist) {
-            await convergeDatabase.workflows.delete(record.data.id);
-          }
           return (
             workflowsStore && (await workflowsStore.deleteById(record.data.id))
           );

@@ -18,14 +18,7 @@ export const IssueStoreInit = ({
   sideView: boolean;
 }) => {
   const [loadState, setLoadState] = React.useState<LoadState>('loading');
-  const loadGeneration = React.useRef(0);
-  const {
-    issuesHistoryStore,
-    commentsStore,
-    issueArtifactsStore,
-    issuesStore,
-    teamsStore,
-  } = useContextStore();
+  const { issuesStore, teamsStore } = useContextStore();
 
   const { issueId: paramIssueId } = useParams();
   const { issueId: viewIssueId } = React.useContext(IssueViewContext);
@@ -37,49 +30,24 @@ export const IssueStoreInit = ({
       return;
     }
 
-    const generation = ++loadGeneration.current;
-    setLoadState('loading');
-
-    void (async () => {
-      let issueData;
-      if (!sideView) {
-        const teamIdentifier = (issueId as string).split('-')[0];
-        const team = teamsStore.getTeamWithIdentifier(teamIdentifier);
-        if (!team) {
-          if (generation === loadGeneration.current) {
-            setLoadState('missing');
-          }
-          return;
-        }
-        issueData = issuesStore.getIssueByNumber(issueId as string, team.id);
-      } else {
-        issueData = issuesStore.getIssueById(issueId as string);
-      }
-
-      if (!issueData?.id) {
-        if (generation === loadGeneration.current) {
-          setLoadState('missing');
-        }
+    // Issue-scoped models (history, comments, artifacts) are memory-only
+    // (R-9): the sync feed fills their stores, so resolving the issue
+    // row is the whole load.
+    let issueData;
+    if (!sideView) {
+      const teamIdentifier = (issueId as string).split('-')[0];
+      const team = teamsStore.getTeamWithIdentifier(teamIdentifier);
+      if (!team) {
+        setLoadState('missing');
         return;
       }
+      issueData = issuesStore.getIssueByNumber(issueId as string, team.id);
+    } else {
+      issueData = issuesStore.getIssueById(issueId as string);
+    }
 
-      await issuesHistoryStore.load(issueData.id);
-      await commentsStore.load(issueData.id);
-      await issueArtifactsStore.load(issueData.id);
-
-      if (generation === loadGeneration.current) {
-        setLoadState('ready');
-      }
-    })();
-  }, [
-    issueId,
-    sideView,
-    issuesHistoryStore,
-    commentsStore,
-    issueArtifactsStore,
-    issuesStore,
-    teamsStore,
-  ]);
+    setLoadState(issueData?.id ? 'ready' : 'missing');
+  }, [issueId, sideView, issuesStore, teamsStore]);
 
   if (loadState === 'loading') {
     return <Loader height={500} />;

@@ -9,8 +9,6 @@ import {
 } from 'class-validator';
 
 import { CreateIssueRelationDto } from '../issue-relation';
-import { CreateLinkedIssueDto } from '../linked-issue';
-import { SupportDto } from '../support';
 
 export class LinkIssueDto {
   @IsString()
@@ -96,10 +94,6 @@ export class CreateIssueDto {
 
   @IsOptional()
   @IsObject()
-  linkIssueData?: CreateLinkedIssueDto;
-
-  @IsOptional()
-  @IsObject()
   sourceMetadata?: Record<string, string>;
 
   @IsOptional()
@@ -109,8 +103,4 @@ export class CreateIssueDto {
   @IsOptional()
   @IsString()
   projectMilestoneId?: string;
-
-  @IsOptional()
-  @IsObject()
-  supportData?: SupportDto;
 }

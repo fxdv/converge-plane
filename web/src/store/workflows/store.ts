@@ -1,16 +1,8 @@
 import { WorkflowCategoryEnum } from '@converge/types';
-import {
-  type IAnyStateTreeNode,
-  type Instance,
-  types,
-  flow,
-} from 'mobx-state-tree';
+import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
 
 import { type WorkflowType } from 'common/types';
 
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 import { asSnapshot } from 'store/snapshot';
 
 import { Workflow } from './models';
@@ -49,32 +41,7 @@ export const WorkflowsStore: IAnyStateTreeNode = types
       }
     };
 
-    const load = flow(function* () {
-      if (isMemoryAuthorityModel(MODELS.Workflow)) {
-        return;
-      }
-      const workflows = yield convergeDatabase.workflows.toArray();
-
-      // Clear existing data
-      self.workflows.clear();
-      self.workflowsByTeamId.clear();
-
-      // Populate both the map and team index
-      workflows.forEach((workflow: WorkflowType) => {
-        self.workflows.set(
-          workflow.id,
-          Workflow.create(asSnapshot<typeof Workflow>(workflow)),
-        );
-        const teamWorkflows: string[] =
-          self.workflowsByTeamId.get(workflow.teamId) || [];
-        self.workflowsByTeamId.set(workflow.teamId, [
-          ...teamWorkflows,
-          workflow.id,
-        ]);
-      });
-    });
-
-    return { update, deleteById, load };
+    return { update, deleteById };
   })
   .views((self) => ({
     getWorkflowWithId(workflowId: string) {

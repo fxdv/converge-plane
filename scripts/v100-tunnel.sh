@@ -12,13 +12,18 @@
 #   - a half-open connection (ssh thinks it is alive, the path is dead) is
 #     the one case the loop cannot see; v100-tunnel-watchdog.sh covers it.
 #
-# Env overrides (all optional): CONVERGE_TUNNEL_HOST, CONVERGE_TUNNEL_KEY,
-# CONVERGE_TUNNEL_LOG. Never prompts: BatchMode.
+# Required env: CONVERGE_TUNNEL_HOST (user@host), CONVERGE_TUNNEL_KEY (ssh key
+# path). Optional overrides: CONVERGE_TUNNEL_LOG. Never prompts: BatchMode.
 set -u
 umask 077
 
-HOST="${CONVERGE_TUNNEL_HOST:-user1@203.0.113.10}"
-KEY="${CONVERGE_TUNNEL_KEY:-$HOME/coding/tunnel.key}"
+HOST="${CONVERGE_TUNNEL_HOST:-}"
+KEY="${CONVERGE_TUNNEL_KEY:-}"
+if [ -z "$HOST" ] || [ -z "$KEY" ]; then
+	echo "usage: CONVERGE_TUNNEL_HOST=user@host CONVERGE_TUNNEL_KEY=/path/to/ssh-key $0" >&2
+	echo "  both CONVERGE_TUNNEL_HOST and CONVERGE_TUNNEL_KEY must be set (no defaults)" >&2
+	exit 64
+fi
 LOG="${CONVERGE_TUNNEL_LOG:-$HOME/Library/Logs/converge-v100-tunnel.log}"
 
 log() { echo "$(date -Iseconds) [tunnel] $*" >> "$LOG"; }

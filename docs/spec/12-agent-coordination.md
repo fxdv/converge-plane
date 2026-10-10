@@ -290,7 +290,12 @@ The runtime runs in-process inside the API artifact (one Go binary,
 in-process workers) and adds **no tables and no dependencies**: the D1/D2
 trace tables plus in-memory state (per-agent worker map, 24h spend
 window, one coalesced wakeup) — the same seam discipline as the rate
-limiter, so a multi-instance deployment moves it to the shared broker.
+limiter. Multi-instance (P6, doc 11 row C) did not add a broker: the
+runtime runs only on the process holding a Postgres advisory lock
+(`pg_try_advisory_lock`, `server/internal/api/cluster.go`), other
+processes learn of outbox rows through `LISTEN/NOTIFY`, and the spend
+meters stay in the leader's memory (a leader change restarts the 24h
+window).
 
 - **Inbox.** The issue table is the queue: open, unpaused, non-terminal,
   assigned to the agent. A dispatcher reconciles the fleet on a tick

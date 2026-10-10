@@ -28,7 +28,7 @@ Follow-ups are tracked in `docs/spec/28-frontend-follow-ups.md`.
 | Item | Status |
 | --- | --- |
 | Responsive issue side panel (&lt;768px full width) | Done |
-| R-10 trim built-in AI writing on new issue | Done |
+| R-10 trim built-in AI writing on new issue | Done — the new-issue title help; the editor AI-writing extension and continue-writing service that survived it are removed in the 2026-10 hardening pass (doc 11 R-10) |
 | Board virtualization pass at 10k | Done — all column views (category, team, priority, label, assignee); `board-profile.mjs`, overscan 5 |
 
 ## Phase 5 — Hardening

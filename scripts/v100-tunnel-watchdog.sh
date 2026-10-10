@@ -12,7 +12,11 @@ set -u
 umask 077
 
 PORT="${CONVERGE_TUNNEL_PROBE_PORT:-8000}"
-KEY="${CONVERGE_TUNNEL_KEY:-$HOME/coding/tunnel.key}"
+KEY="${CONVERGE_TUNNEL_KEY:-}"
+if [ -z "$KEY" ]; then
+	echo "usage: CONVERGE_TUNNEL_KEY=/path/to/ssh-key $0 (must match the tunnel's key)" >&2
+	exit 64
+fi
 LOG="${CONVERGE_TUNNEL_LOG:-$HOME/Library/Logs/converge-v100-tunnel.log}"
 
 # /v1/models is a token-free liveness probe.

@@ -1,15 +1,6 @@
-import {
-  type IAnyStateTreeNode,
-  type Instance,
-  types,
-  flow,
-} from 'mobx-state-tree';
+import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
 
 import type { IssueArtifactType } from 'common/types';
-
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 
 import { IssueArtifactArray } from './models';
 
@@ -57,25 +48,7 @@ export const IssueArtifactsStore: IAnyStateTreeNode = types
       }
     };
 
-    const load = flow(function* (issueId: string) {
-      if (isMemoryAuthorityModel(MODELS.IssueArtifact)) {
-        return;
-      }
-      const artifacts = issueId
-        ? yield convergeDatabase.issueArtifacts
-            .where({
-              issueId,
-            })
-            .toArray()
-        : [];
-
-      // Create a new IssueArtifactArray for this issueId
-      if (artifacts.length > 0) {
-        self.issueArtifacts.set(issueId, IssueArtifactArray.create(artifacts));
-      }
-    });
-
-    return { update, deleteById, load };
+    return { update, deleteById };
   })
   .views((self) => ({
     getArtifacts(issueId: string): IssueArtifactType[] {

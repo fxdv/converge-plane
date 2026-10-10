@@ -1,15 +1,6 @@
-import {
-  type IAnyStateTreeNode,
-  type Instance,
-  flow,
-  types,
-} from 'mobx-state-tree';
+import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
 
 import type { NotificationType } from 'common/types';
-
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 
 import { NotificationArray } from './models';
 
@@ -30,7 +21,7 @@ export const NotificationsStore: IAnyStateTreeNode = types
       }
       self.recipientId = next;
       // A different account: the previous recipient's rows are not
-      // ours. The array is rebuilt by the workspace load; clear so the
+      // ours. The sync feed and the inbox fetch refill it; clear so the
       // badge never shows another account's count.
       self.notifications.clear();
     };
@@ -58,27 +49,7 @@ export const NotificationsStore: IAnyStateTreeNode = types
       }
     };
 
-    const load = flow(function* (workspaceId: string) {
-      if (isMemoryAuthorityModel(MODELS.Notification)) {
-        return;
-      }
-      const recipientId = self.recipientId;
-      if (!recipientId) {
-        self.notifications.clear();
-        return;
-      }
-      // The annotation is load-bearing: a yield in a flow types as any
-      // (noImplicitAny would otherwise flag the callback below).
-      const rows: NotificationType[] = yield convergeDatabase.notifications
-        .where('recipientId')
-        .equals(recipientId)
-        .toArray();
-      self.notifications = NotificationArray.create(
-        rows.filter((r) => r.workspaceId === workspaceId),
-      );
-    });
-
-    return { setRecipient, update, deleteById, load };
+    return { setRecipient, update, deleteById };
   })
   .views((self) => {
     // The shared body (a view cannot reference another view through

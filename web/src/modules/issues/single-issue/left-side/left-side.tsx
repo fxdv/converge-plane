@@ -1,11 +1,10 @@
 import { Editor, EditorExtensions } from '@converge/ui/components/editor/index';
+import { suggestionItems } from '@converge/ui/components/editor/slash-command';
 import { ScrollArea } from '@converge/ui/components/scroll-area';
 import { Separator } from '@converge/ui/components/separator';
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 import { useDebouncedCallback } from 'use-debounce';
-
-import { useEditorSuggestionItems } from 'modules/issues/components/use-editor-suggestion-items';
 
 import { getTiptapJSON } from 'common';
 import { convergeIssueExtension } from 'common/editor/converge-issue-extension';
@@ -32,7 +31,6 @@ import { SubIssueView } from './sub-issue-view';
 export const LeftSide = observer(() => {
   const issue = useIssueData();
   const { mutate: updateIssue } = useUpdateIssueMutation({});
-  const { suggestionItems } = useEditorSuggestionItems();
 
   const onDescriptionChange = useDebouncedCallback((content: string) => {
     const { json: description } = getTiptapJSON(content);

@@ -21,7 +21,6 @@ import {
   markNotificationRead,
 } from 'services/workspace';
 
-import { convergeDatabase } from 'store/database';
 import { useContextStore } from 'store/global-context-provider';
 
 // spec cs:swarm:inbox
@@ -170,13 +169,12 @@ export const InboxPage = withApplicationStore(() => {
     setSettled(false);
     setFailed(false);
     listNotifications(workspace.id)
-      .then(async (incoming) => {
+      .then((incoming) => {
         if (cancel) {
           return;
         }
         for (const row of incoming ?? []) {
           notificationsStore.update(row);
-          await convergeDatabase.notifications.put(row);
         }
         if (!cancel) {
           setSettled(true);
@@ -202,7 +200,6 @@ export const InboxPage = withApplicationStore(() => {
     try {
       const updated = await markNotificationRead(n.id);
       notificationsStore.update(updated);
-      await convergeDatabase.notifications.put(updated);
     } catch {
       // The row stays unread; the feed or the next list fetch settles it.
     }
@@ -215,7 +212,6 @@ export const InboxPage = withApplicationStore(() => {
     const stamp = new Date().toISOString();
     for (const n of unread) {
       notificationsStore.update({ ...n, readAt: stamp });
-      await convergeDatabase.notifications.put({ ...n, readAt: stamp });
     }
     try {
       await markAllNotificationsRead(workspace.id);

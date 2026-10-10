@@ -18,7 +18,7 @@ Open decisions do not authorize broader scope. Each row has a recommended defaul
 | OD-10 | PostgreSQL search strategy | Built-in full-text/trigram indexes with exact key boost; no Elasticsearch/vector DB | Before search implementation | OPEN — default strong |
 | OD-11 | MVP job execution | PostgreSQL transactional outbox and leased worker, runnable in same artifact; no Trigger.dev/external scheduler | Before outbox implementation | OPEN — default strong |
 | OD-12 | NEXT attachment storage/scanning | S3-compatible interface plus local-development adapter; short-lived URLs; pluggable scanning hook and quarantine policy | Before attachment schema/API | OPEN — NEXT blocking |
-| OD-13 | NEXT project/cycle rules | Projects cross teams without granting access; cycles single-team/non-overlapping; explicit incomplete-item rollover | Before planning schema | OPEN — NEXT blocking |
+| OD-13 | NEXT project/cycle rules | Projects cross teams without granting access; cycles single-team/non-overlapping; explicit incomplete-item rollover | Before planning schema | PARTIAL — the project half shipped in v1.1 (0017_projects.sql: workspace-scoped, `teams[]` scopes which boards show a project and grants nothing, one project per issue); the cycle rules stay OPEN — NEXT blocking |
 | OD-14 | NEXT notification triggers/grouping | Assignment, mention, comment, relation, watched issue; deterministic burst grouping; in-app only; user mute controls | Before notification projector | OPEN for mute and grouping — the in-app inbox has shipped |
 | OD-15 | Performance budgets and representative scale | Define p95 API/UI budgets using 10k issues/workspace, 1k/team active collection, 100 concurrent sessions as initial fixture—not claimed capacity | Before MVP UI acceptance | **Defined** — [24-od15-web-performance-budgets.md](24-od15-web-performance-budgets.md); p95 verification on fixture still **OPEN** for beta |
 | OD-16 | Realtime transport | SSE in NEXT; refetch/gap recovery authoritative; WebSocket only for measured bidirectional need | Before NEXT realtime implementation | CLOSED — SSE (doc 11 R-8) |
@@ -36,7 +36,7 @@ These are not open implementation choices:
 - Tegon architecture is rejected as a greenfield base. The web is a Tegon-derived fork; doc 11 records that.
 - The product is workspace-tenant and team-restricted.
 - Authentication alone is insufficient; object authorization uses the explicit matrix.
-- Saved views, the in-app inbox, external coding agents, and GitHub linking have shipped. Projects, cycles, and attachments have not.
+- Saved views, the in-app inbox, external coding agents, and GitHub linking have shipped. Projects shipped in v1.1 (doc 03 CAP-PLAN-01). Cycles and attachments have not.
 - Arbitrary remote Actions, in-process third-party code, token injection, full client database replication, WAL dependence, support/CRM, built-in conversational AI, and semantic/vector search are excluded. Coding agents the operator runs are not that exclusion.
 - Public/shared URLs, projects, assignments, notifications, and integrations never grant permission implicitly.
 - Security, accessibility, audit, backup/restore, upgrade safety, and tests are delivery requirements, not optional hardening.

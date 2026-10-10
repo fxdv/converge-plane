@@ -8,7 +8,5 @@ export * from './pull-requests';
 export * from './done-approval';
 export * from './handoff-issue';
 export * from './move-issue-to-team';
-export * from './summarise-issue';
-export * from './ai';
 export * from './issue-suggestions';
 export * from './subscribe-issue';

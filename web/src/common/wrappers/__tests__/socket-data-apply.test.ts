@@ -264,20 +264,15 @@ const rec = (
 
 // --- The object-cache stand-in -------------------------------------------
 // Dexie table property names (the constructor binds camelCase properties
-// to the MODELS-named tables); SwarmActivity is in-memory, no table.
+// to the MODELS-named tables). Memory-authority models (R-9) and the
+// in-memory swarm signal have no table.
 const TABLE_PROPS: Record<string, string> = {
   [MODELS.Workspace]: 'workspaces',
   [MODELS.Label]: 'labels',
   [MODELS.Team]: 'teams',
-  [MODELS.Workflow]: 'workflows',
-  [MODELS.Issue]: 'issues',
   [MODELS.UsersOnWorkspaces]: 'usersOnWorkspaces',
-  [MODELS.IssueHistory]: 'issueHistory',
-  [MODELS.IssueComment]: 'comments',
-  [MODELS.IssueArtifact]: 'issueArtifacts',
   [MODELS.View]: 'views',
   [MODELS.Project]: 'projects',
-  [MODELS.Notification]: 'notifications',
 };
 
 interface TableStub {
@@ -451,17 +446,10 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.equal(map[MODELS.Notification].notifications.length, 1);
     assert.equal(map[MODELS.Notification].notifications[0].recipientId, 'u2');
 
-    // Every Dexie-backed model got its cache row; R-9 slice 1 skips Issue
-    // and Workflow; swarm is in-memory.
+    // Every Dexie-backed model got its cache row; memory-authority
+    // models (R-9) have no table, so nothing else wrote.
     for (const model of Object.keys(TABLE_PROPS)) {
-      if (!persistModelToDexie(model)) {
-        assert.equal(
-          tableStubs.get(model)!.puts.length,
-          0,
-          `expected no cache put for ${model}`,
-        );
-        continue;
-      }
+      assert.equal(persistModelToDexie(model), true);
       assert.equal(
         tableStubs.get(model)!.puts.length,
         1,
@@ -509,11 +497,7 @@ describe('saveSocketData (the sync apply pipeline)', () => {
     assert.equal(map[MODELS.IssueComment].comments.size, 0);
     assert.equal(map[MODELS.IssueArtifact].issueArtifacts.size, 0);
     assert.deepEqual(tableStubs.get(MODELS.Label)!.dels, ['l1']);
-    assert.deepEqual(tableStubs.get(MODELS.Issue)!.dels, []);
     assert.deepEqual(tableStubs.get(MODELS.UsersOnWorkspaces)!.dels, ['m1']);
-    assert.deepEqual(tableStubs.get(MODELS.IssueHistory)!.dels, []);
-    assert.deepEqual(tableStubs.get(MODELS.IssueComment)!.dels, []);
-    assert.deepEqual(tableStubs.get(MODELS.IssueArtifact)!.dels, []);
   });
 
   it('a degraded record fails its own model only (the batch survives)', async () => {
@@ -592,13 +576,13 @@ describe('saveLiveSocketData (the dedupe guard composed with the apply)', () => 
     // The stream drops between delivery and the watermark write, then
     // re-delivers the old CREATE over the newer DELETE: it must be deduped
     // before the apply, never reaching the handler.
-    const putsBefore = tableStubs.get(MODELS.Issue)!.puts.length;
+    const putsBefore = allWrites().puts;
     await saveLiveSocketData(
       [rec(MODELS.Issue, 'i1', 'I', issue(), '1001')],
       map,
     );
     assert.equal(map[MODELS.Issue].issuesMap.size, 0); // no resurrection
-    assert.equal(tableStubs.get(MODELS.Issue)!.puts.length, putsBefore);
+    assert.equal(allWrites().puts, putsBefore);
   });
 
   it('applies a fresh batch above the high-water and advances it', async () => {
@@ -637,7 +621,7 @@ describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
   // to u2 (the signed-in account).
   it('keeps the recipient rows and drops another members nudges', async () => {
     const map = storeMap();
-    const putsBefore = tableStubs.get(MODELS.Notification)!.puts.length;
+    const putsBefore = allWrites().puts;
     await saveSocketData(
       [
         rec(MODELS.Notification, 'n1', 'I', notification(), '50'),
@@ -655,13 +639,13 @@ describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
       map[MODELS.Notification].notifications.map((n: { id: string }) => n.id),
       ['n1'],
     );
-    // R-9 slice 3: notifications are MST-only; Dexie is not written.
-    assert.equal(tableStubs.get(MODELS.Notification)!.puts.length, putsBefore);
+    // R-9: notifications are MST-only; no cache table is written.
+    assert.equal(allWrites().puts, putsBefore);
   });
 
   it('a row without a recognizable recipient is dropped (never guessed)', async () => {
     const map = storeMap();
-    const putsBefore = tableStubs.get(MODELS.Notification)!.puts.length;
+    const putsBefore = allWrites().puts;
     await saveSocketData(
       [
         rec(
@@ -675,7 +659,7 @@ describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
       map,
     );
     assert.equal(map[MODELS.Notification].notifications.length, 0);
-    assert.equal(tableStubs.get(MODELS.Notification)!.puts.length, putsBefore);
+    assert.equal(allWrites().puts, putsBefore);
   });
 
   it('a D removes from the store and the cache (the retention path)', async () => {
@@ -685,12 +669,12 @@ describe('saveNotificationsData (the addressed delivery guard, SWR-13)', () => {
       map,
     );
     assert.equal(map[MODELS.Notification].notifications.length, 1);
-    const delsBefore = tableStubs.get(MODELS.Notification)!.dels.length;
+    const delsBefore = allWrites().dels;
     await saveSocketData(
       [rec(MODELS.Notification, 'n1', 'D', { id: 'n1' }, '54')],
       map,
     );
     assert.equal(map[MODELS.Notification].notifications.length, 0);
-    assert.equal(tableStubs.get(MODELS.Notification)!.dels.length, delsBefore);
+    assert.equal(allWrites().dels, delsBefore);
   });
 });

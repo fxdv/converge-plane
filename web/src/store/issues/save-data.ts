@@ -2,10 +2,6 @@ import type { IssuesStoreType } from './store';
 
 import type { SyncActionRecord } from 'common/types';
 
-import { persistModelToDexie } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
-
 export async function saveIssuesData(
   data: SyncActionRecord[],
   issuesStore: IssuesStoreType,
@@ -48,31 +44,20 @@ export async function saveIssuesData(
         version: record.data.version ?? 0,
       };
 
-      const persist = persistModelToDexie(MODELS.Issue);
-
       switch (record.action) {
         case 'I': {
-          if (persist) {
-            await convergeDatabase.issues.put(issue);
-          }
           return (
             issuesStore && (await issuesStore.update(issue, record.data.id))
           );
         }
 
         case 'U': {
-          if (persist) {
-            await convergeDatabase.issues.put(issue);
-          }
           return (
             issuesStore && (await issuesStore.update(issue, record.data.id))
           );
         }
 
         case 'D': {
-          if (persist) {
-            await convergeDatabase.issues.delete(record.data.id);
-          }
           return issuesStore && (await issuesStore.deleteById(record.data.id));
         }
       }

@@ -15,11 +15,7 @@ export const WorkspaceStoreInit = observer(
       teamsStore,
       labelsStore,
       projectsStore,
-      issuesStore,
-      workflowsStore,
       viewsStore,
-      agentRunsStore,
-      issuePullRequestsStore,
     } = useContextStore();
 
     const currentWorkspace = useCurrentWorkspace();
@@ -34,17 +30,13 @@ export const WorkspaceStoreInit = observer(
     // All data related to workspace
     const initWorkspaceBasedStores = React.useCallback(async () => {
       await workspaceStore.load(currentWorkspace.id);
-      await workflowsStore.load();
       await teamsStore.load();
       setLoading(false);
 
       await Promise.all([
         labelsStore.load(),
         projectsStore.load(),
-        issuesStore.load(),
         viewsStore.load(),
-        agentRunsStore.load(),
-        issuePullRequestsStore.load(),
       ]);
 
       // eslint-disable-next-line react-hooks/exhaustive-deps

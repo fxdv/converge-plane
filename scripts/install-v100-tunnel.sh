@@ -6,6 +6,10 @@
 #   com.converge.v100tunnel-watchdog   2-minute liveness probe (StartInterval)
 #
 # Idempotent: safe to re-run after moving the repo or after --uninstall.
+# Install:     CONVERGE_TUNNEL_HOST=user@host CONVERGE_TUNNEL_KEY=/path/to/key \
+#                scripts/install-v100-tunnel.sh
+#              (both are required; they are written into the plists'
+#              EnvironmentVariables because launchd does not inherit your shell)
 # Uninstall:   scripts/install-v100-tunnel.sh --uninstall
 set -euo pipefail
 
@@ -39,6 +43,13 @@ install_one() {
 		<string>$program</string>
 	</array>
 	$extra
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CONVERGE_TUNNEL_HOST</key>
+		<string>$TUNNEL_HOST</string>
+		<key>CONVERGE_TUNNEL_KEY</key>
+		<string>$TUNNEL_KEY</string>
+	</dict>
 	<key>WorkingDirectory</key>
 	<string>$HOME</string>
 	<key>StandardOutPath</key>
@@ -64,6 +75,18 @@ if [ "${1:-}" = "--uninstall" ]; then
 		echo "uninstalled $label"
 	done
 	exit 0
+fi
+
+TUNNEL_HOST="${CONVERGE_TUNNEL_HOST:-}"
+TUNNEL_KEY="${CONVERGE_TUNNEL_KEY:-}"
+if [ -z "$TUNNEL_HOST" ] || [ -z "$TUNNEL_KEY" ]; then
+	echo "usage: CONVERGE_TUNNEL_HOST=user@host CONVERGE_TUNNEL_KEY=/path/to/ssh-key $0 [--uninstall]" >&2
+	echo "  both CONVERGE_TUNNEL_HOST and CONVERGE_TUNNEL_KEY must be set (no defaults)" >&2
+	exit 64
+fi
+if [ ! -r "$TUNNEL_KEY" ]; then
+	echo "error: CONVERGE_TUNNEL_KEY=$TUNNEL_KEY is not readable" >&2
+	exit 1
 fi
 
 # The loop: always running; launchd respawns it if the script itself dies.

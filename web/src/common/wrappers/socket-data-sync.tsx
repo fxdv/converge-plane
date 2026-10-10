@@ -9,6 +9,7 @@ import { useCurrentWorkspace } from 'hooks/workspace';
 
 import { getDeltaRecords } from 'services/sync';
 
+import { lastSequenceIdKey } from 'store/database';
 import { useContextStore } from 'store/global-context-provider';
 import { MODELS } from 'store/models';
 import { UserContext } from 'store/user-context';
@@ -94,7 +95,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       // (SWR-51): from here on the tab fetches and dedupes against its
       // own cursor, never against what another tab wrote to the shared
       // key. The shared key remains the cross-tab floor.
-      seedTabHighWater(localStorage.getItem(`lastSequenceId_${hash(hashKey)}`));
+      seedTabHighWater(localStorage.getItem(lastSequenceIdKey(hash(hashKey))));
       const url = `${base}/api/v1/sync_actions/stream?workspaceId=${workspaceStore.workspace.id}&userId=${user.id}`;
       const socket = new EventSource(url, { withCredentials: true });
       socketRef.current = socket;
@@ -104,10 +105,10 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
       // would let a third tab skip records (SWR-51).
       const advanceShared = (seq: number) => {
         const stored = Number(
-          localStorage.getItem(`lastSequenceId_${hash(hashKey)}`) || '0',
+          localStorage.getItem(lastSequenceIdKey(hash(hashKey))) || '0',
         );
         if (seq > stored) {
-          localStorage.setItem(`lastSequenceId_${hash(hashKey)}`, `${seq}`);
+          localStorage.setItem(lastSequenceIdKey(hash(hashKey)), `${seq}`);
         }
       };
 
@@ -179,7 +180,7 @@ export const SocketDataSyncWrapper: React.FC<Props> = observer(
             // The delta is incomplete: forget the watermark so the next
             // load takes a full snapshot; don't advance past the gap.
             await apply(dedupeLiveRecords(resp.syncActions));
-            localStorage.removeItem(`lastSequenceId_${hash(hashKey)}`);
+            localStorage.removeItem(lastSequenceIdKey(hash(hashKey)));
             feedStale = true;
             setSyncFeedStatus('stale');
             return;

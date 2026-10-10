@@ -1,24 +1,11 @@
 import { AdjustableTextArea } from '@converge/ui/components/adjustable-textarea';
-import { Button } from '@converge/ui/components/button';
 import {
   FormControl,
   FormField,
   FormItem,
   FormMessage,
 } from '@converge/ui/components/form';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@converge/ui/components/tooltip';
-import { AI } from '@converge/ui/icons';
-import { useWatch } from 'react-hook-form';
 
-import { useCurrentWorkspace } from 'hooks/workspace';
-
-import { useAITitleMutation } from 'services/issues';
-
-import { useDescriptionChange } from './new-issue-utils';
 import { type IssueDraftForm } from './new-issues-type';
 
 interface NewIssueTitleProps {
@@ -27,74 +14,9 @@ interface NewIssueTitleProps {
   isSubIssue: boolean;
 }
 
-function getDescription(description: string) {
-  try {
-    return description ? JSON.parse(description).text : '';
-  } catch (e) {
-    return description;
-  }
-}
-
-function getIfTouched(form: IssueDraftForm, index: number) {
-  if (
-    form.formState.touchedFields.issues &&
-    form.formState.touchedFields.issues[index]
-  ) {
-    return !!form.formState.touchedFields.issues[index].title;
-  }
-
-  return false;
-}
-
 export function NewIssueTitle({ form, index, isSubIssue }: NewIssueTitleProps) {
-  const description = useWatch({
-    control: form.control,
-    name: `issues.${index}.description`,
-  });
-
-  const touched = getIfTouched(form, index);
-
-  const descriptionString = getDescription(description);
-  const workspace = useCurrentWorkspace();
-  const { mutate, isPending } = useAITitleMutation({
-    onSuccess: (data) => {
-      if (data) {
-        if (data === 'null') {
-        } else {
-          form.setValue(`issues.${index}.title`, data);
-        }
-      }
-    },
-  });
-
-  useDescriptionChange(touched, descriptionString, (description: string) => {
-    (mutate({ description, workspaceId: workspace.id }), 100, 40);
-  });
-
   return (
     <div className="p-4 py-2 text-lg font-normal w-full gap-2 flex items-center">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="link"
-            className="px-0"
-            isLoading={isPending}
-            onClick={() => {
-              if (descriptionString) {
-                mutate({
-                  description: descriptionString,
-                  workspaceId: workspace.id,
-                });
-              }
-            }}
-          >
-            <AI size={16} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Click to generate title</p>
-        </TooltipContent>
-      </Tooltip>
       <FormField
         control={form.control}
         name={`issues.${index}.title`}

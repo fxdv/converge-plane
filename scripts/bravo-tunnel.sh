@@ -5,14 +5,19 @@
 # where docker compose publishes the Converge stack. Use after deploy when
 # you want localhost in the browser without running web/api locally.
 #
-# Env overrides (all optional): CONVERGE_TUNNEL_HOST, CONVERGE_TUNNEL_KEY,
-# CONVERGE_TUNNEL_LOG, CONVERGE_TUNNEL_REMOTE_WEB, CONVERGE_TUNNEL_REMOTE_API.
+# Required env: CONVERGE_TUNNEL_HOST (user@host), CONVERGE_TUNNEL_KEY (ssh key
+# path). Optional overrides: CONVERGE_TUNNEL_LOG, CONVERGE_TUNNEL_REMOTE_WEB, CONVERGE_TUNNEL_REMOTE_API.
 # Never prompts: BatchMode.
 set -u
 umask 077
 
-HOST="${CONVERGE_TUNNEL_HOST:-user1@203.0.113.10}"
-KEY="${CONVERGE_TUNNEL_KEY:-$HOME/coding/tunnel.key}"
+HOST="${CONVERGE_TUNNEL_HOST:-}"
+KEY="${CONVERGE_TUNNEL_KEY:-}"
+if [ -z "$HOST" ] || [ -z "$KEY" ]; then
+	echo "usage: CONVERGE_TUNNEL_HOST=user@host CONVERGE_TUNNEL_KEY=/path/to/ssh-key $0" >&2
+	echo "  both CONVERGE_TUNNEL_HOST and CONVERGE_TUNNEL_KEY must be set (no defaults)" >&2
+	exit 64
+fi
 LOG="${CONVERGE_TUNNEL_LOG:-$HOME/Library/Logs/converge-bravo-tunnel.log}"
 REMOTE_WEB="${CONVERGE_TUNNEL_REMOTE_WEB:-127.0.0.1:3000}"
 REMOTE_API="${CONVERGE_TUNNEL_REMOTE_API:-127.0.0.1:3001}"

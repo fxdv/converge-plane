@@ -2,8 +2,6 @@ import type { UseFormReturn } from 'react-hook-form';
 
 import { WorkflowCategory } from '@converge/types';
 import React from 'react';
-import { useState, useEffect, useCallback } from 'react';
-import { useDebouncedCallback } from 'use-debounce';
 
 import type { IssueType, TeamType, WorkflowType } from 'common/types';
 
@@ -99,46 +97,6 @@ export function useTeamForNewIssue(defaultTeamId: string): {
   };
 
   return { team, setTeam: setTeamWithIdentifier };
-}
-
-export function useDescriptionChange(
-  touched: boolean,
-  value: string,
-  callback: (description: string) => void,
-  delay = 500,
-  threshold = 5,
-) {
-  const [prevValue, setPrevValue] = useState(value);
-
-  const hasSignificantChange = (newValue: string, oldValue: string) => {
-    if (!oldValue) {
-      return true;
-    }
-    // Define what constitutes a "significant" change
-    // This is a simple example, customize it based on your needs
-    return Math.abs(newValue.length - oldValue.length) > threshold;
-  };
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const debouncedCallback = useCallback(
-    useDebouncedCallback((newValue) => {
-      if (hasSignificantChange(newValue, prevValue) && !touched) {
-        callback(newValue);
-        setPrevValue(newValue);
-      }
-    }, delay),
-    [prevValue, callback, delay, touched],
-  );
-
-  useEffect(() => {
-    if (value) {
-      debouncedCallback(value);
-    }
-  }, [value, debouncedCallback]);
-
-  return {
-    prevValue,
-  };
 }
 
 export function getBacklogWorkflow(workflows: WorkflowType[]) {

@@ -3,7 +3,6 @@ import { runInAction } from 'mobx';
 import type { SyncActionRecord } from 'common/types';
 
 import { saveAgentRunsData } from 'store/agent-runs';
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
 import { saveCommentsData } from 'store/comments';
 import { convergeDatabase } from 'store/database';
 import { saveIssueArtifactsData } from 'store/issue-artifacts';
@@ -465,144 +464,89 @@ async function localRowsForModel(
     case MODELS.View:
       return db.views.where('workspaceId').equals(domain.workspaceId).toArray();
     case MODELS.Workflow:
-      if (isMemoryAuthorityModel(MODELS.Workflow)) {
-        return Array.from(
-          MODEL_STORE_MAP[MODELS.Workflow]?.workflows.values() ?? [],
-        ).map((row: { id: string }) => ({ id: row.id }));
+      return Array.from(
+        MODEL_STORE_MAP[MODELS.Workflow]?.workflows.values() ?? [],
+      ).map((row: { id: string }) => ({ id: row.id }));
+    case MODELS.Issue: {
+      const store = MODEL_STORE_MAP[MODELS.Issue];
+      if (!store?.issuesMap) {
+        return [];
       }
-      return domain.teamIds.size
-        ? db.workflows
-            .where('teamId')
-            .anyOf([...domain.teamIds])
-            .toArray()
-        : [];
-    case MODELS.Issue:
-      if (isMemoryAuthorityModel(MODELS.Issue)) {
-        const store = MODEL_STORE_MAP[MODELS.Issue];
-        if (!store?.issuesMap) {
-          return [];
-        }
-        return Array.from(store.issuesMap.values())
-          .filter((issue: { teamId: string }) =>
-            domain.teamIds.size ? domain.teamIds.has(issue.teamId) : true,
-          )
-          .map((issue: { id: string }) => ({ id: issue.id }));
-      }
-      return domain.teamIds.size
-        ? db.issues
-            .where('teamId')
-            .anyOf([...domain.teamIds])
-            .toArray()
-        : [];
+      return Array.from(store.issuesMap.values())
+        .filter((issue: { teamId: string }) =>
+          domain.teamIds.size ? domain.teamIds.has(issue.teamId) : true,
+        )
+        .map((issue: { id: string }) => ({ id: issue.id }));
+    }
     case MODELS.IssueComment: {
-      if (isMemoryAuthorityModel(MODELS.IssueComment)) {
-        const store = MODEL_STORE_MAP[MODELS.IssueComment];
-        if (!store?.comments) {
-          return [];
-        }
-        const rows: Array<{ id: string }> = [];
-        for (const [issueId, comments] of store.comments.entries()) {
-          if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
-            continue;
-          }
-          for (const comment of comments as Array<{ id: string }>) {
-            rows.push({ id: comment.id });
-          }
-        }
-        return rows;
+      const store = MODEL_STORE_MAP[MODELS.IssueComment];
+      if (!store?.comments) {
+        return [];
       }
-      return domain.issueIds.size
-        ? db.comments
-            .where('issueId')
-            .anyOf([...domain.issueIds])
-            .toArray()
-        : [];
+      const rows: Array<{ id: string }> = [];
+      for (const [issueId, comments] of store.comments.entries()) {
+        if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
+          continue;
+        }
+        for (const comment of comments as Array<{ id: string }>) {
+          rows.push({ id: comment.id });
+        }
+      }
+      return rows;
     }
     case MODELS.IssueHistory: {
-      if (isMemoryAuthorityModel(MODELS.IssueHistory)) {
-        const store = MODEL_STORE_MAP[MODELS.IssueHistory];
-        if (!store?.issueHistories) {
-          return [];
-        }
-        const rows: Array<{ id: string }> = [];
-        for (const [issueId, histories] of store.issueHistories.entries()) {
-          if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
-            continue;
-          }
-          for (const row of histories as Array<{ id: string }>) {
-            rows.push({ id: row.id });
-          }
-        }
-        return rows;
+      const store = MODEL_STORE_MAP[MODELS.IssueHistory];
+      if (!store?.issueHistories) {
+        return [];
       }
-      return domain.issueIds.size
-        ? db.issueHistory
-            .where('issueId')
-            .anyOf([...domain.issueIds])
-            .toArray()
-        : [];
+      const rows: Array<{ id: string }> = [];
+      for (const [issueId, histories] of store.issueHistories.entries()) {
+        if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
+          continue;
+        }
+        for (const row of histories as Array<{ id: string }>) {
+          rows.push({ id: row.id });
+        }
+      }
+      return rows;
     }
     case MODELS.IssueArtifact: {
-      if (isMemoryAuthorityModel(MODELS.IssueArtifact)) {
-        const store = MODEL_STORE_MAP[MODELS.IssueArtifact];
-        if (!store?.issueArtifacts) {
-          return [];
-        }
-        const rows: Array<{ id: string }> = [];
-        for (const [issueId, artifacts] of store.issueArtifacts.entries()) {
-          if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
-            continue;
-          }
-          for (const row of artifacts as Array<{ id: string }>) {
-            rows.push({ id: row.id });
-          }
-        }
-        return rows;
+      const store = MODEL_STORE_MAP[MODELS.IssueArtifact];
+      if (!store?.issueArtifacts) {
+        return [];
       }
-      return domain.issueIds.size
-        ? db.issueArtifacts
-            .where('issueId')
-            .anyOf([...domain.issueIds])
-            .toArray()
-        : [];
+      const rows: Array<{ id: string }> = [];
+      for (const [issueId, artifacts] of store.issueArtifacts.entries()) {
+        if (domain.issueIds.size && !domain.issueIds.has(issueId)) {
+          continue;
+        }
+        for (const row of artifacts as Array<{ id: string }>) {
+          rows.push({ id: row.id });
+        }
+      }
+      return rows;
     }
     case MODELS.AgentRun: {
-      if (isMemoryAuthorityModel(MODELS.AgentRun)) {
-        const store = MODEL_STORE_MAP[MODELS.AgentRun];
-        if (!store?.runs) {
-          return [];
-        }
-        return Array.from(store.runs.values())
-          .filter((run: { issueId: string }) =>
-            domain.issueIds.size ? domain.issueIds.has(run.issueId) : true,
-          )
-          .map((run: { id: string }) => ({ id: run.id }));
+      const store = MODEL_STORE_MAP[MODELS.AgentRun];
+      if (!store?.runs) {
+        return [];
       }
-      return domain.issueIds.size
-        ? db.agentRuns
-            .where('issueId')
-            .anyOf([...domain.issueIds])
-            .toArray()
-        : [];
+      return Array.from(store.runs.values())
+        .filter((run: { issueId: string }) =>
+          domain.issueIds.size ? domain.issueIds.has(run.issueId) : true,
+        )
+        .map((run: { id: string }) => ({ id: run.id }));
     }
     case MODELS.IssuePullRequest: {
-      if (isMemoryAuthorityModel(MODELS.IssuePullRequest)) {
-        const store = MODEL_STORE_MAP[MODELS.IssuePullRequest];
-        if (!store?.pullRequests) {
-          return [];
-        }
-        return Array.from(store.pullRequests.values())
-          .filter((pr: { issueId: string }) =>
-            domain.issueIds.size ? domain.issueIds.has(pr.issueId) : true,
-          )
-          .map((pr: { id: string }) => ({ id: pr.id }));
+      const store = MODEL_STORE_MAP[MODELS.IssuePullRequest];
+      if (!store?.pullRequests) {
+        return [];
       }
-      return domain.issueIds.size
-        ? db.issuePullRequests
-            .where('issueId')
-            .anyOf([...domain.issueIds])
-            .toArray()
-        : [];
+      return Array.from(store.pullRequests.values())
+        .filter((pr: { issueId: string }) =>
+          domain.issueIds.size ? domain.issueIds.has(pr.issueId) : true,
+        )
+        .map((pr: { id: string }) => ({ id: pr.id }));
     }
     case MODELS.SwarmActivity:
       // In-memory only (no cache table): the whole store is the local set.
@@ -610,21 +554,13 @@ async function localRowsForModel(
         MODEL_STORE_MAP[MODELS.SwarmActivity]?.activities.values() ?? [],
       );
     case MODELS.Notification: {
-      if (isMemoryAuthorityModel(MODELS.Notification)) {
-        const store = MODEL_STORE_MAP[MODELS.Notification];
-        if (!store?.notifications) {
-          return [];
-        }
-        return (
-          store.notifications as Array<{ id: string; workspaceId: string }>
-        )
-          .filter((n) => n.workspaceId === domain.workspaceId)
-          .map((n) => ({ id: n.id }));
+      const store = MODEL_STORE_MAP[MODELS.Notification];
+      if (!store?.notifications) {
+        return [];
       }
-      return db.notifications
-        .where('workspaceId')
-        .equals(domain.workspaceId)
-        .toArray();
+      return (store.notifications as Array<{ id: string; workspaceId: string }>)
+        .filter((n) => n.workspaceId === domain.workspaceId)
+        .map((n) => ({ id: n.id }));
     }
     default:
       return [];
@@ -656,25 +592,14 @@ export async function pruneStaleLocalRecords(
       .equals(workspaceId)
       .toArray();
     const teamIds = new Set(teams.map((t) => t.id));
-    let issueIds: Set<string>;
-    if (isMemoryAuthorityModel(MODELS.Issue)) {
-      const store = MODEL_STORE_MAP[MODELS.Issue];
-      issueIds = new Set(
-        store?.issuesMap
-          ? Array.from(store.issuesMap.values())
-              .filter((i: { teamId: string }) => teamIds.has(i.teamId))
-              .map((i: { id: string }) => i.id)
-          : [],
-      );
-    } else {
-      const issues = teamIds.size
-        ? await convergeDatabase.issues
-            .where('teamId')
-            .anyOf([...teamIds])
-            .toArray()
-        : [];
-      issueIds = new Set(issues.map((i) => i.id));
-    }
+    const issueStore = MODEL_STORE_MAP[MODELS.Issue];
+    const issueIds = new Set<string>(
+      issueStore?.issuesMap
+        ? Array.from(issueStore.issuesMap.values())
+            .filter((i: { teamId: string }) => teamIds.has(i.teamId))
+            .map((i: { id: string }) => i.id)
+        : [],
+    );
     const domain: PruneDomain = {
       workspaceId,
       teamIds,

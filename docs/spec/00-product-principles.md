@@ -64,10 +64,10 @@ The product succeeds when a new team can:
 
 | Release | Commitment |
 | --- | --- |
-| **Shipped** | The board (workspaces, teams, issues, workflows, labels, comments, list/Kanban, filters, search, saved views), in-app notifications, external coding agents over MCP, agent runs and cost, GitHub pull-request links and one-way issue import, and the in-process floor that triages. |
-| **NEXT — Collaboration** | Projects, cycles, attachments, and the notification controls that have not shipped (mute, grouping beyond the current inbox). |
+| **Shipped** | The board (workspaces, teams, issues, workflows, labels, comments, list/Kanban, filters, search, saved views), in-app notifications, external coding agents over MCP, agent runs and cost, GitHub pull-request links and one-way issue import, projects (v1.1: workspace-scoped, one per issue, board rail), and the in-process floor that triages. |
+| **NEXT — Collaboration** | Cycles, attachments, project depth beyond v1.1 (multi-project membership, milestones stay EXCLUDED), and the notification controls that have not shipped (mute, grouping beyond the current inbox). |
 | **LATER — Integrations** | Slack, templates, a versioned public API/SDK beyond the agent API, and further outbound webhooks. |
-| **EXCLUDED — Optional RFC or never** | Built-in conversational AI, AI issue writing, prompt administration, remote Actions, support/CRM, semantic-search infrastructure, and other rows marked DEFER or DROP. |
+| **EXCLUDED — Optional RFC or never** | Built-in conversational AI, AI issue writing (the forked web's AI-writing code is removed under R-10, doc 11), prompt administration, remote Actions, support/CRM, semantic-search infrastructure, and other rows marked DEFER or DROP. |
 
 Only ADOPT or ADAPT rows assigned to the active release authorize implementation. Future rows must not receive speculative tables, services, navigation, or configuration during earlier releases.
 

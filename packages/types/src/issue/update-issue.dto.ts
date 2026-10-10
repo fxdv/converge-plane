@@ -8,7 +8,6 @@ import {
 } from 'class-validator';
 
 import { CreateIssueRelationDto } from '../issue-relation';
-import { CreateLinkedIssueDto } from '../linked-issue';
 
 export class UpdateIssueDto {
   @IsOptional()
@@ -82,10 +81,6 @@ export class UpdateIssueDto {
   @IsOptional()
   @IsString()
   userId?: string;
-
-  @IsOptional()
-  @IsObject()
-  linkIssueData?: CreateLinkedIssueDto;
 
   @IsOptional()
   @IsObject()

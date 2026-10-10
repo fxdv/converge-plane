@@ -3,103 +3,85 @@
 import Dexie from 'dexie';
 
 import type {
-  AgentRunType,
-  IssueArtifactType,
-  IssueCommentType,
-  IssueHistoryType,
-  IssuePullRequestType,
-  IssueType,
   LabelType,
-  NotificationType,
   ProjectType,
   TeamType,
   UsersOnWorkspaceType,
   ViewType,
-  WorkflowType,
   WorkspaceType,
 } from 'common/types';
 
 import { MODELS } from './models';
 
 // Local object-cache for workspace metadata (teams, labels, views, …).
-// Issue-scoped models and notifications are MST-authoritative (R-9); Dexie
-// tables for those models remain for schema compatibility but are not written.
+// Issue-scoped models and notifications are MST-authoritative (R-9, see
+// client-cache-policy.ts) and have no table here.
 export class ConvergeDatabase extends Dexie {
   workspaces: Dexie.Table<WorkspaceType, string>;
   labels: Dexie.Table<LabelType, string>;
   teams: Dexie.Table<TeamType, string>;
-  workflows: Dexie.Table<WorkflowType, string>;
-  issues: Dexie.Table<IssueType, string>;
-  issueHistory: Dexie.Table<IssueHistoryType, string>;
-  comments: Dexie.Table<IssueCommentType, string>;
-  issueArtifacts: Dexie.Table<IssueArtifactType, string>;
-  agentRuns: Dexie.Table<AgentRunType, string>;
-  issuePullRequests: Dexie.Table<IssuePullRequestType, string>;
   usersOnWorkspaces: Dexie.Table<UsersOnWorkspaceType, string>;
   views: Dexie.Table<ViewType, string>;
   projects: Dexie.Table<ProjectType, string>;
-  notifications: Dexie.Table<NotificationType, string>;
 
   constructor(databaseName: string) {
     super(databaseName);
 
-    this.version(24).stores({
+    // v25 drops the memory-authority tables v24 still declared (never
+    // written since R-9) and the unqueried Team.currentCycle index.
+    // Dexie 4 diffs against the installed schema, so only the current
+    // version needs declaring; a null entry deletes that table on upgrade.
+    this.version(25).stores({
       [MODELS.Workspace]: 'id,createdAt,updatedAt,name,slug,preferences',
       [MODELS.Label]:
         'id,createdAt,updatedAt,name,color,description,workspaceId,groupId,teamId',
       [MODELS.Team]:
-        'id,createdAt,updatedAt,name,identifier,workspaceId,preferences,currentCycle',
-      [MODELS.Workflow]:
-        'id,createdAt,updatedAt,name,position,color,category,teamId,description',
-      [MODELS.Issue]:
-        'id,createdAt,updatedAt,title,number,description,priority,dueDate,sortOrder,estimate,teamId,createdById,assigneeId,labelIds,parentId,stateId,sourceMetadata.projectId,projectMilestoneId,cycleId',
+        'id,createdAt,updatedAt,name,identifier,workspaceId,preferences',
       [MODELS.UsersOnWorkspaces]:
         'id,createdAt,updatedAt,userId,workspaceId,teamIds,settings,role,status',
-      [MODELS.IssueHistory]:
-        'id,createdAt,updatedAt,userId,issueId,assedLabelIds,removedLabelIds,fromPriority,toPriority,fromStateId,toStateId,fromEstimate,toEstimate,fromAssigneeId,toAssigneeId,fromParentId,toParentId,sourceMetadata',
-      [MODELS.IssueComment]:
-        'id,createdAt,updatedAt,userId,issueId,body,parentId,sourceMetadata',
-      // SWR-56: the document channel. body is deliberately unindexed (up
-      // to 8 KB of display text per row; the load path queries issueId).
-      [MODELS.IssueArtifact]:
-        'id,createdAt,updatedAt,userId,issueId,title,sourceMetadata',
-      [MODELS.AgentRun]: 'id,issueId,agentId,startedAt',
-      [MODELS.IssuePullRequest]: 'id,issueId',
       [MODELS.View]:
         'id,createdAt,updatedAt,workspaceId,name,description,filters,isBookmarked,teamId',
       [MODELS.Project]:
         'id,createdAt,updatedAt,name,color,description,workspaceId',
-      // SWR-13: the inbox. recipientId is the load key (one database
-      // per user, the rows addressed to them); readAt and createdAt
-      // serve the badge and the ordering.
-      [MODELS.Notification]: 'id, workspaceId, recipientId, readAt, createdAt',
+      [MODELS.Workflow]: null,
+      [MODELS.Issue]: null,
+      [MODELS.IssueHistory]: null,
+      [MODELS.IssueComment]: null,
+      [MODELS.IssueArtifact]: null,
+      [MODELS.AgentRun]: null,
+      [MODELS.IssuePullRequest]: null,
+      [MODELS.Notification]: null,
     });
 
     this.workspaces = this.table(MODELS.Workspace);
     this.labels = this.table(MODELS.Label);
     this.teams = this.table(MODELS.Team);
-    this.workflows = this.table(MODELS.Workflow);
-    this.issues = this.table(MODELS.Issue);
     this.usersOnWorkspaces = this.table(MODELS.UsersOnWorkspaces);
-    this.issueHistory = this.table(MODELS.IssueHistory);
-    this.comments = this.table(MODELS.IssueComment);
-    this.issueArtifacts = this.table(MODELS.IssueArtifact);
-    this.agentRuns = this.table(MODELS.AgentRun);
-    this.issuePullRequests = this.table(MODELS.IssuePullRequest);
     this.views = this.table(MODELS.View);
     this.projects = this.table(MODELS.Project);
-    this.notifications = this.table(MODELS.Notification);
   }
 }
 
+// The shared sync watermark for one workspace+user cache, keyed by the
+// same hash the database name carries (bootstrap-data, socket-data-sync).
+export function lastSequenceIdKey(hash: number): string {
+  return `lastSequenceId_${hash}`;
+}
+
 export let convergeDatabase: ConvergeDatabase;
+let databaseHash: number | undefined;
 
 export function initDatabase(hash: number) {
+  databaseHash = hash;
   convergeDatabase = new ConvergeDatabase(`Converge_${hash}`);
 }
 
 export async function resetDatabase() {
-  localStorage.removeItem('lastSequenceId');
+  // The watermark must go with the cache: a surviving cursor would make
+  // the next load a delta from a sequence the empty database never saw.
+  if (databaseHash !== undefined) {
+    localStorage.removeItem(lastSequenceIdKey(databaseHash));
+  }
 
   if (convergeDatabase) {
     await convergeDatabase.delete();

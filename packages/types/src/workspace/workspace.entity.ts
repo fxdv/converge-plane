@@ -1,17 +1,10 @@
 import { Action } from '../action';
 import { ActionEvent } from '../action-event';
-import { AIRequest } from '../ai-request';
 import { Attachment } from '../attachment';
-import { Company } from '../company';
-import { Conversation } from '../conversation';
-import { IntegrationAccount } from '../integration-account';
-import { IntegrationDefinition } from '../integration-definition';
 import { Label } from '../label';
 import { Project } from '../project';
-import { Prompt } from '../prompt';
 import { SyncAction } from '../sync-action';
 import { Team } from '../team';
-import { Template } from '../template';
 import { UsersOnWorkspaces } from '../users-on-workspaces';
 import { View } from '../view';
 
@@ -28,17 +21,10 @@ export class Workspace {
   usersOnWorkspaces?: UsersOnWorkspaces[];
   team?: Team[];
   label?: Label[];
-  template?: Template[];
   syncAction?: SyncAction[];
-  integrationAccount?: IntegrationAccount[];
-  integrationDefinition?: IntegrationDefinition[];
   attachments?: Attachment[] | null;
   View?: View[];
-  aiRequests?: AIRequest[];
-  prompts?: Prompt[];
   action?: Action[] | null;
   projects?: Project[] | null;
   ActionEvent?: ActionEvent[] | null;
-  Conversation?: Conversation[] | null;
-  Company?: Company[] | null;
 }

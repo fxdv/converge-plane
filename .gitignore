@@ -21,3 +21,11 @@ server/bin/
 .DS_Store
 .idea/
 .vscode/
+
+# Local tunnel logs (scripts/*-tunnel.sh)
+.bravo-tunnel.log
+*-tunnel.log
+
+# Playwright output
+test-results/
+playwright-report/

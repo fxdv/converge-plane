@@ -1,7 +1,7 @@
 import { Button } from '@converge/ui/components/button';
 import { Editor, EditorExtensions } from '@converge/ui/components/editor/index';
+import { suggestionItems } from '@converge/ui/components/editor/slash-command';
 import { FormControl, FormField, FormItem } from '@converge/ui/components/form';
-import { Loader } from '@converge/ui/components/loader';
 import { DeleteLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
@@ -11,7 +11,6 @@ import { useWatch, type UseFieldArrayRemove } from 'react-hook-form';
 
 import type { IssueType } from 'common/types';
 
-import { useSuggestionItems } from './hooks';
 import { NewIssueHeader } from './new-issue-header';
 import { NewIssueMetadata } from './new-issue-metadata';
 import { NewIssueTitle } from './new-issue-title';
@@ -64,8 +63,6 @@ export const NewIssueForm = observer(
 
     const { team, setTeam } = useTeamForNewIssue(issue.teamId);
     const [editor, setEditor] = React.useState(undefined);
-    const { suggestionItems, isPending: aiLoading } =
-      useSuggestionItems(subIssueOperations);
 
     const defaultValuesForForm = useDefaultValues(team, defaultValues);
 
@@ -179,7 +176,6 @@ export const NewIssueForm = observer(
 
           <div className="flex items-center p-3 pr-0 pb-0 shrink-0 justify-end">
             <div className="flex gap-2 items-center">
-              {aiLoading && <Loader text="Thinking..." variant="horizontal" />}
               {isSubIssue && (
                 <Button
                   variant="ghost"

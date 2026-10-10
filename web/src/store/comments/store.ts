@@ -1,15 +1,6 @@
-import {
-  type IAnyStateTreeNode,
-  type Instance,
-  types,
-  flow,
-} from 'mobx-state-tree';
+import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
 
 import type { IssueCommentType } from 'common/types';
-
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 
 import { CommentArray } from './models';
 
@@ -53,25 +44,7 @@ export const CommentsStore: IAnyStateTreeNode = types
       }
     };
 
-    const load = flow(function* (issueId: string) {
-      if (isMemoryAuthorityModel(MODELS.IssueComment)) {
-        return;
-      }
-      const comments = issueId
-        ? yield convergeDatabase.comments
-            .where({
-              issueId,
-            })
-            .toArray()
-        : [];
-
-      // Create a new CommentArray for this issueId
-      if (comments.length > 0) {
-        self.comments.set(issueId, CommentArray.create(comments));
-      }
-    });
-
-    return { update, deleteById, load };
+    return { update, deleteById };
   })
   .views((self) => ({
     getComments(issueId: string): IssueCommentType[] {

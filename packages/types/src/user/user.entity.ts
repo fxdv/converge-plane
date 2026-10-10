@@ -1,8 +1,6 @@
 import { Attachment } from '../attachment';
-import { IntegrationAccount } from '../integration-account';
 import { Role } from '../invite';
 import { Issue } from '../issue';
-import { Template } from '../template';
 import { UsersOnWorkspaces } from '../users-on-workspaces';
 
 export class User {
@@ -15,9 +13,7 @@ export class User {
   initialSetupComplete: boolean;
   anonymousDataCollection: boolean;
   usersOnWorkspaces?: UsersOnWorkspaces[];
-  template?: Template[];
   createdBy?: Issue[];
-  integrationAccount?: IntegrationAccount[];
   attachment?: Attachment[];
 }
 

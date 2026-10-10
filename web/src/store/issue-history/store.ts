@@ -3,14 +3,10 @@ import {
   type Instance,
   getSnapshot,
   types,
-  flow,
 } from 'mobx-state-tree';
 
 import type { IssueHistoryType } from 'common/types';
 
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 import { asSnapshot } from 'store/snapshot';
 
 import { IssueHistoriesModel, IssueHistory } from './models';
@@ -66,27 +62,7 @@ export const IssueHistoryStore: IAnyStateTreeNode = types
       }
     };
 
-    const load = flow(function* (issueId: string) {
-      if (isMemoryAuthorityModel(MODELS.IssueHistory)) {
-        return;
-      }
-      const issueHistories = issueId
-        ? yield convergeDatabase.issueHistory
-            .where({
-              issueId,
-            })
-            .toArray()
-        : [];
-
-      if (issueHistories.length > 0) {
-        self.issueHistories.set(
-          issueId,
-          IssueHistoriesModel.create(issueHistories),
-        );
-      }
-    });
-
-    return { update, deleteById, load };
+    return { update, deleteById };
   })
   .views((self) => ({
     getIssueHistories(issueId: string): IssueHistoryType[] {

@@ -3,14 +3,9 @@ import {
   type Instance,
   getSnapshot,
   types,
-  flow,
 } from 'mobx-state-tree';
 
 import type { IssueType } from 'common/types';
-
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 
 import { Issue, IssuesMap } from './models';
 
@@ -43,29 +38,7 @@ export const IssuesStore: IAnyStateTreeNode = types
       self.issuesMap.delete(id);
     };
 
-    const load = flow(function* () {
-      if (isMemoryAuthorityModel(MODELS.Issue)) {
-        return;
-      }
-      const issues = yield convergeDatabase.issues.toArray();
-
-      issues.forEach((issue: IssueType) => {
-        self.issuesMap.set(issue.id, Issue.create(issue));
-      });
-
-      // Second pass: Build parent-child relationships
-      issues.forEach((issue: IssueType) => {
-        if (issue.parentId) {
-          const parent = self.issuesMap.get(issue.parentId);
-          if (parent) {
-            // Add this issue to parent's children array
-            parent.children.push(issue.id);
-          }
-        }
-      });
-    });
-
-    return { update, deleteById, load, updateIssue };
+    return { update, deleteById, updateIssue };
   })
   .views((self) => ({
     getIssues({

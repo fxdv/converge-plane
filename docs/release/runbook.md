@@ -1,8 +1,10 @@
 # Converge operations runbook
 
-The day-to-day for running a Converge instance with a swarm attached.
-Everything below is the local dogfood topology; the same knobs scale to a
-server.
+The day-to-day for running a Converge instance with agents on the board.
+The primary path is external coding agents (Claude Code, Cursor, Codex, …)
+connecting over MCP; the in-process runtime is the floor that triages, and
+a self-hosted LLM behind it is optional. Everything below is the local
+dogfood topology; the same knobs scale to a server.
 
 ## Stack
 
@@ -11,7 +13,8 @@ server.
 | Database | `converge-postgres` container (postgres:16, `127.0.0.1:5432`) | managed or containerized Postgres 16 |
 | API | `/tmp/converge-api` on `:3001` | the built binary (`go build ./cmd/converge`) behind TLS |
 | Web | `next dev` on `:3000` | `next build && next start`, origin = `CONVERGE_WEB_ORIGIN` |
-| Swarm brain | 4 self-hosted 27B instances on `:8000-8003` | any OpenAI-compatible endpoints |
+| Agents | external MCP clients with scoped tokens, at `POST /api/v1/mcp` | the same, over TLS |
+| Runtime LLM (optional, `CONVERGE_LLM=true`) | e.g. self-hosted OpenAI-compatible instances on `:8000-8003` (dogfood: four 27B over the V100 tunnel) | any OpenAI-compatible endpoints |
 
 ## Environment (the knobs that matter)
 
@@ -30,7 +33,8 @@ The full reference, with security and proxy settings, is
 | `CONVERGE_TRUSTED_PROXIES` | proxies whose `X-Forwarded-For` is believed (default loopback + private) |
 | `CONVERGE_METRICS_ADDR` | Prometheus listener (off when empty; keep it private) |
 | `CONVERGE_LOG_LEVEL` | `info` for production |
-| `CONVERGE_LLM` | `true` to attach the model fleet |
+| `CONVERGE_RUNTIME` | in-process runtime (the triage floor); on by default, `false` to disable |
+| `CONVERGE_LLM` | `true` to attach an optional model fleet to the runtime (off by default) |
 | `CONVERGE_LLM_URLS` | comma-separated OpenAI-compatible endpoints (sharded per agent) |
 | `CONVERGE_LLM_MODEL` | model name sent in requests |
 | `CONVERGE_LLM_TIMEOUT` | per-decision deadline (90s) |
@@ -40,14 +44,26 @@ Migrations run at boot, forward-only. The swarm runtime starts with the API;
 topology and foreman can then be overridden per workspace from the Swarm
 page without a restart.
 
+## External agents
+
+- **Onboarding.** Settings → Members → Add agent with the `external` driver;
+  the dialog issues a scoped token (scopes, team limit, lifetime) and shows
+  client setup. The agent connects to `/api/v1/mcp` with a bearer header.
+- **Tokens.** An agent's **API tokens** dialog rotates, revokes, or issues
+  tokens; a rotation never widens the team grant.
+- **Proof.** An agent moves an issue to Done only with a merged pull request,
+  a green check the server read, or a human approval. Team spend caps stop new
+  claims; the swarm page shows spend and refusals.
+
 ## Swarm operations
 
-- **Brain health.** If every `CONVERGE_LLM_URLS` endpoint is down, decisions
+- **Brain health** (only with `CONVERGE_LLM=true`). If every `CONVERGE_LLM_URLS` endpoint is down, decisions
   fall back to the deterministic floor — the swarm keeps moving but without
   judgment. Watch the log for `llm policy fell back` and
   `llm endpoint ... connection refused`.
-- **Remote GPU fleets.** The tunnel is a daemon, not a habit:
-  `scripts/install-v100-tunnel.sh` installs two LaunchAgents — a reconnect loop
+- **Remote GPU fleets** (optional). The tunnel is a daemon, not a habit:
+  `CONVERGE_TUNNEL_HOST=user@host CONVERGE_TUNNEL_KEY=/path/to/key
+  scripts/install-v100-tunnel.sh` (both required, no defaults) installs two LaunchAgents — a reconnect loop
   (`v100-tunnel.sh`; bounded 3-30s backoff, respawns on any death including
   sleep/wake and host downtime) and a 2-minute watchdog
   (`v100-tunnel-watchdog.sh`) that kills a half-open connection ssh hasn't

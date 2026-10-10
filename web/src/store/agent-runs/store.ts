@@ -1,15 +1,6 @@
-import {
-  type IAnyStateTreeNode,
-  type Instance,
-  types,
-  flow,
-} from 'mobx-state-tree';
+import { type IAnyStateTreeNode, type Instance, types } from 'mobx-state-tree';
 
 import type { AgentRunType } from 'common/types';
-
-import { isMemoryAuthorityModel } from 'store/client-cache-policy';
-import { convergeDatabase } from 'store/database';
-import { MODELS } from 'store/models';
 
 import { AgentRun } from './models';
 
@@ -36,15 +27,7 @@ export const AgentRunsStore: IAnyStateTreeNode = types
       self.runs.delete(id);
     };
 
-    const load = flow(function* () {
-      if (isMemoryAuthorityModel(MODELS.AgentRun)) {
-        return;
-      }
-      const runs: AgentRunType[] = yield convergeDatabase.agentRuns.toArray();
-      runs.forEach((run) => self.runs.set(run.id, run));
-    });
-
-    return { update, deleteById, load };
+    return { update, deleteById };
   })
   .views((self) => ({
     // One pass over the runs, cached until a run changes: every board
