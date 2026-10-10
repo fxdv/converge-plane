@@ -179,6 +179,28 @@ export const BoardIssueItem = observer(
           ? { opacity: 0.45 }
           : {};
 
+    const layoutKey = [
+      issue.title,
+      issue.description,
+      (issue.labelIds ?? []).join(','),
+      relations.length,
+      pullRequests.length,
+      prHeadline,
+      needsHuman,
+      latestHandoff?.id,
+      runTotals?.runs,
+      runTotals?.costMicros,
+      blocksCount,
+      blockedCount,
+    ].join('|');
+
+    const measureRef = React.useRef(measure);
+    measureRef.current = measure;
+
+    React.useLayoutEffect(() => {
+      measureRef.current?.();
+    }, [layoutKey]);
+
     const statusChange = (stateId: string) => {
       updateIssue({ id: issue.id, stateId, teamId: issue.teamId });
     };
@@ -192,7 +214,7 @@ export const BoardIssueItem = observer(
 
     return (
       <a
-        className="p-3 flex flex-col justify-between group rounded-md bg-background-3 dark:bg-grayAlpha-200 w-[100%] gap-2 mb-2 !cursor-default hover:bg-background-3/70"
+        className="p-3 flex flex-col justify-between group rounded-md bg-background-3 dark:bg-grayAlpha-200 w-[100%] gap-2 !cursor-default hover:bg-background-3/70"
         onClick={(e) => {
           if (!e.metaKey && currentViewIssueId === issue.id) {
             closeIssueView();
@@ -201,13 +223,7 @@ export const BoardIssueItem = observer(
           }
           openIssue(issue.id, e.metaKey);
         }}
-        ref={(el) => {
-          provided.innerRef(el);
-          // Debounce measure to prevent infinite loop
-          if (el) {
-            setTimeout(measure, 0);
-          }
-        }}
+        ref={provided.innerRef}
         key={key}
         {...provided.draggableProps}
         {...provided.dragHandleProps}

@@ -2,14 +2,7 @@ import { Button } from '@converge/ui/components/button';
 import { NoPriorityLine } from '@converge/ui/icons';
 import { cn } from '@converge/ui/lib/utils';
 import { observer } from 'mobx-react-lite';
-import React from 'react';
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  type Index,
-  type ListRowProps,
-} from 'react-virtualized';
+import { AutoSizer, type Index, type ListRowProps } from 'react-virtualized';
 
 import { IssueListItem, PriorityIcons } from 'modules/issues/components';
 import { useFilterIssues } from 'modules/issues/issues-utils';
@@ -21,6 +14,7 @@ import { useComputedWorkflows } from 'hooks/workflows';
 
 import { useContextStore } from 'store/global-context-provider';
 
+import { MeasuredRow, useMeasuredRowCache } from '../../board-measured-row';
 import { useIssueRowsPriority } from './utils';
 
 export const PriorityList = observer(() => {
@@ -35,17 +29,14 @@ export const PriorityList = observer(() => {
   const filteredIssues = useFilterIssues(issues, workflows);
 
   const rows = useIssueRowsPriority(filteredIssues, Priorities);
-
-  // Create a CellMeasurerCache instance
-  const cache = new CellMeasurerCache({
-    defaultHeight: 45, // Default row height
-    fixedWidth: true, // Rows have fixed width but dynamic height
-  });
-
-  React.useEffect(() => {
-    cache.clearAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
+  const cache = useMeasuredRowCache(
+    rows
+      .map((row) =>
+        row.type === 'header' ? `h:${row.key}` : `i:${row.issueId}`,
+      )
+      .join('\0'),
+    45,
+  );
 
   const getHeaderRow = (row: { type: string; key: string }, index: number) => {
     if (!row) {
@@ -91,21 +82,21 @@ export const PriorityList = observer(() => {
     }
 
     return (
-      <CellMeasurer
-        key={key}
+      <MeasuredRow
         cache={cache}
-        columnIndex={0}
         parent={parent}
-        rowIndex={index}
+        index={index}
+        rowKey={key}
+        style={style}
       >
-        <div style={style} key={key}>
-          {row.type === 'header' ? (
+        {(measure) =>
+          row.type === 'header' ? (
             getHeaderRow(row, index)
           ) : (
-            <IssueListItem issueId={row.issueId} key={index} />
-          )}
-        </div>
-      </CellMeasurer>
+            <IssueListItem issueId={row.issueId} measure={measure} />
+          )
+        }
+      </MeasuredRow>
     );
   };
 
@@ -132,7 +123,6 @@ export const PriorityList = observer(() => {
           noRowsRenderer={() => <></>}
           rowCount={rows.length + 2}
           rowHeight={rowHeight}
-          deferredMeasurementCache={cache}
           rowRenderer={rowRender}
           width={width}
           shallowCompare

@@ -36,10 +36,16 @@ interface IssueListItemProps {
   issueId: string;
   subIssueView?: boolean;
   noBorder?: boolean;
+  measure?: () => void;
 }
 
 export const IssueListItem = observer(
-  ({ issueId, subIssueView = false, noBorder = false }: IssueListItemProps) => {
+  ({
+    issueId,
+    subIssueView = false,
+    noBorder = false,
+    measure,
+  }: IssueListItemProps) => {
     const {
       openIssue,
       issueId: currentViewIssueId,
@@ -74,6 +80,20 @@ export const IssueListItem = observer(
     const pullRequests: IssuePullRequestType[] =
       issuePullRequestsStore.getForIssue(issue.id);
     const prHeadline = pullRequestHeadline(pullRequests);
+    const measureRef = React.useRef(measure);
+    measureRef.current = measure;
+    const layoutKey = [
+      issue.title,
+      (issue.labelIds ?? []).join(','),
+      pullRequests.length,
+      prHeadline,
+      runTotals?.runs,
+      runTotals?.costMicros,
+    ].join('|');
+
+    React.useLayoutEffect(() => {
+      measureRef.current?.();
+    }, [layoutKey]);
 
     return (
       <>

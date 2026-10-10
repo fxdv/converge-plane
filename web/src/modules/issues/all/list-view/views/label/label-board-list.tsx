@@ -8,14 +8,7 @@ import {
   type DroppableStateSnapshot,
 } from '@hello-pangea/dnd';
 import { observer } from 'mobx-react-lite';
-import React from 'react';
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  List,
-  type ListRowProps,
-} from 'react-virtualized';
+import { AutoSizer, List, type ListRowProps } from 'react-virtualized';
 
 import type { LabelType } from 'common/types';
 
@@ -26,6 +19,11 @@ import { useContextStore } from 'store/global-context-provider';
 
 import { BoardIssueItem } from '../../../../components/issue-board-item/issue-board-item';
 import { useFilterIssues } from '../../../../issues-utils';
+import {
+  BoardMeasuredRow,
+  rowHeightOr,
+  useBoardMeasureCache,
+} from '../../board-measured-row';
 import {
   BOARD_DEFAULT_ROW_HEIGHT,
   BOARD_OVERSCAN_ROW_COUNT,
@@ -46,6 +44,7 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
   });
 
   const computedIssues = useFilterIssues(issues, workflows);
+  const cache = useBoardMeasureCache(computedIssues.map((issue) => issue.id));
 
   if (
     computedIssues.length === 0 &&
@@ -53,13 +52,6 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
   ) {
     return null;
   }
-
-  const cache = React.useRef(
-    new CellMeasurerCache({
-      defaultHeight: BOARD_DEFAULT_ROW_HEIGHT,
-      fixedWidth: true,
-    }),
-  ).current;
 
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const issue = computedIssues[index];
@@ -76,22 +68,22 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
           dragProvided: DraggableProvided,
           dragSnapshot: DraggableStateSnapshot,
         ) => (
-          <CellMeasurer
-            key={key}
+          <BoardMeasuredRow
             cache={cache}
-            columnIndex={0}
             parent={parent}
-            rowIndex={index}
+            index={index}
+            rowKey={key}
+            style={style}
           >
-            <div style={style} key={key}>
+            {(measure) => (
               <BoardIssueItem
                 issueId={issue.id}
                 isDragging={dragSnapshot.isDragging}
                 provided={dragProvided}
-                key={key}
+                measure={measure}
               />
-            </div>
-          </CellMeasurer>
+            )}
+          </BoardMeasuredRow>
         )}
       </Draggable>
     );
@@ -151,8 +143,7 @@ export const LabelBoardList = observer(({ label }: LabelBoardItemProps) => {
                     width={width}
                     rowCount={itemCount}
                     elementRef={droppableProvided.innerRef}
-                    rowHeight={cache.rowHeight}
-                    deferredMeasurementCache={cache}
+                    rowHeight={rowHeightOr(cache, BOARD_DEFAULT_ROW_HEIGHT)}
                     rowRenderer={rowRender}
                     shallowCompare
                   />
@@ -176,6 +167,7 @@ export const NoLabelBoardList = observer(() => {
   });
 
   const computedIssues = useFilterIssues(issues, workflows);
+  const cache = useBoardMeasureCache(computedIssues.map((issue) => issue.id));
 
   if (
     computedIssues.length === 0 &&
@@ -183,13 +175,6 @@ export const NoLabelBoardList = observer(() => {
   ) {
     return null;
   }
-
-  const cache = React.useRef(
-    new CellMeasurerCache({
-      defaultHeight: BOARD_DEFAULT_ROW_HEIGHT,
-      fixedWidth: true,
-    }),
-  ).current;
 
   const rowRender = ({ index, style, key, parent }: ListRowProps) => {
     const issue = computedIssues[index];
@@ -204,22 +189,22 @@ export const NoLabelBoardList = observer(() => {
           dragProvided: DraggableProvided,
           dragSnapshot: DraggableStateSnapshot,
         ) => (
-          <CellMeasurer
-            key={key}
+          <BoardMeasuredRow
             cache={cache}
-            columnIndex={0}
             parent={parent}
-            rowIndex={index}
+            index={index}
+            rowKey={key}
+            style={style}
           >
-            <div style={style} key={key}>
+            {(measure) => (
               <BoardIssueItem
                 issueId={issue.id}
                 isDragging={dragSnapshot.isDragging}
                 provided={dragProvided}
-                key={key}
+                measure={measure}
               />
-            </div>
-          </CellMeasurer>
+            )}
+          </BoardMeasuredRow>
         )}
       </Draggable>
     );
@@ -273,8 +258,7 @@ export const NoLabelBoardList = observer(() => {
                     width={width}
                     rowCount={itemCount}
                     elementRef={droppableProvided.innerRef}
-                    rowHeight={cache.rowHeight}
-                    deferredMeasurementCache={cache}
+                    rowHeight={rowHeightOr(cache, BOARD_DEFAULT_ROW_HEIGHT)}
                     rowRenderer={rowRender}
                     shallowCompare
                   />
