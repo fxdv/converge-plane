@@ -57,7 +57,7 @@
     "@tanstack/react-query": "^5.90.5",
     "react-time-ago": "^7.3.1",
     "react-virtualized": "^9.22.6",
-    "superagent": "^8.1.2",
+    "superagent": "^10.4.1",
     "tippy.js": "^6.3.7",
     "ts-key-enum": "^2.0.12",
     "use-debounce": "^10.0.0",
