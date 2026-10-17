@@ -47,7 +47,7 @@
   "dependencies": {
     "@converge/types": "workspace:*",
     "axios": "^1.6.7",
-    "superagent": "^8.1.2",
+    "superagent": "^10.4.1",
     "zod": "4.6.5"
   },
   "engines": {
