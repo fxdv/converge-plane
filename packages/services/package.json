@@ -41,7 +41,7 @@
     "@converge/typescript-config": "workspace:*",
     "@types/superagent": "^8.1.4",
     "rimraf": "^3.0.2",
-    "tsup": "^8.0.1",
+    "tsup": "^9.0.0",
     "typescript": "^5.4.5"
   },
   "dependencies": {
